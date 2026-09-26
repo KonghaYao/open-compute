@@ -16,8 +16,9 @@ FRONTEND_ROOTS = {
 RELEASE_TOOLING = {
     ".github/workflows/release.yml",
     ".github/workflows/release-recovery.yml",
-    ".github/workflows/release-dry-run.yml",
     "scripts/assemble-release.ts",
+    "scripts/release-dry-run.sh",
+    "test/release-dry-run/Dockerfile",
     "test/release-tools.test.mjs",
 }
 

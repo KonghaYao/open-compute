@@ -1,8 +1,18 @@
 # CI 与 Rust 构建性能
 
-2026-09-16。按 GitHub Actions 实际 run 记录复盘；以下数字是墙钟，不是 runner 分钟。
+2026-09-26。按 GitHub Actions 实际 run 记录复盘；以下数字是墙钟，不是 runner 分钟。
 
 ## 已观察到的成本
+
+0.2.2 的正式 run `36243010371` 墙钟为 82 分 06 秒、合计 240.55 runner-min；关键路径是
+80 分 45 秒的 coverage。coverage 内部构建为 27 分 26 秒、Gate 为 44 分 57 秒，报告生成为
+4 分 16 秒。macOS runner 有 3 CPU，但插桩构建被固定为单 job；正式 workflow 现在只把构建并行度
+提高到 2，保留 Gate 的 `--jobs 2`、每个测试进程的 `--test-threads=1` 和独占目标边界。正式 artifact
+只消费 LCOV 与 JSON，因此 tag CI 不再额外生成约 74 秒且不上传的 HTML；本地 coverage 默认仍生成 HTML。
+
+同日已退役的 GitHub dry-run `36241986887` 为 31 分 43 秒、32.42 runner-min；它尚未完成时正式 release
+已经启动，而且其产物不会流入 tag workflow，因此没有提供发布前拦截或构建复用。远端 dry-run 已删除；
+隔离 package 诊断改在本机 Docker 内完成，不再先消耗一轮 Actions runner。
 
 `main` 的旧轻量检查（`34015774164`）耗时 2 分 46 秒；加入生产 Clippy、no-default-features
 和 production hygiene 后，健康缓存的 `34974064143` 耗时 8 分 04 秒，半成品缓存下的
@@ -105,6 +115,13 @@ workspace/final binary。当前没有应用 benchmark，且仓库 cache 已接�
 
 ## 缓存与证据
 
+- 正式 tag workflow 使用 `cache-mode: read`。GitHub cache 按 branch/tag 隔离，tag 可以读取默认分支缓存，
+  但下一个 tag 不能读取前一个 tag 写入的条目；main 负责写入可复用缓存，正式发布
+  不再压缩、上传和占用只服务当前 tag 的缓存。
+- 0.2.2 发布时 inventory 为 22 个条目、约 10.43 GiB；11 个旧 `v0.1.10` tag-scope 条目占约
+  6.06 GiB。它们既不能服务后续 tag，又使新保存因 configured budget 进入 read-only。删除这些可重建
+  的旧 tag cache 或提高预算后，main/诊断 workflow 才能重新写入；不能把失败的 save 当成暖缓存证据。
+
 - Rust dependency cache 按工具链、OS/CPU、编译环境和 manifest/lock 分隔；release target 与 coverage
   各自使用 profile key。失败的普通 target cache 不保存，避免把不完整目录当成下一次构建输入；PR
   仍不向共享 Rust cache 写入。
@@ -150,8 +167,9 @@ SKU，单独增加 SKU 预算不能覆盖它。要允许 cache 写入，Actions 
   最终链接、bin/proc-macro 编译等仍有不可缓存部分；不承诺完全免编译。
 - 保存 Cargo `--timings` 报告、cache statistics、失败时的未验收原生 binary 和现有失败 Gate evidence。
   一般日志显示子命令 stderr，避免长时间只看到一个无输出步骤。
-- 正式 release 和 dry-run 都上传 `.temp/release-target/cargo-timings/`；下一次真实 package run 直接提供
-  crate/编译单元关键路径，不为性能分析单独重复构建。
+- 正式 release 上传 `.temp/release-target/cargo-timings/`；本地 Docker 诊断把对应 target/cache 保留在
+  `.temp/release-dry-run/source/`。下一次真实 package run 直接提供 crate/编译单元关键路径，不为性能
+  分析单独重复构建。
 - source、formal runtime pin、生成资产和 artifact SHA 校验仍执行；不得通过伪造 mtime 或复用不同
   revision 的发布二进制制造命中。输入发生变化，已有 Gate 结果只证明它原来的输入。
 
@@ -161,6 +179,8 @@ SKU，单独增加 SKU 预算不能覆盖它。要允许 cache 写入，Actions 
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | full CI 并行职责                | 三个 runner 把 89 秒 Clippy 与 80 秒 production link/scan 移出 core 关键路径；不再细拆，控制总 runner 成本          |
 | package 与 qualification 并行   | 已配置；publish 保留所有依赖，提前暴露打包问题                                                                      |
+| coverage 构建并行               | 3 CPU macOS runner 上由 1 提到保守的 2；不改变 Gate/test 并发，以下一次完整 coverage 验证实际收益与资源稳定性       |
+| CI coverage HTML                | 正式 workflow 不上传或消费 HTML，跳过约 74 秒；本地默认继续生成                                                     |
 | Cargo target cache              | 保留按 profile/平台区分的依赖缓存；不盲目上传整个几十 GiB workspace target 导致缓存驱逐                             |
 | sccache                         | 仅 native package 启用，限制容量并收集命中数据；coverage 保持现有插桩路径                                           |
 | S3 SDK 默认 feature             | 生产注入自有 verified HTTP client；只保留 `rt-tokio`，删除未使用的默认 TLS client 与 SigV4a 依赖                    |
@@ -203,17 +223,18 @@ SKU，单独增加 SKU 预算不能覆盖它。要允许 cache 写入，Actions 
 
 ## Dry-run release
 
-`release-dry-run.yml` 用指定 ref 构建并验证 SDK、单个平台原生包和 `single-binary` Gate，不创建
-GitHub Release、不发布 npm，也不修改 tag。默认只跑 Linux x64 以快速检查；需要验证三平台组装时显式
-选择 `target=all`：
+远端 dry-run 已删除。需要在发布前隔离验证原生打包路径时，从干净的候选 `HEAD` 运行：
 
 ```sh
-gh workflow run release-dry-run.yml --ref main -f ref=main -f target=linux-x64
-gh workflow run release-dry-run.yml --ref main -f ref=main -f target=all
+./scripts/release-dry-run.sh
 ```
 
-它是发布前的构建/组装烟测，不替代正式 tag 的 coverage、完整 workspace Gate、受控 egress 或公开发布
-回读；失败时保留 artifact 和编译缓存统计，便于定位而不触发真实发布副作用。
+脚本构建固定的 Ubuntu 24.04/Linux ARM64 工具链镜像；依赖 hydration 有网络，真正资格阶段使用
+`--network none` 和 Cargo offline。它复用正式 `package-release.sh`，随后只跑一次 `single-binary` Gate 与
+正式 Linux ARM64 Dashboard smoke。保留 worktree、Cargo/Bun/build cache 供下一次复用；候选、report 和
+server 日志位于 `.temp/release-dry-run/output/`，Gate/Playwright 详细失败树留在 retained worktree 的
+`.temp/` 与 `apps/dashboard/test-results/`。它只证明 Linux ARM64 package 路径，不替代正式 tag 的 macOS
+coverage/workspace Gate、Linux x64/Darwin package、受控 egress、SDK/assemble 或公开发布回读。
 
 主要资料：
 

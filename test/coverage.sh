@@ -11,6 +11,12 @@ ignore_filename_regex='/rustlib/src/rust/|^/rustc/|/\.cargo/(registry|git)/|/\.r
 minimum_lines=90.00
 workerd=${OPEN_COMPUTE_TEST_WORKERD:-}
 cargo_bin=${CARGO:-cargo}
+coverage_html=${OPEN_COMPUTE_COVERAGE_HTML:-1}
+
+case "$coverage_html" in
+  0|1) ;;
+  *) echo "OPEN_COMPUTE_COVERAGE_HTML must be 0 or 1" >&2; exit 1 ;;
+esac
 
 if [ "${OPEN_COMPUTE_GATE_ROUNDS:-1}" != 1 ]; then
   echo "coverage runs exactly once; final timing rounds require uninstrumented executables" >&2
@@ -110,8 +116,10 @@ fi
   --ignore-filename-regex="$ignore_filename_regex" "$@" > "$report_dir/lcov.info"
 "$llvm_cov" export --format=text --summary-only --instr-profile="$profdata" \
   --ignore-filename-regex="$ignore_filename_regex" "$@" > "$report_dir/summary.json"
-"$llvm_cov" show --format=html --output-dir="$report_dir/html" --instr-profile="$profdata" \
-  --ignore-filename-regex="$ignore_filename_regex" "$@" >/dev/null
+if [ "$coverage_html" = 1 ]; then
+  "$llvm_cov" show --format=html --output-dir="$report_dir/html" --instr-profile="$profdata" \
+    --ignore-filename-regex="$ignore_filename_regex" "$@" >/dev/null
+fi
 python3 - "$report_dir/summary.json" "$minimum_lines" <<'PY'
 import json
 import sys
@@ -127,7 +135,9 @@ print(f"workspace line coverage: {lines['percent']:.2f}%")
 PY
 
 echo "coverage reports:"
-echo "  HTML: $report_dir/html/index.html"
+if [ "$coverage_html" = 1 ]; then
+  echo "  HTML: $report_dir/html/index.html"
+fi
 echo "  LCOV: $report_dir/lcov.info"
 echo "  JSON: $report_dir/summary.json"
 echo "  minimum line coverage: $minimum_lines%"

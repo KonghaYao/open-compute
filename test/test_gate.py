@@ -444,6 +444,14 @@ class GateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn('coverage runs exactly once', result.stderr.decode())
 
+    def test_coverage_rejects_invalid_html_mode_before_tool_checks(self):
+        result = subprocess.run([str(gate.ROOT/'test/coverage.sh')], capture_output=True,
+                                env={'OPEN_COMPUTE_COVERAGE_HTML': 'false',
+                                     'PATH': '/usr/bin:/bin'}, timeout=10)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('OPEN_COMPUTE_COVERAGE_HTML must be 0 or 1',
+                      result.stderr.decode())
+
     def test_source_freeze_ignores_designs_and_python_caches_but_includes_runtime_inputs(self):
         names = ['crates/service/src/resources.rs', 'docs/references/runbooks/install.md',
                  'docs/plan.md', 'docs/implemented/report.md',
