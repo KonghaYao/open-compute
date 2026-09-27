@@ -9,9 +9,8 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-# A tag-scoped cache cannot be restored by the next release tag. Release jobs
-# consume the reusable default-branch caches without spending storage on dead
-# tag-only entries; main remains the reusable cache writer.
+# Release tags consume the reusable default-branch caches without creating
+# tag-scoped entries that no later release can restore.
 cache-mode: read
 
 permissions:
@@ -236,6 +235,7 @@ jobs:
       - uses: ./.github/actions/setup-open-compute
         with:
           rust-cache-key: llvm-cov-${{ hashFiles('crates/storage/refinery-migrations/**/*.sql') }}
+          rust-cache-save: "false"
           rust-workspaces: ". -> target/llvm-cov-target"
           llvm-cov: "true"
           rust-components: llvm-tools-preview
@@ -271,6 +271,7 @@ jobs:
       - uses: ./.github/actions/setup-open-compute
         with:
           rust-cache-key: default-${{ hashFiles('crates/storage/refinery-migrations/**/*.sql') }}
+          rust-cache-save: "false"
       - name: Build untracked runtime and toolchain assets from this checkout
         run: bun run build
       - name: Fetch locked crates for offline Gate compile
@@ -313,20 +314,10 @@ jobs:
           # Reuse main's debug/test target for the single-binary harness.
           rust-cache-key: default-${{ hashFiles('crates/storage/refinery-migrations/**/*.sql') }}
           rust-cache-save: "false"
-      - name: Cache release dependency artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: false
-          save-if: "true"
-          add-job-id-key: false
-          shared-key: v3-release-${{ matrix.target }}-${{ hashFiles('crates/storage/refinery-migrations/**/*.sql') }}
-          workspaces: ". -> .temp/release-target"
-          cache-all-crates: false
       - uses: mozilla-actions/sccache-action@v0.0.11
         with:
           version: v0.16.0
       - name: Restore bounded compiler cache
-        id: compiler-cache
         uses: actions/cache/restore@v6
         with:
           path: .temp/sccache
@@ -417,13 +408,6 @@ jobs:
       - name: Compiler cache statistics
         if: always()
         run: sccache --show-stats
-      - name: Save compiler cache including failed builds
-        if: ${{ always() && !cancelled() && steps.compiler-cache.outputs.cache-hit != 'true' }}
-        continue-on-error: true
-        uses: actions/cache/save@v6
-        with:
-          path: .temp/sccache
-          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
       - name: Retain compiler timings
         if: always()
         uses: actions/upload-artifact@v7

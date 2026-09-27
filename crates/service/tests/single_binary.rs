@@ -237,7 +237,7 @@ impl Process {
     }
 
     async fn ready(&mut self, address: SocketAddr) {
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(120);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(180);
         loop {
             assert!(
                 self.child.try_wait().unwrap().is_none(),

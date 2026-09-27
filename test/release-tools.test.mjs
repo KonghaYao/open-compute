@@ -234,9 +234,17 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   assert.match(workflow, /  coverage:\n    needs: failfast\n/);
   assert.match(
     workflow,
+    /rust-cache-key: llvm-cov-[^\n]+\n\s+rust-cache-save: "false"/,
+  );
+  assert.match(
+    workflow,
     /name: Enforce 90 percent Rust line coverage\n\s+env:\n\s+CARGO_BUILD_JOBS: "2"\n\s+OPEN_COMPUTE_COVERAGE_HTML: "0"\n\s+run: \.\/test\/coverage\.sh --jobs 2/,
   );
   assert.match(workflow, /  integration:\n    needs: failfast\n/);
+  assert.match(
+    workflow,
+    /rust-cache-key: default-[^\n]+\n\s+rust-cache-save: "false"/,
+  );
   assert.match(
     workflow,
     /  sdk-package:\n    # Build the SDK tarball once[\s\S]*?needs: failfast\n/,
@@ -256,22 +264,16 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   ]) {
     assert.equal(ci.split(command).length - 1, 1);
   }
-  for (const source of [workflow]) {
-    assert.match(
-      source,
-      /Fetch locked crates for offline packaged-binary tests\n\s+run: cargo fetch --locked/,
-    );
-    assert.match(
-      source,
-      /shared-key: v3-release-\$\{\{ matrix\.target \}\}-\$\{\{ hashFiles\('crates\/storage\/refinery-migrations\/\*\*\/\*\.sql'\) \}\}/,
-    );
-    assert.match(source, /workspaces: "\. -> \.temp\/release-target"/);
-    assert.match(
-      source,
-      /unset CARGO_TARGET_DIR RUSTC_WRAPPER SCCACHE_DIR SCCACHE_CACHE_SIZE[\s\S]*?OPEN_COMPUTE_TEST_OCD="\$destination"[\s\S]*?OPEN_COMPUTE_PACKAGE_GATE_USER_ROOT=1[\s\S]*?\.\/test\/gate\.py single-binary --jobs 1/,
-    );
-    assert.match(source, /path: \.temp\/release-target\/cargo-timings\//);
-  }
+  assert.match(
+    workflow,
+    /Fetch locked crates for offline packaged-binary tests\n\s+run: cargo fetch --locked/,
+  );
+  assert.doesNotMatch(workflow, /v3-release-|actions\/cache\/save@/);
+  assert.match(
+    workflow,
+    /unset CARGO_TARGET_DIR RUSTC_WRAPPER SCCACHE_DIR SCCACHE_CACHE_SIZE[\s\S]*?OPEN_COMPUTE_TEST_OCD="\$destination"[\s\S]*?OPEN_COMPUTE_PACKAGE_GATE_USER_ROOT=1[\s\S]*?\.\/test\/gate\.py single-binary --jobs 1/,
+  );
+  assert.match(workflow, /path: \.temp\/release-target\/cargo-timings\//);
   assert.match(
     workflow,
     /name: unverified-native-build-\$\{\{ matrix\.target \}\}[\s\S]*?\.temp\/dashboard-e2e[\s\S]*?\.temp\/dashboard-server[\s\S]*?apps\/dashboard\/test-results/,
@@ -306,6 +308,10 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   assert.equal(
     localDryRun.match(/\.\/test\/gate\.py single-binary --jobs 1/g)?.length,
     1,
+  );
+  assert.match(
+    localDryRun,
+    /OPEN_COMPUTE_CAFFEINATED=1[\s\S]*?exec \/usr\/bin\/caffeinate -is "\$0"/,
   );
   assert.match(
     localDryRun,

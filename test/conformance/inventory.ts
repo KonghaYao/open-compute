@@ -255,7 +255,10 @@ function productStatus(
       .every((member) =>
         ["allowExperimental", "streamingTails"].includes(member.member),
       );
-  if ((blocked && !onlyOptionalDynamicControlsBlocked) || members.length === 0) {
+  if (
+    (blocked && !onlyOptionalDynamicControlsBlocked) ||
+    members.length === 0
+  ) {
     return { status: "blocked", kind, members, deviations: [...deviations] };
   }
   const withDeviation =

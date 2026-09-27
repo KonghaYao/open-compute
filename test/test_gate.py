@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 import tempfile
 import threading
-import time
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -75,6 +74,33 @@ class GateTests(unittest.TestCase):
         with patch.dict(os.environ, OPEN_COMPUTE_GATE_ROUNDS='3'):
             self.assertEqual(gate.rounds_from_env(), 3)
 
+    def test_macos_gate_reexecs_under_caffeinate_once(self):
+        with patch.object(gate.sys, 'platform', 'darwin'), \
+             patch.dict(os.environ, {}, clear=True), \
+             patch.object(gate.os, 'execve', side_effect=RuntimeError('exec')) as execute:
+            with self.assertRaisesRegex(RuntimeError, 'exec'):
+                gate.prevent_macos_sleep()
+            self.assertEqual(
+                execute.call_args.args[:2],
+                ('/usr/bin/caffeinate', [
+                    '/usr/bin/caffeinate', '-is', sys.executable,
+                    str(Path(gate.__file__).resolve()), *sys.argv[1:],
+                ]),
+            )
+            self.assertEqual(
+                execute.call_args.args[2]['OPEN_COMPUTE_CAFFEINATED'], '1')
+        with patch.object(gate.sys, 'platform', 'darwin'), \
+             patch.dict(os.environ, {'OPEN_COMPUTE_CAFFEINATED': '1'}, clear=True), \
+             patch.object(gate.os, 'execve') as execute:
+            gate.prevent_macos_sleep()
+            execute.assert_not_called()
+            self.assertNotIn('OPEN_COMPUTE_CAFFEINATED', os.environ)
+        with patch.object(gate.sys, 'platform', 'darwin'), \
+             patch.dict(os.environ, {'GITHUB_ACTIONS': 'true'}, clear=True), \
+             patch.object(gate.os, 'execve') as execute:
+            gate.prevent_macos_sleep()
+            execute.assert_not_called()
+
     def test_overlapping_selections_run_each_physical_target_once(self):
         selected = gate.selection(['p0-2', 'p2-3', 'workflow', 'p1-8', 'p0-7'])
         self.assertEqual(len(selected), len(set(gate.TARGETS[name][:2] for name in selected)))
@@ -85,24 +111,39 @@ class GateTests(unittest.TestCase):
 
     def test_parallel_targets_overlap_but_exclusive_targets_are_barriers(self):
         running = set()
+        completed = set()
         overlaps = []
         lock = threading.Lock()
+        parallel_started = threading.Barrier(2)
         def execute(name, executable, directory, target):
             with lock:
-                if gate.TARGETS[name][2]:
+                if target.exclusive:
                     self.assertFalse(running)
-                self.assertFalse(any(gate.TARGETS[item][2] for item in running))
+                self.assertFalse(any(targets[item].exclusive for item in running))
+                if name == 'service-process-lifecycle':
+                    self.assertEqual(completed, {'service-lib', 'peer'})
+                if name == 'after':
+                    self.assertIn('service-process-lifecycle', completed)
                 running.add(name)
                 overlaps.append(len(running))
-            time.sleep(0.02)
+            if name in {'service-lib', 'peer'}:
+                parallel_started.wait(timeout=5)
             with lock:
                 running.remove(name)
+                completed.add(name)
             return {'target': name, 'exit_code': 0}
-        selected = ['p0-3', 'p0-4', 'p0-1', 'p0-2', 'workflow-product', 'runtime']
+        targets = {
+            'service-lib': gate.Target('service', 'lib', 'lib', '/repo', False),
+            'peer': gate.Target('peer', 'lib', 'lib', '/repo', False),
+            'service-process-lifecycle': gate.Target('service', 'lib', 'lib', '/repo', True),
+            'after': gate.Target('after', 'lib', 'lib', '/repo', False),
+        }
         with tempfile.TemporaryDirectory() as temp:
-            artifacts = {name: name for name in selected}
-            results = gate.run_round(self.targets(selected), artifacts, Path(temp)/'round', 4, execute)
-        self.assertEqual({result['target'] for result in results}, set(selected))
+            artifacts = {name: name for name in targets}
+            results = gate.run_round(targets, artifacts, Path(temp)/'round', 2, execute)
+        self.assertEqual({result['target'] for result in results}, set(targets))
+        self.assertTrue(all(result['exit_code'] == 0 for result in results), results)
+        self.assertEqual(completed, set(targets))
         self.assertGreater(max(overlaps), 1)
 
     def test_failure_stops_unscheduled_work_and_does_not_retry(self):
@@ -253,6 +294,8 @@ class GateTests(unittest.TestCase):
                 {'name': 'cli', 'kind': ['test'], 'test': True},
                 {'name': 'open_compute_service', 'kind': ['lib'], 'test': True},
                 {'name': 'p0_2_runtime_gate', 'kind': ['test'], 'test': True},
+                {'name': 'p5_search_gate', 'kind': ['test'], 'test': True},
+                {'name': 'single_binary', 'kind': ['test'], 'test': True},
                 {'name': 'new_test', 'kind': ['test'], 'test': True},
                 {'name': 'ocd', 'kind': ['bin'], 'test': True},
                 {'name': 'build-script-build', 'kind': ['custom-build'], 'test': False},
@@ -261,17 +304,30 @@ class GateTests(unittest.TestCase):
             'manifest_path': '/repo/crates/runtime/Cargo.toml',
             'targets': [{'name': 'open_compute_runtime', 'kind': ['lib'], 'test': True}]}]}
         with patch.object(gate.subprocess, 'check_output', return_value=json.dumps(metadata)), \
-             patch.object(gate, 'CARGO_TARGETS', {'p0-2': gate.CARGO_TARGETS['p0-2']}):
+             patch.object(gate, 'CARGO_TARGETS', {
+                 name: gate.CARGO_TARGETS[name] for name in ('p0-2', 'p5-search', 'single-binary')
+             }):
             targets = gate.resolve_targets([], True)
         self.assertEqual({target.name for target in targets.values()},
-                         {'cli', 'open_compute_service', 'open_compute_runtime',
-                          'p0_2_runtime_gate', 'new_test', 'ocd', 'p3-contract'})
+                          {'cli', 'open_compute_service', 'open_compute_runtime',
+                          'p0_2_runtime_gate', 'p5_search_gate', 'single_binary', 'new_test', 'ocd',
+                          'p3-contract'})
         self.assertNotIn('p3-cf-diff', targets)
-        self.assertEqual(next(iter(targets)), 'open-compute-service.test.cli')
+        self.assertEqual(
+            list(targets)[:3],
+            ['open-compute-service.test.cli', 'single-binary', 'p5-search'],
+        )
         self.assertTrue(targets['open-compute-service.test.cli'].exclusive)
-        self.assertTrue(targets['open-compute-service.lib.open_compute_service'].exclusive)
+        self.assertTrue(targets['single-binary'].exclusive)
+        self.assertFalse(targets[gate.SERVICE_LIB_TARGET].exclusive)
+        self.assertTrue(targets[gate.SERVICE_PROCESS_TARGET].exclusive)
+        self.assertEqual(
+            targets[gate.SERVICE_LIB_TARGET]._replace(exclusive=True),
+            targets[gate.SERVICE_PROCESS_TARGET],
+        )
         self.assertTrue(targets['open-compute-runtime.lib.open_compute_runtime'].exclusive)
         self.assertTrue(targets['p0-2'].exclusive)
+        self.assertTrue(gate.CARGO_TARGETS['p0-5'][2])
         self.assertTrue(targets['open-compute-service.test.new_test'].exclusive)
         self.assertTrue(all(target.cwd == '/repo/crates/service'
                             for target in targets.values() if target.package_id == 'service'))
@@ -289,10 +345,16 @@ class GateTests(unittest.TestCase):
     def test_final_workspace_runs_complete_inventory_once_and_only_timing_twice_more(self):
         targets = self.targets(['p0-1', 'p1-security', 'p2-1', 'workflow-product'])
         targets['unit'] = gate.Target('package', 'lib', 'lib', '/repo', False)
+        targets[gate.SERVICE_LIB_TARGET] = gate.Target(
+            'service', 'open_compute_service', 'lib', '/repo', False)
+        targets[gate.SERVICE_PROCESS_TARGET] = gate.Target(
+            'service', 'open_compute_service', 'lib', '/repo', True)
         plans = gate.round_plan(targets, 3)
         self.assertEqual(plans[0], targets)
         for plan in plans[1:]:
             self.assertEqual(set(plan), {'p0-1', 'workflow-product'})
+            self.assertNotIn(gate.SERVICE_LIB_TARGET, plan)
+            self.assertNotIn(gate.SERVICE_PROCESS_TARGET, plan)
             for name, target in plan.items():
                 self.assertEqual(set(target.cases), set(gate.TIMING[name]))
                 self.assertFalse(set(target.cases) & set(gate.ONCE.get(name, ())))
@@ -363,6 +425,11 @@ class GateTests(unittest.TestCase):
         with patch.dict(gate.ONCE, {'p0-2': gate.TIMING['p0-2']}):
             with self.assertRaisesRegex(ValueError, 'duplicate'):
                 gate.validate_registry(gate.TARGETS)
+        for cases in [(), ('same', 'same')]:
+            with patch.dict(gate.validate_registry.__globals__,
+                            {'SERVICE_PROCESS_CASES': cases}):
+                with self.assertRaisesRegex(ValueError, 'workspace case partition'):
+                    gate.validate_registry(gate.TARGETS)
         with tempfile.TemporaryDirectory() as temp:
             log = Path(temp)/'list.log'
             targets = self.targets(['p1-security'])
@@ -385,6 +452,54 @@ class GateTests(unittest.TestCase):
                     gate.discovered_cases(log)
             log.write_text('0 tests, 0 benchmarks\n')
             self.assertEqual(gate.discovered_cases(log), ())
+
+    def test_service_library_inventory_is_partitioned_once_before_execution(self):
+        cases = (*gate.SERVICE_PROCESS_CASES, 'ordinary::case')
+        targets = {
+            gate.SERVICE_LIB_TARGET:
+                gate.Target('service', 'open_compute_service', 'lib', '/repo', False),
+            gate.SERVICE_PROCESS_TARGET:
+                gate.Target('service', 'open_compute_service', 'lib', '/repo', True),
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            full = root / 'full.log'
+            full.write_text('\n'.join(f'{name}: test' for name in cases)
+                            + f'\n\n{len(cases)} tests, 0 benchmarks\n')
+            prepared = [
+                {'target': name, 'log': str(full)} for name in targets
+            ]
+            partitioned = gate.verify_case_inventory(targets, prepared)
+            ordinary = set(partitioned[gate.SERVICE_LIB_TARGET].cases)
+            process = set(partitioned[gate.SERVICE_PROCESS_TARGET].cases)
+            self.assertEqual(ordinary, {'ordinary::case'})
+            self.assertEqual(process, set(gate.SERVICE_PROCESS_CASES))
+            self.assertFalse(ordinary & process)
+            self.assertEqual(ordinary | process, set(cases))
+
+            with self.assertRaisesRegex(ValueError, 'planned together'):
+                gate.verify_case_inventory(
+                    {gate.SERVICE_LIB_TARGET: targets[gate.SERVICE_LIB_TARGET]},
+                    prepared[:1],
+                )
+
+            different = root / 'different.log'
+            different.write_text('\n'.join(f'{name}: test' for name in cases[:-1])
+                                 + f'\n\n{len(cases) - 1} tests, 0 benchmarks\n')
+            with self.assertRaisesRegex(ValueError, 'different inventories'):
+                gate.verify_case_inventory(targets, [
+                    prepared[0],
+                    {'target': gate.SERVICE_PROCESS_TARGET, 'log': str(different)},
+                ])
+
+            missing = root / 'missing.log'
+            reduced = cases[1:]
+            missing.write_text('\n'.join(f'{name}: test' for name in reduced)
+                               + f'\n\n{len(reduced)} tests, 0 benchmarks\n')
+            with self.assertRaisesRegex(ValueError, 'exclusive cases are missing'):
+                gate.verify_case_inventory(targets, [
+                    {'target': name, 'log': str(missing)} for name in targets
+                ])
 
     def test_contract_mapping_validates_member_runtime_evidence_before_build(self):
         registered = f'p0-2::{gate.TIMING["p0-2"][0]}'
@@ -479,12 +594,17 @@ class GateTests(unittest.TestCase):
             root = Path(temp)
             binary = root / 'test-binary'
             binary.write_bytes(b'compiled test')
-            targets = {'first': gate.Target('one', 'same', 'lib', temp, False),
-                       'second': gate.Target('two', 'same', 'test', temp, False)}
-            messages = [{'reason': 'compiler-artifact', 'package_id': target.package_id,
-                         'target': {'name': target.name, 'kind': [target.kind], 'test': True},
-                         'profile': {'test': True}, 'executable': str(binary)}
-                        for target in targets.values()]
+            targets = {
+                gate.SERVICE_LIB_TARGET: gate.Target('one', 'same', 'lib', temp, False),
+                gate.SERVICE_PROCESS_TARGET: gate.Target('one', 'same', 'lib', temp, True),
+                'second': gate.Target('two', 'same', 'test', temp, False),
+            }
+            messages = [
+                {'reason': 'compiler-artifact', 'package_id': target.package_id,
+                 'target': {'name': target.name, 'kind': [target.kind], 'test': True},
+                 'profile': {'test': True}, 'executable': str(binary)}
+                for target in (targets[gate.SERVICE_LIB_TARGET], targets['second'])
+            ]
             messages.append({'reason': 'compiler-artifact', 'package_id': 'fixture-package',
                              'target': {'name': 'fixture', 'kind': ['bin'], 'test': False},
                              'profile': {'test': True}, 'executable': str(binary)})
@@ -492,6 +612,10 @@ class GateTests(unittest.TestCase):
             with patch.object(gate.subprocess, 'run', return_value=result) as run:
                 artifacts, build = gate.build_targets(targets, root, True)
             self.assertEqual(set(artifacts), set(targets))
+            self.assertEqual(artifacts[gate.SERVICE_LIB_TARGET],
+                             artifacts[gate.SERVICE_PROCESS_TARGET])
+            self.assertEqual(build['executables'][gate.SERVICE_LIB_TARGET],
+                             build['executables'][gate.SERVICE_PROCESS_TARGET])
             self.assertEqual(build['invocations'], 1)
             self.assertIn('--all-targets', run.call_args.args[0])
             missing = root / 'missing'
@@ -510,6 +634,19 @@ class GateTests(unittest.TestCase):
             with patch.object(gate.subprocess, 'run', return_value=result):
                 with self.assertRaisesRegex(RuntimeError, 'unplanned test executable'):
                     gate.build_targets(targets, unplanned, True)
+            duplicate = root / 'duplicate'
+            duplicate.mkdir()
+            with patch.object(gate.subprocess, 'run') as run, \
+                 self.assertRaisesRegex(RuntimeError, 'duplicate Gate owners'):
+                gate.build_targets(
+                    {
+                        'one': gate.Target('one', 'same', 'lib', temp, False),
+                        'two': gate.Target('one', 'same', 'lib', temp, False),
+                    },
+                    duplicate,
+                    True,
+                )
+            run.assert_not_called()
 
     def test_typed_discovery_and_exact_execution_use_strict_json_and_environment(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(gate, 'ROOT', Path(temp)):

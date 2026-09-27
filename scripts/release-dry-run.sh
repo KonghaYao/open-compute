@@ -160,6 +160,12 @@ if [ "${1:-}" = --inside ]; then
 fi
 [ "$#" -eq 0 ] || fail "usage: $0"
 
+if [ "$(uname -s)" = Darwin ] && [ "${OPEN_COMPUTE_CAFFEINATED:-}" != 1 ]; then
+  export OPEN_COMPUTE_CAFFEINATED=1
+  exec /usr/bin/caffeinate -is "$0"
+fi
+unset OPEN_COMPUTE_CAFFEINATED
+
 command -v docker >/dev/null 2>&1 || fail "Docker is required"
 docker info >/dev/null 2>&1 || fail "Docker is not running"
 host_uid=$(id -u)

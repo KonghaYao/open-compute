@@ -38,6 +38,8 @@ W3 Provider fixture 不属于发行物；它是本仓库 `test-support` feature 
 ## 一个调度入口
 
 调度器仅依赖 Python 3.11+ 标准库；CI 显式选择 Python 3.12。
+macOS 本地运行会自动经 `caffeinate -is` 重新执行，避免 suspend/resume 打断真实 workerd、
+loopback transport 和有界计时；Linux/CI 行为不变。
 
 ```sh
 ./test/gate.py p0-2
@@ -57,6 +59,12 @@ W3 Provider fixture 不属于发行物；它是本仓库 `test-support` feature 
 `1` 或 `3`，但三轮不再是开发、最终或发行验收要求；只有用户明确要求单独的重复诊断时才可设置为 `3`。
 `--list` 输出本轮目标、注册用例及计划进程数，不构建、不执行；workspace 中未列入产品 Gate 的宿主用例会在构建后发现，
 计划中的 `null` 不代表跳过。`inventory_verified` 只有核对原生 discovery 后才为真。
+workspace 的 service library 仍只构建一个 test binary；调度器对同一原生 inventory 做互斥分区：普通 case
+进入现有并行槽，`test/gate_cases.py` 登记的真实进程/lifecycle case 保持独占。两个逻辑目标的 discovery
+必须完全相同，分区必须无遗漏、无重叠，且每个 case 仍只执行一次，否则在任何产品 case 启动前失败。
+P0.5 的 241 MB 并发上传/回读矩阵保持独占，避免 coverage 下与 service library 争用时截断 HTTP stream。
+workspace 顺序先做 CLI、single-binary 和独占的 p5-search，再进入普通并行段；这不增加成功路径工作量，
+但会在约五分钟内暴露已知的打包/runtime/search 阻塞，而不是等到长尾独占段。
 旧 `test-p*.sh` 递归入口已删除，
 仅保留需要授权和清理的 Linux egress wrapper。
 
@@ -152,7 +160,8 @@ single-binary 与 `workflow-product` 使用独占屏障。该目标同时覆盖 
 core/storage/artifacts/workers/service 五个库的故障钩子均
 为进程私有，staging/数据库归属独立 TMPDIR，已经并发验证。runtime 库的 1–2 秒进程故障
 窗口在并行实测中失败，因此保留独占，不放宽时限。CLI 先独占执行，使实际 ocd 的首次
-加载不与定时 runtime probe 重叠；新增未审查目标保守独占。无需安装额外 Rust 测试运行器。
+加载不与定时 runtime probe 重叠；随后立即独占验证 single-binary，在长并行区前暴露正式单文件启动失败。
+新增未审查目标保守独占。无需安装额外 Rust 测试运行器。
 
 ## 完整检查与最终验收
 

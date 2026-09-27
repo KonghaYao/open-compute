@@ -9,6 +9,7 @@ async fn cli_execute_covers_success_failure_and_output_modes() {
     for json in [false, true] {
         let mut args = vec![
             "ocd".to_owned(),
+            "--no-update-check".to_owned(),
             "--config".to_owned(),
             path.display().to_string(),
             "config".to_owned(),
@@ -53,6 +54,7 @@ async fn cli_execute_covers_success_failure_and_output_modes() {
     drop(storage);
     let recovery = parse_from([
         "ocd",
+        "--no-update-check",
         "--config",
         path.to_str().unwrap(),
         "scheduler",
@@ -91,6 +93,7 @@ async fn cli_execute_covers_success_failure_and_output_modes() {
     let missing_path = dir.path().join("missing.toml");
     let missing_config = parse_from([
         "ocd",
+        "--no-update-check",
         "--config",
         missing_path.to_str().unwrap(),
         "config",
@@ -110,6 +113,7 @@ async fn cli_execute_covers_success_failure_and_output_modes() {
     for json in [false, true] {
         let mut args = vec![
             "ocd".to_owned(),
+            "--no-update-check".to_owned(),
             "--config".to_owned(),
             path.display().to_string(),
             "doctor".to_owned(),
@@ -140,7 +144,15 @@ async fn cli_execute_covers_success_failure_and_output_modes() {
             Ok(())
         }
     }
-    let cli = parse_from(["ocd", "--config", path.to_str().unwrap(), "config", "check"]).unwrap();
+    let cli = parse_from([
+        "ocd",
+        "--no-update-check",
+        "--config",
+        path.to_str().unwrap(),
+        "config",
+        "check",
+    ])
+    .unwrap();
     let mut stdout = RejectWrites;
     let mut stderr = Vec::new();
     assert_ne!(

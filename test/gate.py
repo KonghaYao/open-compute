@@ -22,7 +22,13 @@ import uuid
 # This CLI imports repository-local policy; do not create disposable source-tree
 # bytecode (or change the frozen input set) while discovering/running tests.
 sys.dont_write_bytecode = True
-from gate_cases import ONCE, TIMING, validate_registry
+from gate_cases import (
+    ONCE,
+    SERVICE_PROCESS_CASES,
+    SERVICE_PROCESS_TARGET,
+    TIMING,
+    validate_registry,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_JOBS = min(4, os.cpu_count() or 1)
@@ -33,9 +39,10 @@ TypedTarget = namedtuple(
     'timeout resource_class cleanup_owner',
     defaults=[None, (), (), (), 600, 'light', 'runner'],
 )
+SERVICE_LIB_TARGET = 'open-compute-service.lib.open_compute_service'
 # Only these targets have been audited for independent TempDir/SQLite/S3/port-0 state
-# and bounded resource use. The service library includes real runtime doctor probes,
-# so it remains an exclusive barrier instead of starving parallel version probes.
+# and bounded resource use. The service library's real-process subset remains an
+# exclusive barrier instead of starving parallel version probes.
 # p0_1 scans global executable staging, so it is an exclusive barrier.
 # The current Workflow product target's 16 concurrent MiB results exhausted
 # shared kernel socket buffers in a
@@ -47,7 +54,9 @@ CARGO_TARGETS = {
     'p0-2': ('open-compute-service', 'p0_2_runtime_gate', True),
     'p0-3': ('open-compute-service', 'p0_3_resource_binding_gate', False),
     'p0-4': ('open-compute-service', 'p0_4_kv_gate', False),
-    'p0-5': ('open-compute-service', 'p0_5_r2_gate', False),
+    # The 241 MB concurrent upload/readback matrix loses its HTTP stream under
+    # coverage when it contends with the service-library process.
+    'p0-5': ('open-compute-service', 'p0_5_r2_gate', True),
     'p0-6': ('open-compute-service', 'p0_6_d1_gate', False),
     'p0-7': ('open-compute-service', 'p0_7_durable_objects_gate', False),
     'p0-8': ('open-compute-service', 'p0_8_scheduler_do_alarms_gate', False),
@@ -114,6 +123,19 @@ GROUPS = {
     'all': [*CARGO_TARGETS, 'p3-contract'],
     'p5': ['p5-search'],
 }
+
+
+def prevent_macos_sleep():
+    """Keep a local real-process Gate out of macOS suspend/resume."""
+    marker = os.environ.pop('OPEN_COMPUTE_CAFFEINATED', None)
+    if sys.platform != 'darwin' or os.environ.get('GITHUB_ACTIONS') == 'true' or marker == '1':
+        return
+    environment = dict(os.environ, OPEN_COMPUTE_CAFFEINATED='1')
+    os.execve(
+        '/usr/bin/caffeinate',
+        ['/usr/bin/caffeinate', '-is', sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]],
+        environment,
+    )
 
 
 def selection(names):
@@ -218,6 +240,22 @@ def verify_case_inventory(targets, prepared):
         if expected != actual:
             raise ValueError(f'{name}: case registry mismatch; missing={sorted(expected - actual)}; '
                              f'unregistered={sorted(actual - expected)}')
+    service_partitions = {SERVICE_LIB_TARGET, SERVICE_PROCESS_TARGET} & targets.keys()
+    if service_partitions:
+        if service_partitions != {SERVICE_LIB_TARGET, SERVICE_PROCESS_TARGET}:
+            raise ValueError('service library case partitions must be planned together')
+        ordinary_inventory = set(inventories[SERVICE_LIB_TARGET])
+        process_inventory = set(inventories[SERVICE_PROCESS_TARGET])
+        if ordinary_inventory != process_inventory:
+            raise ValueError('service library case partitions discovered different inventories')
+        exclusive = set(SERVICE_PROCESS_CASES)
+        if missing := exclusive - ordinary_inventory:
+            raise ValueError(f'service library exclusive cases are missing: {sorted(missing)}')
+        ordinary = ordinary_inventory - exclusive
+        if not ordinary or ordinary & exclusive or ordinary | exclusive != ordinary_inventory:
+            raise ValueError('service library case partition is incomplete or overlapping')
+        inventories[SERVICE_LIB_TARGET] = tuple(sorted(ordinary))
+        inventories[SERVICE_PROCESS_TARGET] = tuple(sorted(exclusive))
     return {name: target._replace(cases=inventories[name]) for name, target in targets.items()}
 
 
@@ -246,10 +284,17 @@ def resolve_targets(selected, workspace):
                 f'{package["name"]}.{kind}.{target["name"]}',
                 (package['name'], kind if kind == 'lib' else target['name']) not in independent))
             if workspace or label in selected:
-                found[label] = Target(package['id'], target['name'], kind,
-                                      str(Path(package['manifest_path']).parent), exclusive,
-                                      tuple(sorted(ONCE.get(label, ()) + TIMING.get(label, ())))
-                                      if label in CARGO_TARGETS else None)
+                resolved = Target(
+                    package['id'], target['name'], kind,
+                    str(Path(package['manifest_path']).parent), exclusive,
+                    tuple(sorted(ONCE.get(label, ()) + TIMING.get(label, ())))
+                    if label in CARGO_TARGETS else None,
+                )
+                if workspace and label == SERVICE_LIB_TARGET:
+                    found[label] = resolved._replace(exclusive=False)
+                    found[SERVICE_PROCESS_TARGET] = resolved._replace(exclusive=True)
+                else:
+                    found[label] = resolved
     typed = {}
     if workspace or {'p3-contract', 'p3-cf-diff'} & set(selected):
         bun = shutil.which('bun')
@@ -300,9 +345,12 @@ def resolve_targets(selected, workspace):
         # CLI first loads the actual ocd executable before timed runtime probes.
         # Runtime's tight process-fault windows require an exclusive slot even though
         # its hooks/staging are private; the other libraries have passed together.
-        # Complete independent jobs together; unaudited/global-state jobs are barriers.
+        # Prove the packaged single binary before the long parallel section, then
+        # complete independent jobs together; other global-state jobs are barriers.
         resolved = dict(sorted(found.items(), key=lambda item: (
-            0 if item[0] == 'open-compute-service.test.cli' else 2 if item[1].exclusive else 1,
+            0 if item[0] == 'open-compute-service.test.cli' else
+            1 if item[0] == 'single-binary' else
+            2 if item[0] == 'p5-search' else 4 if item[1].exclusive else 3,
             item[0])))
         resolved.update(typed)
         return resolved
@@ -406,6 +454,14 @@ def build_targets(targets, directory, workspace):
     if not cargo_targets:
         return artifacts, {'invocations': 0, 'seconds': 0.0, 'executables': {},
                            'typed_targets': typed_inputs}
+    expected = {}
+    for name, target in cargo_targets.items():
+        key = (target.package_id, target.name, target.kind)
+        expected.setdefault(key, []).append(name)
+    allowed_aliases = {SERVICE_LIB_TARGET, SERVICE_PROCESS_TARGET}
+    for names in expected.values():
+        if len(names) > 1 and set(names) != allowed_aliases:
+            raise RuntimeError(f'Cargo test executable has duplicate Gate owners: {sorted(names)}')
     command = [os.environ.get('CARGO', 'cargo'), 'test', '--locked', '--offline',
                '--all-features', '--no-run', '--message-format=json']
     if workspace:
@@ -418,8 +474,6 @@ def build_targets(targets, directory, workspace):
     start = time.monotonic()
     with (directory / 'build.stderr.log').open('x') as errors:
         result = subprocess.run(command, cwd=ROOT, stdout=subprocess.PIPE, stderr=errors, text=True)
-    expected = {(target.package_id, target.name, target.kind): name
-                for name, target in cargo_targets.items()}
     coverage_executables = []
     with (directory / 'build.jsonl').open('x') as output:
         output.write(result.stdout)
@@ -441,7 +495,8 @@ def build_targets(targets, directory, workspace):
             key = (item['package_id'], item['target']['name'], item['target']['kind'][0])
             if key not in expected:
                 raise RuntimeError(f'Cargo produced an unplanned test executable: {key}')
-            artifacts[expected[key]] = item['executable']
+            for name in expected[key]:
+                artifacts[name] = item['executable']
     missing = cargo_targets.keys() - artifacts.keys()
     if missing:
         raise RuntimeError(f'Cargo did not produce selected Gate executables: {missing}')
@@ -818,6 +873,7 @@ def main():
 
 
 if __name__ == '__main__':
+    prevent_macos_sleep()
     try:
         sys.exit(main())
     except (ValueError, OSError, subprocess.SubprocessError) as error:

@@ -245,18 +245,30 @@ fn dashboard_base_url(
 }
 
 fn open_url_in_browser(url: &str) -> Result<(), PlatformError> {
-    let status = if cfg!(target_os = "macos") {
-        Command::new("open").arg(url).status()
+    open_url_with(url, |program, target| {
+        Command::new(program)
+            .arg(target)
+            .status()
+            .map(|status| status.success())
+    })
+}
+
+fn open_url_with(
+    url: &str,
+    launch: impl FnOnce(&str, &str) -> std::io::Result<bool>,
+) -> Result<(), PlatformError> {
+    let program = if cfg!(target_os = "macos") {
+        "open"
     } else if cfg!(target_os = "linux") {
-        Command::new("xdg-open").arg(url).status()
+        "xdg-open"
     } else {
         return Err(PlatformError::new(
             ErrorCode::PlatformUnavailable,
             "opening a browser is not supported on this host; use --no-open",
         ));
     };
-    match status {
-        Ok(code) if code.success() => Ok(()),
+    match launch(program, url) {
+        Ok(true) => Ok(()),
         _ => Err(PlatformError::new(
             ErrorCode::Internal,
             "failed to open the Dashboard URL in a browser; retry with --no-open",

@@ -10,9 +10,21 @@
 提高到 2，保留 Gate 的 `--jobs 2`、每个测试进程的 `--test-threads=1` 和独占目标边界。正式 artifact
 只消费 LCOV 与 JSON，因此 tag CI 不再额外生成约 74 秒且不上传的 HTML；本地 coverage 默认仍生成 HTML。
 
+同一 coverage Gate 中，service library 的 795 个 case 作为一个独占进程串行占用 1,061.67 秒。现在仍只
+编译一个 test binary，但 discovery 后将 787 个已审计隔离的 case 交给普通两路调度，只把 8 个真实
+workerd、进程级 shutdown 和 startup lifecycle case 留在独占 barrier。两个逻辑目标必须发现完全相同的
+原生 inventory，随后验证分区无遗漏、无重叠；每个 case 仍恰好执行一次。按该 run 的调度数据预计缩短
+关键路径；本地插桩验证发现 P0.5 的 241 MB 并发上传/回读不能与该分片争用资源，因此 P0.5 保持独占。
+最终收益尚未经过下一次插桩 CI 实测，不能把估算写成已实现收益。
+
 同日已退役的 GitHub dry-run `36241986887` 为 31 分 43 秒、32.42 runner-min；它尚未完成时正式 release
 已经启动，而且其产物不会流入 tag workflow，因此没有提供发布前拦截或构建复用。远端 dry-run 已删除；
 隔离 package 诊断改在本机 Docker 内完成，不再先消耗一轮 Actions runner。
+
+本地最终 Gate 的一次 `p5-search` 失败发生在 05:35:08 macOS 入睡至 05:51:54 DarkWake 的窗口；
+该目标报告只累计 22.40 秒 active monotonic time，并在唤醒同秒得到 `RUNTIME_UNAVAILABLE`。同一源码保持
+唤醒后单目标 71.41 秒通过，因此不改产品 runtime、不加重试：本地 Gate 和 Docker dry-run 在 macOS
+自动使用 `caffeinate -is`，并把 p5-search 移到 single-binary 后的 fail-fast 段。正式 GitHub runner 不变。
 
 `main` 的旧轻量检查（`34015774164`）耗时 2 分 46 秒；加入生产 Clippy、no-default-features
 和 production hygiene 后，健康缓存的 `34974064143` 耗时 8 分 04 秒，半成品缓存下的
@@ -117,7 +129,8 @@ workspace/final binary。当前没有应用 benchmark，且仓库 cache 已接�
 
 - 正式 tag workflow 使用 `cache-mode: read`。GitHub cache 按 branch/tag 隔离，tag 可以读取默认分支缓存，
   但下一个 tag 不能读取前一个 tag 写入的条目；main 负责写入可复用缓存，正式发布
-  不再压缩、上传和占用只服务当前 tag 的缓存。
+  不再压缩、上传和占用只服务当前 tag 的缓存。release job 显式关闭 composite Rust save，并删除
+  read-only 模式下仍会先清理目录的 save 步骤。
 - 0.2.2 发布时 inventory 为 22 个条目、约 10.43 GiB；11 个旧 `v0.1.10` tag-scope 条目占约
   6.06 GiB。它们既不能服务后续 tag，又使新保存因 configured budget 进入 read-only。删除这些可重建
   的旧 tag cache 或提高预算后，main/诊断 workflow 才能重新写入；不能把失败的 save 当成暖缓存证据。
@@ -125,14 +138,15 @@ workspace/final binary。当前没有应用 benchmark，且仓库 cache 已接�
 - Rust dependency cache 按工具链、OS/CPU、编译环境和 manifest/lock 分隔；release target 与 coverage
   各自使用 profile key。失败的普通 target cache 不保存，避免把不完整目录当成下一次构建输入；PR
   仍不向共享 Rust cache 写入。
-- package 把正式 profile 隔离在 `.temp/release-target/`，使用每个平台独立的 `v3-release-*`
-  smart cache 保存第三方 release dependency artifacts；普通 `target/` 仍只服务 main 与
-  `single-binary` Gate。两个 profile 不互相覆盖，也不保存 incremental 或把开发产物当作发行物。
+- package 把正式 profile 隔离在 `.temp/release-target/`；普通 `target/` 仍只服务 main 与
+  `single-binary` Gate。default branch 没有 `v3-release-*` writer，而新 tag 不能读取旧 tag 的 cache，
+  因此已删除这个确定 miss 的 release-target cache layer。两个 profile 不互相覆盖，也不保存 incremental
+  或把开发产物当作发行物。
 - Cargo registry/index/git 下载使用独立、仅由 OS 与 `Cargo.lock` 定位的缓存，避免 profile-specific
   target cache 未命中时重新下载全部 Rust 依赖。
-- package 使用固定 sccache 0.16.0，512 MiB 本地缓存位于 `.temp/sccache`，整目录通过 Actions
-  cache restore/save 复用；主 key 只包含 OS/CPU、Rust/sccache 版本和锁定输入，fallback 可跨源码
-  commit 复用内容寻址的编译结果。精确命中不再重复保存，竞争保存失败也不影响构建。它是编译
+- package 使用固定 sccache 0.16.0，512 MiB 本地缓存位于 `.temp/sccache`，正式 tag 只恢复 default
+  branch 已有的 Actions cache；主 key 只包含 OS/CPU、Rust/sccache 版本和锁定输入，fallback 可跨源码
+  commit 复用内容寻址的编译结果。tag 不再尝试保存不可供下一 tag 读取的 cache。它是编译
   加速缓存，不是测试通过证据或可信发行物。package 完成后先从环境移除 sccache，再执行
   `single-binary` Gate，避免 debug/test 编译逐出容量有限的 release 编译项。
 - 2026-09-16 inventory 有 22 个条目、约 9.57 GiB，已经贴近 GitHub 每仓库 10 GiB 上限；其中
@@ -189,7 +203,7 @@ SKU，单独增加 SKU 预算不能覆盖它。要允许 cache 写入，Actions 
 | 增加 codegen units              | 暖跑剩余 245.58 秒为最终 ThinLTO/link；没有应用 benchmark 前不拿未知运行时退化换几十秒构建时间                      |
 | 缓存完整 workspace/final binary | 当前 target/compiler cache 已证明 9 分钟暖跑；不增加 source-keyed 全量 target 缓存挤占 20 GB 配额                   |
 | nightly 编译参数 / 替换 linker  | 不引入 nightly 或未验证 linker；保持正式 Rust 1.98 和原生链接契约                                                   |
-| 增大 Gate 并发                  | 保持审计后的 `--jobs 2` 和独占目标，不拿资源争抢换取新的时序失败                                                    |
+| Gate 调度                       | 保持 `--jobs 2`；service lib 的 787/8 case 分区并行调度，但 241 MB P0.5 矩阵继续独占，避免以资源争用换时序失败      |
 
 ## 测试与复用边界
 
