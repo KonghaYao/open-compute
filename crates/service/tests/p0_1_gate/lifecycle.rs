@@ -296,7 +296,7 @@ pub(super) fn term_ignore_kill_deadline(
         .find(|&p| p != pid)
         .expect("workerd");
     note_tree(round, wpid);
-    let _ = kill_process(Pid::from_raw(wpid).unwrap(), Signal::STOP);
+    stop_process(wpid);
     let mut child = round.child.take().unwrap();
     let started = Instant::now();
     let _ = kill_process(Pid::from_raw(pid).unwrap(), Signal::TERM);
@@ -340,6 +340,7 @@ pub(super) fn orphan_sigkill_recovery(
         .find(|&p| p != pid)
         .expect("workerd");
     note_tree(round, wpid);
+    stop_process(wpid);
     let mut child = round.child.take().unwrap();
     let _ = kill_process(Pid::from_raw(pid).unwrap(), Signal::KILL);
     let _ = child.wait();

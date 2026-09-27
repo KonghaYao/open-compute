@@ -264,6 +264,25 @@ pub(super) fn pid_alive(pid: i32) -> bool {
     }
 }
 
+pub(super) fn stop_process(pid: i32) {
+    let raw = Pid::from_raw(pid).expect("tracked PID must be positive");
+    kill_process(raw, Signal::STOP).expect("SIGSTOP the tracked process");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let output = Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .expect("ps is required by the process Gate");
+        let state = String::from_utf8_lossy(&output.stdout);
+        if output.status.success() && state.trim_start().starts_with('T') {
+            return;
+        }
+        assert!(pid_alive(pid), "process exited before SIGSTOP took effect");
+        assert!(Instant::now() < deadline, "process did not stop: {state:?}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 pub(super) fn assert_gone(pid: i32, what: &str) {
     let deadline = Instant::now() + Duration::from_secs(5);
     while pid_alive(pid) {
