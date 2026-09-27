@@ -572,16 +572,7 @@ pub(crate) fn exchange(
         return Err(invalid("daemon control socket owner or mode is invalid"));
     }
     let mut stream = UnixStream::connect(&path).map_err(|_| invalid("daemon is not running"))?;
-    let timeout = match request {
-        ControlRequest::CleanCache { .. } | ControlRequest::CleanGlobalCache { .. } => {
-            Duration::from_secs(300)
-        }
-        ControlRequest::Add { .. }
-        | ControlRequest::Create { .. }
-        | ControlRequest::Remove { .. } => Duration::from_secs(60),
-        ControlRequest::CaddyReload | ControlRequest::CaddyValidate => Duration::from_secs(30),
-        _ => Duration::from_secs(3),
-    };
+    let timeout = response_timeout(request);
     stream
         .set_read_timeout(Some(timeout))
         .map_err(|_| invalid("failed to set daemon control timeout"))?;
@@ -597,6 +588,21 @@ pub(crate) fn exchange(
         .read_to_end(&mut bytes)
         .map_err(|_| invalid("failed to read daemon control response"))?;
     serde_json::from_slice(&bytes).map_err(|_| invalid("daemon control response is invalid"))
+}
+
+fn response_timeout(request: &ControlRequest) -> Duration {
+    match request {
+        ControlRequest::CleanCache { .. } | ControlRequest::CleanGlobalCache { .. } => {
+            Duration::from_secs(300)
+        }
+        ControlRequest::Add { .. }
+        | ControlRequest::Create { .. }
+        | ControlRequest::Remove { .. }
+        | ControlRequest::Start { .. } => crate::instance_ops::INSTANCE_READY_TIMEOUT,
+        ControlRequest::Stop { .. } => crate::instance_ops::INSTANCE_STOP_TIMEOUT,
+        ControlRequest::CaddyReload | ControlRequest::CaddyValidate => Duration::from_secs(30),
+        _ => Duration::from_secs(3),
+    }
 }
 
 fn invalid(message: &'static str) -> PlatformError {
