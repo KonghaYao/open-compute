@@ -1,7 +1,6 @@
 # P5.3：Cloudflare 文档格式、OCR 与可选 VLM
 
-状态：**implemented（2026-09-11）**。尚需真实 provider、hosted differential、正式平台构建和发行尺寸证据的项目见
-[P5 剩余发行验收](../acceptance/p5-release-acceptance.md)。
+状态：**implemented（2026-09-11）**。
 
 本阶段统一完成 [#45 `chunk: false`](https://github.com/elliothux/open-compute/issues/45)、
 [#46 durable parse cache](https://github.com/elliothux/open-compute/issues/46)、
@@ -81,12 +80,5 @@ Xberg 的语言 validator alias 是同目录内经过相同 digest 校验的 har
   width、height、pixels、encoded bytes 和 output tokens。
 - VLM 只接受 `en|it|de|es|fr|pt`，使用 non-stream request、temperature 0、固定 system/user prompt 和 base64 data URL；
   tenant 不能选择 endpoint、model、header 或 prompt。
-- macOS parser child 的 RSS hard limit 仍是已接受的后续项；CPU、wall time、输入/输出、并发、process-group 回收和
+- macOS parser child 无 RSS hard limit 是当前明确接受的支持边界；CPU、wall time、输入/输出、并发、process-group 回收和
   `RLIMIT_FSIZE=0`、无网络边界继续生效。JPEG/PNG/WebP/SVG/GIF/BMP 与扫描 PDF 的 OCR 不需要 regular-file write。
-
-## 尚待资格化
-
-本地 deterministic Gate 不调用 DeepSeek。`OPEN_COMPUTE_RUN_DEEPSEEK_VLM=1 bun run test/deepseek-vlm-live.ts`
-是明确授权后单独执行的真实 wire qualification，只读取 root `/.env` 中的 `DEEPSEEK_API_KEY`，且不输出 secret、请求图片或
-provider body；该检查固定当前官方视觉模型 `deepseek-v4-flash-vision-exp`。正式平台静态链接、release binary 增量和
-hosted Markdown Conversion differential 同样留在验收清单，没有用本机结果代替。

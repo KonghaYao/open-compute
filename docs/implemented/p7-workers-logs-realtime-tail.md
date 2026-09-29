@@ -1,7 +1,6 @@
 # P7：Workers Logs 与 Realtime Tail
 
-状态：**verified / Implementation GO（2026-09-04）**。扩展 hosted、性能和跨平台资格见
-[P7 验收](../acceptance/p7-observability-extended-acceptance.md)。
+状态：**verified / Implementation GO（2026-09-04）**。
 
 ## 用户结果
 
@@ -21,4 +20,5 @@ Wrangler 4.127.1、Cloudflare SDK 7.1.0、Dashboard live wire、214 个 JS tests
 Coverage Gate 和最终单轮 workspace Gate 均为 49 targets／1,107 cases；Rust line coverage 为
 106,499 / 118,313（90.0146%）。
 
-Hosted Script Tail 长尾、nested target attribution differential、参数化性能和跨平台发行仍未完成。
+Hosted nested-target attribution parity 与多 Tail list 的精确 wire shape 不在当前声明范围；实时 session
+仍是 process-local、无 replay 的 best-effort 能力。

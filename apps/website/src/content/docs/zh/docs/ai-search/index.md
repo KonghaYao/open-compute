@@ -6,6 +6,8 @@ AI Search 对你上传的文件建索引，并支持关键词、向量或混合�
 
 open-compute 使用 **operator 配置的 OpenAI-compatible provider** 实现上述表面。**不提供**完整 Workers AI 模型推理（`run()`、`models()`、AutoRAG 及其它无关推理）。
 
+> **目前只支持文本查询：**AI Search 只接受文本 `query` 和 string content message。image、file 以及 text+image 混合查询均不支持，并会 fail closed，不会静默降级为文本检索。文档导入阶段的 OCR 和可选 image description 只是把源文件转换为可索引文本，不代表支持多模态查询。
+
 例如可用于：
 
 - 上传文档或索引有界 R2 source，再从 Worker 中检索
@@ -77,6 +79,7 @@ await index.items.openComputeUpsert({
 | 主题                  | Cloudflare                                          | open-compute                               |
 | --------------------- | --------------------------------------------------- | ------------------------------------------ |
 | AI Search Worker API  | Namespace / instance / items / jobs / search / chat | 已声明表面相同                             |
+| 查询模态              | 模型支持时可使用 text、image 或 multimodal          | **仅文本**                                 |
 | Markdown Conversion   | `env.AI.toMarkdown()` / `supported()`               | 固定 overload 相同                         |
 | Embedding / chat 模型 | Cloudflare 托管 Workers AI                          | operator 固定的 OpenAI-compatible provider |
 | 完整 Workers AI 推理  | `run()` / `models()` / AutoRAG                      | **不提供**                                 |

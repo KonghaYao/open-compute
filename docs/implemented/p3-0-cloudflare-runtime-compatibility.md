@@ -1,7 +1,6 @@
 # P3.0：Cloudflare Runtime 兼容实现
 
-状态：**implemented / hosted Conditional Go（2026-09-01）**。Workflow 托管端资格见
-[剩余验收](../acceptance/p3-0-cloudflare-runtime-compatibility-acceptance.md)。
+状态：**implemented（2026-09-01）**。
 
 ## 最终结果
 
@@ -24,4 +23,4 @@
 Gate 40 targets／802 cases 成功；Rust line coverage 为 68,383 / 75,839（90.17%）。
 
 Workers、Cache API、KV、D1、R2、Durable Objects 和 Queues 的 Cloudflare differential 通过并精确清理。
-Workflow 在只读 preflight 遇到 OAuth code `10000`，因此整体 hosted verdict 保持 Conditional Go；未执行正式发行或跨平台资格。
+Workflow 在只读 preflight 遇到 OAuth code `10000`，因此不声明真实 Cloudflare Workflow 托管端一致性。

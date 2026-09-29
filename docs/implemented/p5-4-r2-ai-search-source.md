@@ -92,13 +92,7 @@ event notification、webhook 或 source detach。单次 scan 的 100,000/10,000 
 token metadata deviation 见 `OC-AI-SEARCH-TOKEN-001`。
 
 当前正式 pin 是 `v1.20260905.0-open-compute-p1.b3e1a278`、compatibility date `2026-09-08`。公开文档已
-包含 64 字符 ID 和完整 interval enum，而该 pin 附带的旧类型注释仍显示更窄边界；实现按当前公开 wire 合同
-验证。`test/conformance/ai-search-r2-item-differential.ts` 已冻结 issue #52 所需的 hosted probe：完成
-initial reconcile 后 pause instance，写入 extensionless R2 object，再用 `PUT /items` 和
-`wait_for_completion: true` 记录创建、`source_id` 与 queryable 结果，并精确清理临时资源。当前环境没有
-Cloudflare 凭据且本轮未获外部写授权，所以该 probe 尚未执行。raw-key filter、checksum、manual-overlap 及
-上述 PUT 行为的 Cloudflare hosted differential 继续在
-[P5 发行验收](../acceptance/p5-release-acceptance.md)保持未验证，不用本地 mock 冒充托管证据。
+包含 64 字符 ID 和完整 interval enum，而该 pin 附带的旧类型注释仍显示更窄边界；实现按当前公开 wire 合同验证。
 
 ## 本地验证
 

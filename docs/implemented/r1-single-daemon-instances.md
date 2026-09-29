@@ -1,6 +1,6 @@
 # R1：单 OCD daemon、多 Instance 与单一身份重构
 
-状态：**implemented**（2026-09-24）。剩余跨平台与真实网络资格见 [R1 验收计划](../acceptance/r1-single-daemon-instances-acceptance.md)。
+状态：**implemented**（2026-09-24）。
 
 ## 用户结果
 

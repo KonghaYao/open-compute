@@ -6,7 +6,6 @@
 | 正式版本说明             | [Release notes](releases/README.md)                                                         |
 | 当前 API 支持与偏差      | [兼容矩阵](references/cloudflare-compatibility.md)、[偏差清单](references/p1-deviations.md) |
 | 开发测试、部署与运维     | [参考文档](references/README.md)                                                            |
-| 尚未取得的 qualification | [验收计划](acceptance/README.md)                                                            |
 | 原生运行时实施与后续工作 | [workerd 路线](workerd/README.md)；源码基于 `third_party/workerd/` submodule                |
 | 其他待实现设计           | 下表；外部前置阻塞见 [blocked](blocked/README.md)                                           |
 
@@ -17,13 +16,15 @@
 
 | 文档                                                                               | 当前状态                                                                                                                                                                                                               |
 | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [R2 架构与代码审查收敛](r2-architecture-code-review.md)                            | planned：统一 R2 lifecycle、identity/limit authority、HTTP composition、Dashboard query/SDK ownership、storage module/public surface，并删除死 API                                                                     |
 | [代码质量提升专项-2026-09-08](q0-code-quality-2026-09-08.md)                       | TODO：按 Day 1 收敛 Rust/TypeScript 领域与 package/crate 边界；Dashboard 改为 kebab-case 文件名、Jotai 状态和 date-fns 日期边界，并建立 Prettier/Oxlint/Knip/typecheck/build/test 硬门                                 |
 | [Q1 workspace 行覆盖长尾补齐](q1-coverage-long-tail.md)                            | TODO：从 90.02% 基线补齐既有覆盖长尾到 ≥91%；W2 新增代码已全覆盖，剩余缺口按 v4 产品后端/运行时进程/服务安装/存储引擎四组列出，结构性不可覆盖项（SIGKILL fixture、公网 clone）单列                                     |
-| [macOS 解析进程内存限制](p5-8-macos-document-parser.md)                            | TODO：RSS 硬限制待实现；0.1.0 接受此限制并保留完整格式支持                                                                                                                                                             |
-| [P19 Cloudflare Browser Run](p19-browser-run.md)                                   | Day 1 合同与单文件分发架构完成；`ocd` 内嵌压缩 Browser Runtime、首次使用时离线物化并完整监督；待 BR-G0 在 `chrome-headless-shell` 与 Obscura 中选择一个正式引擎                                                        |
-| [P20 Cloudflare Containers](p20-cloudflare-containers.md)                          | Day 1 合同与两阶段 provider 路线完成；短期依赖宿主 Docker + restricted Broker，长期以 BoxLite 或其他待 G0 的可嵌入 runtime + Docker 子集 shim 替换；受 dynamic DoHost/workerd attachment 与真实 engine/package G0 阻断 |
-| [P21 macOS Developer ID 签名与 Apple 公证](p21-macos-code-signing-notarization.md) | Day 1 发行合同与 CI 方案完成；待配置受保护的 Apple/GitHub 凭据、签署最终 `ocd`、取得 Notary `Accepted` 并完成真实 tag 验收                                                                                             |
-| [P22 平台后续能力](p22-platform-follow-ups.md)                                     | planned：保留尚未拆成独立阶段的 compatibility date、显式 `.env`、`wrangler.toml`、operator logger 与 lazy Worker startup 工作                                                                                          |
+| [P19 AI Search Query API 完整兼容与专用 Rerank provider](p19-rerank-provider-adapters.md) | planned：新增 Cohere v2、通用 `/v1/rerank` 与 Hugging Face TEI adapter；修正 threshold／score／boosting／`query_kind` 语义，删除 Chat Completions rerank，并明确 text-only query 边界 |
+| [P20 Cloudflare Python Workers](p20-python-workers.md)                             | planned：复用 workerd/Pyodide 官方 entrypoint，把 binding construction 下沉为语言无关 materializer，并补齐 pywrangler upload、prepared snapshot、package/framework 与全 binding differential qualification             |
+| [P21 Cloudflare Browser Run](p21-browser-run.md)                                   | Day 1 合同与单文件分发架构完成；`ocd` 内嵌压缩 Browser Runtime、首次使用时离线物化并完整监督；待 BR-G0 在 `chrome-headless-shell` 与 Obscura 中选择一个正式引擎                                                        |
+| [P22 Cloudflare Containers](p22-cloudflare-containers.md)                          | Day 1 合同与两阶段 provider 路线完成；短期依赖宿主 Docker + restricted Broker，长期以 BoxLite 或其他待 G0 的可嵌入 runtime + Docker 子集 shim 替换；受 dynamic DoHost/workerd attachment 与真实 engine/package G0 阻断 |
+| [P23 macOS Developer ID 签名与 Apple 公证](p23-macos-code-signing-notarization.md) | Day 1 发行合同与 CI 方案完成；待配置受保护的 Apple/GitHub 凭据、签署最终 `ocd`、取得 Notary `Accepted` 并完成真实 tag 验收                                                                                             |
+| [P24 平台后续能力](p24-platform-follow-ups.md)                                     | planned：保留尚未拆成独立阶段的 compatibility date、显式 `.env`、`wrangler.toml`、operator logger 与 lazy Worker startup 工作                                                                                          |
 
-设计完成并通过约定验收后移入 `implemented/`；只剩 qualification 时将剩余事项列入 `acceptance/`。
-未实现设计不按完成文档精简，也不通过改状态标签宣称完成。
+实现完成后移入 `implemented/`；仍需实施的限制、功能缺陷和 TODO 留在活动方案，真正无法继续的外部阻塞移入
+`blocked/`。验证矩阵、Gate 和测试清单不作为独立活动文档保留。

@@ -10,7 +10,6 @@
 | `docs/workerd/`     | 仍需实施的原生 workerd 方案          |
 | `docs/implemented/` | 已完成需求的精简结果和当时证据       |
 | `docs/releases/`    | 已发布版本的用户可见 release notes   |
-| `docs/acceptance/`  | 核心实现完成后剩余的真实环境资格     |
 | `docs/blocked/`     | 被外部条件阻塞且当前无法继续的方案   |
 | `docs/references/`  | 持续维护的接口、测试、发布和运维资料 |
 
@@ -19,18 +18,18 @@
 ## 状态与移动
 
 - `planned`：最终行为已决定，代码尚未全部落地；
-- `implemented`：代码已落地，但列出的真实环境或生命周期检查尚未完成；
+- `implemented`：代码已落地，当前限制在实现或维护文档中明确列出；
 - `verified`：明确记录的检查已经成功退出；
 - `accepted limitation`：已知限制及影响被当前产品接受；
 - `blocked`：外部前置条件阻止继续，并写明恢复条件。
 
 有待实现内容时留在 `docs/` 或 `docs/workerd/`。实现完成后先删掉计划过程，再把精简结果移入 `implemented/`；正式 release notes 放入
-`releases/`；只剩资格时把资格拆到 `acceptance/`。只有真正无法继续的外部阻塞才进入 `blocked/`。路径变化同步更新索引、生成器和链接，
-不保留 redirect、stub 或旧副本。
+`releases/`。明确接受的限制写入对应实现或维护文档；仍需修复的功能缺陷和 TODO 留在活动方案。只有真正无法继续的外部阻塞才进入
+`blocked/`。验证矩阵、Gate 和测试清单不单独建活动文档。路径变化同步更新索引、生成器和链接，不保留 redirect、stub 或旧副本。
 
 ## 编号
 
-需求、实施、验收和阻塞文档必须沿用同一个编号，文件名使用小写编号前缀，不允许无编号文件：
+需求、实施和阻塞文档必须沿用同一个编号，文件名使用小写编号前缀，不允许无编号文件：
 
 | 前缀 | 范围                   | 示例                                                        |
 | ---- | ---------------------- | ----------------------------------------------------------- |
@@ -42,7 +41,7 @@
 | `R`  | 跨既有阶段的架构重构   | `r0-localhost-worker-origins.md`                            |
 
 子阶段和插入主线之间的补充阶段继续使用所属序列，例如 `P2.6` 写作 `p2-6-*`。同一需求从活动方案移动到
-`implemented/`、`acceptance/` 或 `blocked/` 时编号不变。只有各目录 `README.md`、持续维护的
+`implemented/` 或 `blocked/` 时编号不变。只有各目录 `README.md`、持续维护的
 `references/` 与 `runbooks/`、以及以 SemVer 命名的 `releases/` 不使用上述编号。
 
 `R` 只用于替换已经横跨多个产品阶段的 authoritative 架构，不用于普通功能、代码整理或质量修复；后者继续归入所属 `P`、`W`、

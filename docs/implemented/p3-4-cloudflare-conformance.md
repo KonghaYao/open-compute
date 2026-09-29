@@ -1,7 +1,6 @@
 # P3.4：Cloudflare Conformance
 
-状态：**implemented / hosted Conditional Go（2026-09-01）**。本地 catalog 与 conformance 完成；Workflow 托管端见
-[剩余资格](../acceptance/p3-0-cloudflare-runtime-compatibility-acceptance.md)。
+状态：**implemented（2026-09-01）**。
 
 ## 最终结果
 
@@ -19,4 +18,4 @@
 当日 inventory 为 2,097 个 stable tenant API members、`blocked=0`；Workers、Cache API、KV、D1、R2、Durable Objects
 和 Queues 的真实 Cloudflare differential 通过并完成精确清理。最终本地 workspace 为 802/802 cases。
 
-Workflow hosted differential 因 Wrangler OAuth `10000` 未完成；这不撤销本地实现，也不能写成 hosted PASS。
+Wrangler OAuth 返回 `10000`，因此不声明真实 Cloudflare Workflow 托管端一致性。

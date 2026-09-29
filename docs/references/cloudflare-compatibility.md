@@ -6,9 +6,8 @@
 支持面。完成设计和 conformance 方案见
 [Cloudflare Runtime 全量兼容改造](../implemented/p3-0-cloudflare-runtime-compatibility.md)与
 [P3.4 Cloudflare conformance](../implemented/p3-4-cloudflare-conformance.md)。P6 当前管理合同及本地证据见
-[P6 实现与验证](../implemented/p6-cloudflare-v4-wrangler-compatibility.md)；尚待外部账号条件解除的 runtime
-Workflow 与 P6 management qualification 分别只记录在[既有剩余验收](../acceptance/p3-0-cloudflare-runtime-compatibility-acceptance.md)
-和 [P6 远端差分验收](../acceptance/p6-cloudflare-v4-differential-acceptance.md)。
+[P6 实现与验证](../implemented/p6-cloudflare-v4-wrangler-compatibility.md)。当前账号权限不足以运行真实 Cloudflare
+Workflow 与完整 P6 management 对照，因此不声明这两部分的托管端一致性。
 
 固定契约输入见 [`baseline.json`](../../test/conformance/baseline.json)。当前 formal pin 是
 `workerd v1.20260918.1-open-compute-i102.1c7b89be`，revision
@@ -64,6 +63,11 @@ authority 差异；它不代表缺方法、占位返回或半截实现。
 | Vectorize                                    | `supported_with_deviation`                      |    27 | stable post-beta `Vectorize` 的 7 个方法、异步持久 mutation、三种公开 score/order、namespace、indexed metadata filter/projection、restart recovery 与全 stable response surface 均闭环；beta `VectorizeIndex` 不在当前 Day1 合同                                                                                                                                                                                                                                                                                                                                                                                          | `OC-VECTORIZE-001`                                |
 | Workers AI / Markdown Conversion / AI Search | `supported_with_deviation`                      |    54 | 标准 `[ai]` 注入 `env.AI.aiGatewayLogId`/`toMarkdown`；统一 registry 覆盖 62 个 Cloudflare 文档候选并安全公布 59 个 AI Search／18 个 Markdown 格式，本地三语言 OCR、扫描 PDF、可选 OpenAI-compatible VLM、`chunk: false`、bounded durable parse cache 与同实例 R2 source 已接入同一 indexing contract；R2 pause、显式 item/job、extensionless MIME、`r2:<bucket>` source ID、metadata filter、排序、删除 payload 和 bounded completion wait 走同一 Day1 路径；namespaced `open-compute:manual` source 是隔离的 API superset，不进入这 54 个官方成员；完整 Workers AI inference、外部 R2/S3 source 与 AutoRAG 不在声明范围 | `OC-AI-MARKDOWN-001`、`OC-AI-SEARCH-001`          |
 | Artifacts                                    | `supported_with_deviation`                      |    53 | namespace/repository/token、公开 HTTPS import、独立 fork、对象读取、Git Smart HTTP v1/v2、固定 Wrangler 4.138.0 与 pinned Worker binding 闭环；bare Git repository 与 SQLite metadata 位于单机 data-dir                                                                                                                                                                                                                                                                                                                                                                                                                   | `OC-ARTIFACTS-001`                                |
+
+当前 AI Search query surface 只声明文本输入：接受 text `query` 与 string-content messages；image、file 和 text+image
+multimodal query 不在当前支持范围并在 public boundary fail closed。文档 ingestion 的图片、扫描 PDF、OCR 与可选 VLM description
+只生成可索引文本，不代表支持多模态 query。P19 将为所有成功文本 Search response 补齐官方 `query_kind: "text"`，但不会据此扩大
+query modality。
 
 Workers observability 是管理面与平台 collector 能力，不计入 stable runtime-member denominator。当前
 [`workersObservability`](../../share/cloudflare-capabilities.json) authority 明确支持固定 Wrangler 4.138.0 Script
@@ -329,8 +333,7 @@ API、KV、D1、R2、Durable Objects 和 Queues。公开 status/JSON 经合同�
 已有服务。DO fixture 包含递归 nested facet clone/delete；Queue fixture 包含 metrics、五类 producer 错误
 和消费响应。这批证据属于 portable runtime/product differential，不是新的 P6 management qualification；它
 没有证明 P6 `/client/v4` 资源命令、固定官方 SDK wire、multipart/Assets 上传或两个只读 prerequisite route
-已经与 Cloudflare 托管管理面实测一致。后者仅由独立的
-[P6 远端差分验收](../acceptance/p6-cloudflare-v4-differential-acceptance.md)关闭。
+已经与 Cloudflare 托管管理面实测一致，因此这些托管端一致性不在当前声明范围。
 
 此外，产品专项验收已记录 Vectorize、AI Search 的真实 Cloudflare 高风险 differential，以及 Workers
 Observability 的 authenticated Dashboard network differential。README 因此按“存在真实 Cloudflare 直接对照证据”的

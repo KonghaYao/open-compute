@@ -6,6 +6,8 @@ AI Search indexes files you upload, then runs keyword, vector, or hybrid retriev
 
 open-compute implements these surfaces with **operator-configured OpenAI-compatible providers**. Full Workers AI model inference (`run()`, `models()`, AutoRAG, and unrelated inference) is **not** provided.
 
+> **Text queries only:** AI Search currently accepts text `query` values and messages with string content. Image, file, and mixed text-image queries are not supported and fail closed instead of being downgraded to text search. OCR and optional image descriptions during document ingestion convert source files into indexable text; they do not add multimodal query support.
+
 For example, you can use AI Search for:
 
 - Uploading documents or indexing bounded R2 sources, then searching them from a Worker
@@ -77,6 +79,7 @@ Official reference: [Cloudflare AI Search](https://developers.cloudflare.com/ai-
 | Topic                     | Cloudflare                                          | open-compute                                |
 | ------------------------- | --------------------------------------------------- | ------------------------------------------- |
 | AI Search Worker API      | Namespace / instance / items / jobs / search / chat | Same declared surface                       |
+| Query modality            | Text, image, or multimodal when the model supports it | **Text only**                                |
 | Markdown Conversion       | `env.AI.toMarkdown()` / `supported()`               | Same pinned overloads                       |
 | Embeddings / chat models  | Cloudflare-hosted Workers AI                        | Operator-pinned OpenAI-compatible providers |
 | Full Workers AI inference | `run()` / `models()` / AutoRAG                      | **Not provided**                            |

@@ -3,7 +3,7 @@
 macOS 的文档解析功能完整保留，但解析子进程尚无可强制执行的内存硬上限。
 0.1.0 接受该限制；CPU、输入/输出、并发和超时约束继续生效。
 该进程复用同一个 `ocd`，不属于 workerd Worker isolate 的额度，也不增加 sidecar 分发文件。
-宿主内存压力仍可能影响主服务，后续工作见 [macOS 内存限制 TODO](../p5-8-macos-document-parser.md)。
+宿主内存压力仍可能影响主服务；这是当前明确接受的支持边界。
 
 open-compute 只发布标准稳定版本和三个正式平台的原生单文件 `ocd`。版本使用不带预发布或构建后缀的
 SemVer：Cargo 版本写作 `X.Y.Z`，Git tag 写作 `vX.Y.Z`。不使用 `alpha`、`beta`、`rc`、
@@ -224,9 +224,7 @@ sudo install -m 0755 ocd-v0.1.0-linux-x64 /usr/local/bin/ocd
 
 macOS 使用 `shasum -a 256 -c` 校验筛选后的对应行。校验后仍应按
 [单二进制分发与部署](single-binary.md)与[安装与首次启动](runbooks/install-and-first-start.md)完成配置、
-`config check` 和首次启动。运维命令面见
-[P11 实现](../implemented/p11-ocd-operator-experience.md)；三目标正式安装冒烟资格见
-[P11 验收计划](../acceptance/p11-operator-experience-acceptance.md)。
+`config check` 和首次启动。运维命令面见 [P11 实现](../implemented/p11-ocd-operator-experience.md)。
 
 ## 失败、重跑与修复版本
 

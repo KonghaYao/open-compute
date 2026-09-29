@@ -1,7 +1,6 @@
 # P3.2：Service Binding
 
-状态：**implemented（2026-08-30）**。本地核心和最终 Gate 完成；Cloudflare direct differential 见
-[P3 资格](../acceptance/p3-assets-service-bindings-acceptance.md)。
+状态：**implemented（2026-08-30）**。
 
 ## 用户结果
 
@@ -19,5 +18,3 @@
 
 `p3-services` hard／product／events／recovery、静态检查和 coverage 成功；当日完整历史 Gate 共 834/834 cases，
 Rust line coverage 为 90.11%。事件源覆盖 Queue、Cron、Durable Object 和 Workflow；SIGKILL Gate 验证旧 handle／pin 清理。
-
-完整 hosted Service fetch／RPC differential 尚未执行；固定 vinext qualification 明确未覆盖产品 Service Binding 组合。

@@ -1,7 +1,7 @@
 # 已完成实现
 
 本目录保存每项已完成需求的精简方案与当时验证结果。历史 PASS 只适用于文档记录的输入；当前支持面以
-[兼容矩阵](../references/cloudflare-compatibility.md)和源码为准。未完成资格见[验收索引](../acceptance/README.md)。
+[兼容矩阵](../references/cloudflare-compatibility.md)和源码为准。明确接受的限制直接记录在对应实现或维护文档中。
 
 ## 平台能力
 

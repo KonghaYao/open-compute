@@ -11,7 +11,7 @@ release 为 `v1.20260918.1-open-compute-w3.40937077`，见[workerd 方案](../wo
 macOS 的文档解析功能完整保留，但解析子进程尚无可强制执行的内存硬上限。
 0.1.0 接受该限制；CPU、输入/输出、并发和超时约束继续生效。
 该进程复用同一个 `ocd`，不属于 workerd Worker isolate 的额度，也不增加 sidecar 分发文件。
-宿主内存压力仍可能影响主服务，后续工作见 [macOS 内存限制 TODO](../p5-8-macos-document-parser.md)。
+宿主内存压力仍可能影响主服务；这是当前明确接受的支持边界。
 
 Open Compute 只有一种生产发行形式：按平台构建的单个 `ocd` 可执行文件。
 不发布 Rust crate，不提供“外部 workerd”“外部资源目录”或自动下载模式。

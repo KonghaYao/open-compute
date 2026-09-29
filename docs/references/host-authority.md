@@ -1,7 +1,7 @@
 # Host ingress 与 hostname authority
 
-本文持续维护 open-compute 本机和公网 HTTP ingress 共用的 hostname ownership 与解析合同。具体实施、迁移和资格分别由 R0、P18
-及后续产品文档拥有。R0 本机路径已实现；P18 的双入口与 Gateway 扩展已在本地实现；公网 DNS/ACME qualification 仍需具备公网 TCP 443、UDP/TCP 53 的专用主机。
+本文持续维护 open-compute 本机和公网 HTTP ingress 共用的 hostname ownership 与解析合同。具体实施和迁移由 R0、P18
+及后续产品文档拥有。R0 本机路径与 P18 双入口/Gateway 已实现；公网 DNS/ACME 要求主机可达 TCP 443，并为 challenge listener 委派 UDP/TCP 53。
 
 ## 唯一 authority
 
@@ -93,4 +93,4 @@ OpenAPI、生成 SDK、CLI/Wrangler 与 Dashboard 同步消费两种 kind/scope�
 - [P17 宿主子进程管理基础设施](../implemented/p17-host-process-infrastructure.md)：已有 verified-exec 与 process ownership 原语，
   常驻 Caddy 接口已由 P18 提取接入；不拥有路由；
 - [P18 单域名公网网关、DNS 与 TLS](../implemented/p18-single-domain-public-gateway.md)：复用 R0 authority，增加公网 DNS、TLS、Gateway transport
-  与固定双入口生命周期；本地实现已落地，真实公网 qualification 单独保留。
+  与固定双入口生命周期；未满足公网 DNS、端口和证书 readiness 时不提供 public endpoint。
