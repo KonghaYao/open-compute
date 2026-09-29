@@ -452,20 +452,18 @@ fn materialize_r2_metadata(
             continue;
         };
         let value = match field.data_type {
-            crate::ai_search_config::AiSearchMetadataType::Text => {
-                Some(Value::String((*text).clone()))
-            }
-            crate::ai_search_config::AiSearchMetadataType::Number => text
+            AiSearchMetadataType::Text => Some(Value::String((*text).clone())),
+            AiSearchMetadataType::Number => text
                 .parse::<serde_json::Number>()
                 .ok()
                 .filter(|number| number.as_f64().is_some_and(f64::is_finite))
                 .map(Value::Number),
-            crate::ai_search_config::AiSearchMetadataType::Boolean => match text.as_str() {
+            AiSearchMetadataType::Boolean => match text.as_str() {
                 "true" => Some(Value::Bool(true)),
                 "false" => Some(Value::Bool(false)),
                 _ => None,
             },
-            crate::ai_search_config::AiSearchMetadataType::Datetime => text
+            AiSearchMetadataType::Datetime => text
                 .parse::<jiff::Timestamp>()
                 .ok()
                 .map(|_| Value::String((*text).clone())),

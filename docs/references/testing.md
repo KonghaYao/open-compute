@@ -47,6 +47,13 @@ loopback transport 和有界计时；Linux/CI 行为不变。
 ./test/gate.py workflow --list
 ./test/gate.py p3-contract
 ./test/gate.py p5-search
+# 受保护 CI environment 中的真实 provider 资格测试；不会加入 workspace：
+BAILIAN_API_HOST=workspace.cn-beijing.maas.aliyuncs.com \
+BAILIAN_API_KEY=... DEEPSEEK_API_KEY=... COHERE_API_KEY=... \
+  ./test/gate.py p5-ai-provider-qualification --jobs 1
+# 显式 hosted S3 资格测试；使用专用空闲 bucket 和独立前缀，不会加入 workspace：
+OPEN_COMPUTE_TEST_R2_S3_MUTATION_ACK=s3-provider-qualification \
+  ./test/gate.py s3-provider-qualification --jobs 1
 # 外部写入；仅在明确授权、预置账号与 Wrangler OAuth/token credential 后选择：
 ./test/gate.py p3-cf-diff
 # 在同一个冻结报告中合成本地 contract 与 remote qualification：
@@ -84,7 +91,10 @@ workspace 顺序先做 CLI、single-binary 和独占的 p5-search，再进入普
 | `p3-isolation`、`p3-recovery`                              | 两账户 fail-closed 与 P3 产品隔离；进程/快照/跨产品 crash recovery 与清理                                                                                                                                              |
 | `p3`                                                       | `p3-contract`、P0/P1/P2/Workflow 与全部 P3/L6 本地目标，不含外部 differential                                                                                                                                          |
 | `p3-cf-diff`                                               | 显式真实 Cloudflare portable differential；不属于 `all` 或 `--workspace`                                                                                                                                               |
-| `p5-search`、`p5`                                          | 本机 embedding fixture + stock workerd 的 Vectorize 全 stable method/filter、AI Search upload→durable indexing→hybrid retrieval 与 `AI.toMarkdown`；只使用本地 SQLite 与 Local/S3 object fixture，不写 Cloudflare 账号 |
+| `p5-search`                                                | 本机有界 provider fixtures + pinned workerd 的 AI Search upload/index、vector/keyword/hybrid retrieval、boosting、两个 rerank 协议、Search/Chat/SSE/restart 和失败矩阵；不读取真实 credential 或访问公网 |
+| `p5-ai-provider-qualification`                             | 显式 live Gate：百炼 embedding、Cohere/百炼 rerank 与 DeepSeek rewrite/Chat 的三条生产链；只接收四个受保护 provider 变量，记录去敏协议证据，不属于 `all` 或 `--workspace` |
+| `p5`                                                       | 上述本地与 live 两个目标；仅在已授权且四个 provider 变量齐全时显式选择 |
+| `s3-provider-qualification`                                | 显式 hosted S3 Gate：以 production S3 client 运行 object authority 与完整 R2 preflight（含严格 multipart），使用每轮唯一前缀并复查清理；不属于 `all` 或 `--workspace` |
 | `runtime`、`single-binary`                                 | supervisor、单文件离线首启/重启/损坏路径，以及单 daemon 双实例实进程隔离                                                                                                                                               |
 | `p0`、`p1`、`p2`、`all`                                    | 对应集合；多个选择取并集，每个选定目标与 case 执行一次                                                                                                                                                                 |
 
@@ -96,6 +106,14 @@ Workflow；open-compute 只通过 `CLOUDFLARE_API_BASE_URL` 选择本地 v4 orig
 资源，按精确 Worker、binding resource ID/name 删除并再次枚举确认 absent。任何清理失败都使 Gate 失败
 并保留 inventory，不得扩大到账号级批量删除或触碰其它服务。
 
+`p5-ai-provider-qualification` job 受 `ai-search-qualification` CI environment 的 `main` branch policy 保护，只在 trusted
+`main` push 或手动 dispatch 执行，并读取现有 repository secrets。固定 manifest 是
+[`test/ai-provider-qualification.manifest.json`](../../test/ai-provider-qualification.manifest.json)；model、protocol、endpoint suffix
+和 response schema digest 不从环境动态发现。runner 只透传 `BAILIAN_API_HOST`、`BAILIAN_API_KEY`、
+`DEEPSEEK_API_KEY`、`COHERE_API_KEY`，三条 case 都经生产 AI Search service、SQLite、Vectorize 与 pinned workerd
+完成索引、Search 和 Chat；429、timeout 或 contract drift 直接失败且不重试。普通 PR 与 workspace Gate 始终只跑本地
+`p5-search`，因此不会接触 credential 或公网。
+
 ## 单轮覆盖原则
 
 P0.5 的 `uploads::concurrent_large_upload_keeps_runtime_responsive` 使用真实 HTTP、stock workerd、
@@ -103,11 +121,13 @@ SQLite/D1 和 SigV4 S3 fixture，上传 241,910,375 bytes（8 MiB 分片、4 并
 D1 记录、complete 前不可见、流式读回 SHA-256 和并发轻量请求延迟。它属于普通 Gate 的固定回归，
 不是吞吐 SLA 或重复压测。单元测试另覆盖 staging 取消/超时和 blocking checksum 的资源生命周期。
 
-需要与特定本机 S3 provider 对比时，可对同一 case 显式设置 `OPEN_COMPUTE_TEST_R2_S3_ENDPOINT`，
-仅接受 `http://127.0.0.1:<port>`。调用方必须先创建专用、可删除的 fixture 和 `open-compute` bucket；
-不可指向现有服务或业务 bucket。该环境变量不在普通 Gate 的传递白名单内，正常验收始终使用自有
-SigV4 fixture。分别用 Cargo debug/release 构建并执行一次该 exact case，记录 profile、provider pin、
-源码身份及实际输出；provider 初始化/清理属于这次独立 qualification，不增加普通 Gate 的 Docker 依赖。
+普通 Gate 继续使用自有 SigV4 fixture，负责确定性的权限、签名、故障、恢复和清理矩阵；真实 hosted provider
+不能替代这些可控故障断言。`s3-provider-qualification` 另用 production S3 client 对专用 Cloudflare R2 bucket
+执行 object authority 与 R2 startup preflight，包含非最终 part 的 5 MiB 下限、SSE-C、条件写、range、分页和
+multi-delete。该目标只接受六个 `OPEN_COMPUTE_TEST_R2_S3_*` 变量，要求 HTTPS endpoint 与精确 mutation ack，
+每轮使用唯一 prefix，删除 authority marker 并复查两个 prefix 均为空；报告不记录 endpoint、credential、object key
+或 provider body。GitHub Actions 只在 trusted `main` push 或 `main` 手动 dispatch 使用现有 repository secrets，
+普通 PR、`all` 和 `--workspace` 都不运行它。
 
 唯一 case inventory 是 [`test/gate_cases.py`](../../test/gate_cases.py)，按完整 Rust 测试名登记。
 调度器将 `--list` 的实际用例集合与该表逐项比对：新增、删除、改名、重复登记、空 Gate 或非预期

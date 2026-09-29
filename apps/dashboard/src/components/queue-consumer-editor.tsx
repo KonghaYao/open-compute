@@ -51,13 +51,19 @@ function fromConsumer(consumer?: Consumer): Draft {
     ...(consumer?.consumer_id ? { id: consumer.consumer_id } : {}),
     scriptName:
       consumer && "script_name" in consumer ? (consumer.script_name ?? "") : "",
-    batchSize: String(settings?.batch_size ?? 10),
+    batchSize: String(
+      settings && "batch_size" in settings ? (settings.batch_size ?? 10) : 10,
+    ),
     waitSeconds:
       settings && "max_wait_time_ms" in settings
         ? String((settings.max_wait_time_ms ?? 5000) / 1000)
         : "5",
-    maxRetries: String(settings?.max_retries ?? 3),
-    retryDelay: String(settings?.retry_delay ?? 0),
+    maxRetries: String(
+      settings && "max_retries" in settings ? (settings.max_retries ?? 3) : 3,
+    ),
+    retryDelay: String(
+      settings && "retry_delay" in settings ? (settings.retry_delay ?? 0) : 0,
+    ),
     maxConcurrency:
       settings && "max_concurrency" in settings
         ? String(settings.max_concurrency ?? "")
@@ -205,7 +211,10 @@ export function QueueConsumerEditor({ queueId }: { queueId: string }) {
             return {
               name: label,
               type: consumer.type === "worker" ? "Worker" : "HTTP pull",
-              batch: consumer.settings?.batch_size ?? "Default",
+              batch:
+                consumer.settings && "batch_size" in consumer.settings
+                  ? (consumer.settings.batch_size ?? "Default")
+                  : "N/A",
               actions: (
                 <RowActionsMenu
                   label={label}

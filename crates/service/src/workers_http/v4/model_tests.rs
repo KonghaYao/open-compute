@@ -11,6 +11,7 @@ fn upload_metadata_debug_and_binding_helpers_cover_the_closed_wire_union() {
             "packageJsonVersion":"^4.0.0",
             "installedVersion":"4.9.0"
         }],
+        "code_update_strategy":{"mode":"deferred","max_delay":300},
         "bindings":[],
         "keep_bindings":["plain_text"],
         "annotations":{"message":"release"},
@@ -26,6 +27,7 @@ fn upload_metadata_debug_and_binding_helpers_cover_the_closed_wire_union() {
         "index.js",
         "nodejs_compat",
         "package_dependencies: 1",
+        "code_update_strategy: Some",
         "has_assets: true",
         "has_observability: true",
         "has_cache_options: true",
@@ -131,6 +133,37 @@ fn package_dependencies_accepts_only_the_wrangler_wire_shape() {
                 "main_module":"index.js",
                 "compatibility_date":"2026-09-08",
                 "package_dependencies":package_dependencies
+            }))
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn code_update_strategy_accepts_only_the_wrangler_wire_shape() {
+    for strategy in [
+        serde_json::json!({"mode":"immediate"}),
+        serde_json::json!({"mode":"deferred","max_delay":300}),
+    ] {
+        assert!(
+            serde_json::from_value::<WorkerUploadMetadata>(serde_json::json!({
+                "main_module":"index.js",
+                "compatibility_date":"2026-09-08",
+                "code_update_strategy":strategy
+            }))
+            .is_ok()
+        );
+    }
+
+    for strategy in [
+        serde_json::json!({"mode":"later"}),
+        serde_json::json!({"mode":"deferred","max_delay":300,"unknown":true}),
+    ] {
+        assert!(
+            serde_json::from_value::<WorkerUploadMetadata>(serde_json::json!({
+                "main_module":"index.js",
+                "compatibility_date":"2026-09-08",
+                "code_update_strategy":strategy
             }))
             .is_err()
         );

@@ -208,25 +208,24 @@ export async function saveWorkerResourceBinding(
     "remove" in change ? "Delete" : change.originalName ? "Edit" : "Add";
   const kind = resourceBindingLabels[change.type];
   const message = `${label} ${kind}${change.type === "service" ? "" : " binding"}`;
-  await client.workers.scripts.scriptAndVersionSettings.edit(workerId, {
-    account_id: selectedInstanceId,
-    settings: {
-      bindings: [...inherited, ...changed],
-      annotations: {
-        "workers/message": `${message} ${change.originalName || ("remove" in change ? "" : change.name.trim())}`,
+  const saved = await client.workers.scripts.scriptAndVersionSettings.edit(
+    workerId,
+    {
+      account_id: selectedInstanceId,
+      settings: {
+        bindings: [...inherited, ...changed],
+        annotations: {
+          "workers/message": `${message} ${change.originalName || ("remove" in change ? "" : change.name.trim())}`,
+        },
       },
     },
-  });
+  );
   const created = [...(await listIds())].filter((id) => !before.has(id));
   if (created.length !== 1)
     throw new Error(
       "The new Worker Version could not be identified uniquely. It was saved but not deployed.",
     );
-  const version = await client.workers.scripts.versions.get(created[0]!, {
-    account_id: selectedInstanceId,
-    script_name: workerId,
-  });
-  const matching = (version.resources.bindings ?? []).find(
+  const matching = (saved.bindings ?? []).find(
     (binding) =>
       binding.type === change.type &&
       binding.name ===

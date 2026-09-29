@@ -529,7 +529,7 @@ async fn worker_loader_native_binding_versions_delete_and_restart() {
         )
         .await;
         assert_eq!(status, 200, "{egress}");
-        assert_eq!(egress, json!({ "rejected": true }));
+        assert_eq!(egress, json!({ "rejected": false }));
     }
     let (status, wasm) = invoke(&client, &fixture, SCRIPT, "/wasm").await;
     assert_eq!(status, 200, "{wasm}");

@@ -4,7 +4,7 @@ title: "AI Search"
 
 AI Search 对你上传的文件建索引，并支持关键词、向量或混合检索以及可选的 chat。Markdown Conversion 通过同一标准 `env.AI` binding 的 `toMarkdown()` / `supported()` 提供。
 
-open-compute 使用 **operator 配置的 OpenAI-compatible provider** 实现上述表面。**不提供**完整 Workers AI 模型推理（`run()`、`models()`、AutoRAG 及其它无关推理）。
+open-compute 使用 **operator 配置的 provider**：embedding/chat 使用 OpenAI-compatible endpoint，reranking 使用专用 Cohere v2 或通用 `/v1/rerank` endpoint。**不提供**完整 Workers AI 模型推理（`run()`、`models()`、AutoRAG 及其它无关推理）。
 
 > **目前只支持文本查询：**AI Search 只接受文本 `query` 和 string content message。image、file 以及 text+image 混合查询均不支持，并会 fail closed，不会静默降级为文本检索。文档导入阶段的 OCR 和可选 image description 只是把源文件转换为可索引文本，不代表支持多模态查询。
 
@@ -12,6 +12,7 @@ open-compute 使用 **operator 配置的 OpenAI-compatible provider** 实现上�
 
 - 上传文档或索引有界 R2 source，再从 Worker 中检索
 - 在生成回答前做混合检索
+- metadata relevance boosting 后使用专用 reranker
 - 使用 `env.AI.toMarkdown()` 将 Office/PDF/HTML 转为 Markdown
 
 ```ts
@@ -82,6 +83,8 @@ await index.items.openComputeUpsert({
 | 查询模态              | 模型支持时可使用 text、image 或 multimodal          | **仅文本**                                 |
 | Markdown Conversion   | `env.AI.toMarkdown()` / `supported()`               | 固定 overload 相同                         |
 | Embedding / chat 模型 | Cloudflare 托管 Workers AI                          | operator 固定的 OpenAI-compatible provider |
+| Reranking 模型        | Cloudflare 托管 Workers AI                          | operator 固定的 `cohere_rerank_v2` 或 `rerank_v1` provider |
+| Search 响应           | `query_kind` 与检索/rerank score                    | 文本成功响应返回 `query_kind: "text"`；rerank chunk 包含 `reranking_score` |
 | 完整 Workers AI 推理  | `run()` / `models()` / AutoRAG                      | **不提供**                                 |
 | 对象字节              | 托管存储                                            | 选定的 Local 或 S3 authority               |
 | 就近存放 / 复制       | 全球                                                | 单机                                       |

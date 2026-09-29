@@ -1,4 +1,5 @@
 use super::*;
+use crate::workers_http::v4::model;
 
 pub(super) async fn list_versions(
     State(state): State<HttpState>,
@@ -109,6 +110,7 @@ struct CreateDeploymentBody {
     versions: Vec<CreateDeploymentVersion>,
     #[serde(default)]
     annotations: BTreeMap<String, String>,
+    code_update_strategy: Option<model::WorkerUploadCodeUpdateStrategy>,
 }
 
 #[derive(Deserialize)]
@@ -139,6 +141,9 @@ pub(super) async fn create_deployment(
     if body.strategy != "percentage"
         || body.versions.len() != 1
         || body.versions[0].percentage != 100.0
+        || body
+            .code_update_strategy
+            .is_some_and(|strategy| !strategy.is_valid())
     {
         return error_response(V4Error::Unsupported, context.request_id());
     }

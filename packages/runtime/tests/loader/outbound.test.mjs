@@ -17,7 +17,7 @@ const { tenantGlobalOutbound } = await import(sharedUrl);
 test("tenant outbound selects one host-only capability and validation stays offline", () => {
   const network = Object.freeze({ fetch() {}, connect() {} });
   assert.equal(
-    tenantGlobalOutbound({ PUBLIC_NETWORK: network }, false),
+    tenantGlobalOutbound({ OUTBOUND_NETWORK: network }, false),
     network,
   );
   assert.equal(tenantGlobalOutbound({}, true), null);
@@ -27,16 +27,22 @@ test("tenant outbound selects one host-only capability and validation stays offl
   );
 });
 
-test("every dynamic event source uses PUBLIC_NETWORK and the HTTP-only gateway is gone", () => {
+test("every dynamic event source uses OUTBOUND_NETWORK and the HTTP-only gateway is gone", () => {
   const config = source("packages/runtime/config.capnp");
-  assert.equal((config.match(/name = "internet", network/g) ?? []).length, 1);
+  assert.equal(
+    (config.match(/name = "outbound-network", network/g) ?? []).length,
+    1,
+  );
   assert.match(
     config,
-    /allow = \["public"\][\s\S]*tlsOptions = \(trustBrowserCas = true\)/,
+    /allow = \["network", "local"\][\s\S]*deny = \["unix", "unix-abstract"\][\s\S]*tlsOptions = \(trustBrowserCas = true\)/,
   );
   assert.equal(
-    (config.match(/name = "PUBLIC_NETWORK", service = "internet"/g) ?? [])
-      .length,
+    (
+      config.match(
+        /name = "OUTBOUND_NETWORK", service = "outbound-network"/g,
+      ) ?? []
+    ).length,
     2,
   );
   assert.doesNotMatch(config, /outbound-gateway|gateway\/outbound/);
@@ -60,7 +66,7 @@ test("every dynamic event source uses PUBLIC_NETWORK and the HTTP-only gateway i
   );
   assert.doesNotMatch(
     source("packages/runtime/src/loader/bindings.ts"),
-    /PUBLIC_NETWORK/,
+    /OUTBOUND_NETWORK/,
   );
   assert.equal(
     existsSync(resolve(root, "packages/runtime/src/gateway/outbound.ts")),

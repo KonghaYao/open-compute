@@ -131,29 +131,6 @@ pub(crate) fn signed_router() -> Router<HttpState> {
 
 #[derive(Deserialize)]
 #[serde(untagged)]
-enum TailCreateBody {
-    Wrangler(Vec<TailFilterWire>),
-    Sdk(TailCreateSdkBody),
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct TailCreateSdkBody {
-    #[serde(default)]
-    filters: Vec<TailFilterWire>,
-}
-
-impl TailCreateBody {
-    fn filters(self) -> Vec<TailFilterWire> {
-        match self {
-            Self::Wrangler(filters) => filters,
-            Self::Sdk(body) => body.filters,
-        }
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
 enum TailFilterWire {
     Sampling(SamplingFilter),
     Outcome(OutcomeFilter),
@@ -162,6 +139,13 @@ enum TailFilterWire {
     ClientIp(ClientIpFilter),
     Query(QueryFilter),
     ScriptVersion(ScriptVersionFilter),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreateTailBody {
+    #[serde(default)]
+    filters: Vec<TailFilterWire>,
 }
 
 #[derive(Deserialize)]
@@ -242,20 +226,23 @@ async fn create_tail(
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
         .map(|value| value.0.ip());
-    let Some(body) = to_bytes(request.into_body(), MAX_TAIL_BODY)
-        .await
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<TailCreateBody>(&bytes).ok())
-    else {
+    let Ok(body) = to_bytes(request.into_body(), MAX_TAIL_BODY).await else {
         return error_response(V4Error::InvalidRequest, context.request_id());
+    };
+    let filters = if body.is_empty() {
+        Vec::new()
+    } else {
+        match serde_json::from_slice::<CreateTailBody>(&body) {
+            Ok(body) => body.filters,
+            Err(_) => return error_response(V4Error::InvalidRequest, context.request_id()),
+        }
     };
     let result = (|| {
         let instance_id = domain::resolve_instance(&state, &account)?;
         let api = handlers::worker_api(&state)?;
         let worker = domain::worker_by_name(api, instance_id, &script)
             .map_err(|error| V4Error::from(&error))?;
-        let filters = body
-            .filters()
+        let filters = filters
             .into_iter()
             .map(|filter| tail_filter(filter, peer))
             .collect::<Result<Vec<_>, _>>()?;

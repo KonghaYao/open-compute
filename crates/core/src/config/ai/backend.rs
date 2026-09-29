@@ -44,7 +44,7 @@ impl AiBackendConfig {
     }
 }
 
-/// Closed OpenAI-compatible operation protocols.
+/// Closed operation-specific AI provider protocols.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AiBackendProtocol {
@@ -54,6 +54,12 @@ pub enum AiBackendProtocol {
     /// OpenAI-compatible chat-completions and SSE shapes.
     #[serde(rename = "openai_chat_completions_v1")]
     OpenAiChatCompletionsV1,
+    /// Cohere-compatible v2 rerank request and response shapes.
+    #[serde(rename = "cohere_rerank_v2")]
+    CohereRerankV2,
+    /// Minimal common `/v1/rerank` request and response shapes.
+    #[serde(rename = "rerank_v1")]
+    RerankV1,
 }
 
 impl AiBackendProtocol {
@@ -63,6 +69,8 @@ impl AiBackendProtocol {
         match self {
             Self::OpenAiEmbeddingsV1 => "openai_embeddings_v1",
             Self::OpenAiChatCompletionsV1 => "openai_chat_completions_v1",
+            Self::CohereRerankV2 => "cohere_rerank_v2",
+            Self::RerankV1 => "rerank_v1",
         }
     }
 }

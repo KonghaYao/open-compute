@@ -2754,7 +2754,7 @@
           },
           "wrangler_version": {
             "type": "string",
-            "const": "4.138.0"
+            "const": "4.143.0"
           },
           "compatibility_date": {
             "type": "object",

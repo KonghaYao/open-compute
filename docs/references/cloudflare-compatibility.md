@@ -66,8 +66,14 @@ authority 差异；它不代表缺方法、占位返回或半截实现。
 
 当前 AI Search query surface 只声明文本输入：接受 text `query` 与 string-content messages；image、file 和 text+image
 multimodal query 不在当前支持范围并在 public boundary fail closed。文档 ingestion 的图片、扫描 PDF、OCR 与可选 VLM description
-只生成可索引文本，不代表支持多模态 query。P19 将为所有成功文本 Search response 补齐官方 `query_kind: "text"`，但不会据此扩大
-query modality。
+只生成可索引文本，不代表支持多模态 query。所有成功文本 Search response 返回官方 `query_kind: "text"`。Embedding、rewrite 和
+chat 使用 operator-pinned OpenAI-compatible endpoint；reranking 使用独立的 `cohere_rerank_v2` 或 `rerank_v1` catalog，不再通过
+Chat Completions prompt。当前实现按 vector threshold → fusion → metadata boost → dedicated rerank → rerank threshold → final limit
+执行，并分别保留 retrieval、raw keyword 与 reranking score。2026-09-30 使用 `cf` 对临时 hosted AI Search instance 的固定
+differential 确认：普通 vector 结果的顶层 `score` 等于 vector score；keyword score 先按分支最大值归一化；metadata boost 的总权重为
+`0.3`，与 retrieval score 相加后按候选最大值归一化；rerank input 可超过最终 `max_num_results`，最终限制在 rerank 后应用；默认 rerank
+threshold 为 `0.4`；rerank 后顶层 `score` 等于 `reranking_score`，namespace merge 也按该分数排序；keyword-only candidate 不受 vector
+`match_threshold` 过滤。临时 instance、items 与 metadata 均已删除并复查不存在。
 
 Workers observability 是管理面与平台 collector 能力，不计入 stable runtime-member denominator。当前
 [`workersObservability`](../../share/cloudflare-capabilities.json) authority 明确支持固定 Wrangler 4.143.0 Script
@@ -122,7 +128,7 @@ binding 的应用错误使用官方 Artifacts `101xx`/`102xx`/`103xx`/`104xx` �
 [P14 Artifacts](../implemented/p14-cloudflare-artifacts.md)。
 
 deviation 规范文本、官方来源和边界见 [`p1-deviations.md`](p1-deviations.md)。其中 raw TCP 的 Day1
-实现只有一个 `Network(allow = ["network"])` general-outbound authority；`fetch()`、
+实现只有一个 `Network(allow = ["network", "local"], deny = ["unix", "unix-abstract"])` general-outbound authority；workerd 的 `network` 是 `local` 的反集，两者合并覆盖 IP，再显式排除 Unix socket；`fetch()`、
 `cloudflare:sockets.connect()`、`node:net`、`node:tls` 共用该 IP 能力，可达宿主允许的 public、private、
 loopback、link-local 与 metadata 地址，但不能访问 Unix socket。Service/DO `Fetcher.connect()` 仍只通过
 deployment 明确声明的 capability tunnel。runtime-source、binding backend 和 workerd 内部 listener 仅监听
@@ -308,6 +314,9 @@ publish，再把 Worker Version 标记 ready。确定性 probe 失败会拒绝�
 tombstone 非 active、无 pin/持久 referrer 的历史 Version，并释放 binding referrer；外部产品数据不级联删除。
 固定 Wrangler 4.143.0 在 Script upload 后读取官方 Beta Worker GET；本地响应投影 immutable Worker identity、时间戳与空 references，
 并明确返回 `subdomain.enabled=false`、`previews_enabled=false`，不伪造 workers.dev DNS 或 Preview 可达性。
+同一版本在 upload 与 deployment 默认发送 `code_update_strategy={mode:"deferred",max_delay:300}`。本地 closed decoder 验证
+官方 mode、范围与毫秒精度，但单机 runtime 仍原子切换 generation，不模拟 Cloudflare 托管 Durable Object 的 hibernation rollout；
+该语义差异归入 `OC-DEPLOY-001`。
 
 AI Search upload 按官方 `namespace` 字段解析 public instance key；省略时使用 `default`。authority lookup 同时固定 namespace 与
 instance，跨 namespace 同名 instance 不再依赖内部 Resource name，也不会互相解析。

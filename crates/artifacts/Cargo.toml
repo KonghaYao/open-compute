@@ -52,5 +52,12 @@ required-features = ["test-support"]
 test = false
 bench = false
 
+[[bin]]
+name = "open-compute-s3-provider-qualification"
+path = "src/bin/s3_provider_qualification.rs"
+required-features = ["test-support"]
+test = false
+bench = false
+
 [lints]
 workspace = true

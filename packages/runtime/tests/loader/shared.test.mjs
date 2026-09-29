@@ -8,15 +8,18 @@ const { resolveSnapshot } = await importRuntime("loader/shared.ts", {
 
 test("runtime snapshot rejects a route generation changed during source resolution", async () => {
   let generation = 2;
+  const requests = [];
   const env = {
     RUNTIME_SOURCE: {
-      fetch: async () =>
-        Response.json({
+      fetch: async (_url, init) => {
+        requests.push(init);
+        return Response.json({
           loaderKey:
             "019c0000000070008000000000000001/019c0000-0000-7000-8000-000000000002/019c0000-0000-7000-8000-000000000003",
           workerCodeSha256: "a".repeat(64),
           routeGeneration: generation,
-        }),
+        });
+      },
     },
   };
   const envelope = {
@@ -35,4 +38,9 @@ test("runtime snapshot rejects a route generation changed during source resoluti
       .routeGeneration,
     1,
   );
+  assert.equal(
+    requests[0].headers["x-open-compute-startup-generation"],
+    "generation",
+  );
+  assert.equal(JSON.parse(requests[0].body).startupGeneration, undefined);
 });

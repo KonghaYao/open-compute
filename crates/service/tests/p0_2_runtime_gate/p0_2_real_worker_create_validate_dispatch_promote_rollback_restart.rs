@@ -453,18 +453,17 @@ pub(super) async fn run() {
         run_tls_fixture(&workerd, &root, fixture).await;
     }
     let egress = deploy_egress(&controller, account, worker.id, egress_fixture.as_ref()).await;
-    let denied = dispatch(&storage, &transport, account, worker.id, &egress, None, "").await;
+    let response = dispatch(&storage, &transport, account, worker.id, &egress, None, "").await;
     assert_eq!(
-        denied.status,
+        response.status,
         200,
-        "egress response: {denied:?}; diagnostics: {:?}",
+        "egress response: {response:?}; diagnostics: {:?}",
         supervisor.last_diagnostics()
     );
-    let egress_result: serde_json::Value = serde_json::from_str(&denied.body).unwrap();
-    let expected_denied = if egress_fixture.is_some() { 11 } else { 9 };
-    assert_eq!(egress_result["denied"], expected_denied);
+    let egress_result: serde_json::Value = serde_json::from_str(&response.body).unwrap();
+    assert_eq!(egress_result["unreachable"], 9);
     let allowed = egress_result["allowed"].as_array().unwrap();
-    assert_eq!(allowed.len(), egress_fixture.as_ref().map_or(0, |_| 3));
+    assert_eq!(allowed.len(), egress_fixture.as_ref().map_or(0, |_| 5));
     assert!(allowed.iter().all(|value| value == "fixture-ok"));
     assert_eq!(
         egress_result["ctxExports"]["ok"], true,
@@ -528,6 +527,23 @@ pub(super) async fn run() {
     } else {
         assert_eq!(egress_result["rawTcp"], serde_json::Value::Null);
     }
+    let postgres_fixture = postgres::spawn().await;
+    let postgres = deploy_postgres(&controller, account, worker.id, postgres_fixture.address).await;
+    let postgres_response = dispatch(
+        &storage, &transport, account, worker.id, &postgres, None, "",
+    )
+    .await;
+    assert_eq!(
+        postgres_response.status,
+        200,
+        "PostgreSQL driver response: {postgres_response:?}; diagnostics: {:?}",
+        supervisor.last_diagnostics()
+    );
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&postgres_response.body).unwrap(),
+        serde_json::json!({ "committed": 41, "rolledBack": 42 })
+    );
+    postgres_fixture.finish().await;
     let node = deploy_node(&controller, account, worker.id).await;
     let node_response = dispatch(&storage, &transport, account, worker.id, &node, None, "").await;
     assert_eq!(node_response.status, 200);

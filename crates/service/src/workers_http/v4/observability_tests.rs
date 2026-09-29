@@ -22,8 +22,9 @@ fn post(uri: &str, token: &str, body: &serde_json::Value) -> Request<Body> {
 
 #[test]
 fn wire_filters_normalize_all_supported_script_tail_shapes() {
-    let wrangler: TailCreateBody = serde_json::from_value(serde_json::json!([])).unwrap();
-    assert!(wrangler.filters().is_empty());
+    let wrangler: CreateTailBody =
+        serde_json::from_value(serde_json::json!({"filters":[]})).unwrap();
+    assert!(wrangler.filters.is_empty());
     let version = VersionId::generate();
     let values: Vec<TailFilterWire> = serde_json::from_value(serde_json::json!([
         {"sampling_rate":0.5},

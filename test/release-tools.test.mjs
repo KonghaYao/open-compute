@@ -265,6 +265,14 @@ test("release qualification and local Docker diagnostic keep their exact boundar
     assert.equal(ci.split(command).length - 1, 1);
   }
   assert.match(
+    ci,
+    /  s3-provider-qualification:\n[\s\S]*?environment: s3-provider-qualification[\s\S]*?OPEN_COMPUTE_TEST_R2_S3_ACCESS_KEY_ID: \$\{\{ secrets\.OPEN_COMPUTE_TEST_R2_S3_ACCESS_KEY_ID \}\}[\s\S]*?\.\/test\/gate\.py s3-provider-qualification --jobs 1/,
+  );
+  assert.match(
+    ci,
+    /test "\$\{\{ needs\.s3-provider-qualification\.result \}\}" = success/,
+  );
+  assert.match(
     workflow,
     /Fetch locked crates for offline packaged-binary tests\n\s+run: cargo fetch --locked/,
   );
@@ -419,7 +427,7 @@ test("release assembly requires and describes the exact three native executables
     tarballIntegrity: "sha512-cdkovenkZmV2ZGVk",
     surfaceDigest: "c".repeat(64),
     openapiRevision: "d".repeat(40),
-    cloudflareSdkVersion: "7.1.0",
+    cloudflareSdkVersion: "7.2.0",
     files: ["package/package.json"],
   };
   assert.deepEqual(parseSdkPackageReport(sdkReport), sdkReport);
@@ -477,7 +485,7 @@ test("release assembly requires and describes the exact three native executables
       tarballIntegrity: "sha512-cdkovenkZmV2ZGVk",
       surfaceDigest: "c".repeat(64),
       openapiRevision: "d".repeat(40),
-      cloudflareSdkVersion: "7.1.0",
+      cloudflareSdkVersion: "7.2.0",
     });
     assert.deepEqual(
       manifest.artifacts.map((artifact) => artifact.target),

@@ -749,20 +749,20 @@ pub(super) fn materialize_upload_metadata(
         let data_type = declarations.get(name.as_str()).ok_or_else(protocol)?;
         let text = value.as_str().ok_or_else(protocol)?;
         let value = match data_type {
-            crate::ai_search_config::AiSearchMetadataType::Text => Value::String(text.to_owned()),
-            crate::ai_search_config::AiSearchMetadataType::Number => {
+            AiSearchMetadataType::Text => Value::String(text.to_owned()),
+            AiSearchMetadataType::Number => {
                 let number = text.parse::<serde_json::Number>().map_err(|_| protocol())?;
                 if !number.as_f64().is_some_and(f64::is_finite) {
                     return Err(protocol());
                 }
                 Value::Number(number)
             }
-            crate::ai_search_config::AiSearchMetadataType::Boolean => match text {
+            AiSearchMetadataType::Boolean => match text {
                 "true" => Value::Bool(true),
                 "false" => Value::Bool(false),
                 _ => return Err(protocol()),
             },
-            crate::ai_search_config::AiSearchMetadataType::Datetime => {
+            AiSearchMetadataType::Datetime => {
                 text.parse::<jiff::Timestamp>().map_err(|_| protocol())?;
                 Value::String(text.to_owned())
             }

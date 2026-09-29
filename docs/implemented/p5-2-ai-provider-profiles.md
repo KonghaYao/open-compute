@@ -133,11 +133,14 @@ Generation mapping 改为引用声明了 `openai_chat_completions_v1` 的 backen
 backend = "bailian-chat"
 remote_model = "qwen-plus"
 max_context_tokens = 32768
-capabilities = ["chat", "rewrite", "rerank"]
+capabilities = ["chat", "rewrite"]
 ```
 
 Generation 不使用 embedding profile。`max_context_tokens` 与 capabilities 继续属于 model mapping；它们不能进入 backend，
 因为同一 endpoint 可以承载多个能力不同的模型。
+
+P19 已将 `rerank` 从 generation capability 中删除。当前 generation capabilities 只有 `chat` 与 `rewrite`；专用
+`[ai.reranking_models]` 分别映射 `cohere_rerank_v2` 或 `rerank_v1` backend，且不回退到 Chat Completions。
 
 ## 维度、tokenizer 与 metric
 

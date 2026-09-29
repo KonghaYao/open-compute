@@ -497,7 +497,7 @@ identity、加密和恢复不变量。
 - `ocd` 仍是唯一公开 listener 和 deployment identity authority；
 - Python isolate只看到声明的 vars、secrets 和 public bindings；
 - RuntimeSource、SQLite/S3 handles、internal Fetcher/token、prepare service 和 control API 永不进入 tenant env；
-- Python/FFI outbound 与 JavaScript 共用单一 `Network(allow = ["network"])` IP capability；Unix／abstract-Unix endpoint
+- Python/FFI outbound 与 JavaScript 共用单一 `Network(allow = ["network", "local"], deny = ["unix", "unix-abstract"])` IP capability；Unix／abstract-Unix endpoint
   不开放，validation 及未委托 outbound 的执行保持 `globalOutbound = null`；
 - tenant 不能通过 Python object、pickle、FFI、Frankenvalue 或 RPC 构造额外 capability；
 - upload、prepare、restore、binding adapter 和 SDK mismatch 均返回稳定 sanitized error；

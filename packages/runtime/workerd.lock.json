@@ -24,8 +24,8 @@
     "astSha256": "da29f5ec1d9a81cc0094bd083ed3b28013573fcb2d4febd9fd62aecbfb53c6b3"
   },
   "workersSdk": {
-    "revision": "f8085545bcaa2c639f171c25e4424685036a0e10",
-    "wranglerVersion": "4.138.0",
+    "revision": "968d629c9f4978d6842b0e11af511ef59a51cd79",
+    "wranglerVersion": "4.143.0",
     "vitePluginVersion": "1.54.2"
   },
   "targets": {

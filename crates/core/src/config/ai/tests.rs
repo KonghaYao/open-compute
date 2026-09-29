@@ -100,6 +100,27 @@ fn add_vlm(config: &mut AiConfig) {
     config.default_vlm_model = Some("fixture/vision".to_owned());
 }
 
+fn add_reranker(config: &mut AiConfig, protocol: AiBackendProtocol) {
+    config.backends.insert(
+        "fixture-rerank".to_owned(),
+        AiBackendConfig {
+            protocol,
+            endpoint: "http://127.0.0.1:8080/v2/rerank".to_owned(),
+            auth: AiAuthConfig::None,
+            headers: BTreeMap::new(),
+        },
+    );
+    config.reranking_models.insert(
+        "fixture/rerank".to_owned(),
+        AiRerankingModelConfig {
+            backend: "fixture-rerank".to_owned(),
+            remote_model: "fixture-reranker".to_owned(),
+            provider_revision: Some("rerank-revision-1".to_owned()),
+        },
+    );
+    config.default_reranking_model = Some("fixture/rerank".to_owned());
+}
+
 #[test]
 fn vlm_contract_is_optional_bounded_and_secret_free() {
     assert!(
@@ -293,8 +314,8 @@ fn limits_names_profiles_and_generation_protocols_are_validated() {
         ("max_provider_in_flight", 257),
         ("max_embedding_inputs_per_batch", 0),
         ("max_embedding_inputs_per_batch", 513),
-        ("max_embedding_request_bytes", 0),
-        ("max_embedding_response_bytes", 0),
+        ("max_provider_request_bytes", 0),
+        ("max_provider_response_bytes", 0),
         ("provider_timeout_ms", 0),
         ("query_timeout_ms", 0),
     ];
@@ -305,8 +326,8 @@ fn limits_names_profiles_and_generation_protocols_are_validated() {
             "max_embedding_inputs_per_batch" => {
                 config.max_embedding_inputs_per_batch = value as u16;
             }
-            "max_embedding_request_bytes" => config.max_embedding_request_bytes = value,
-            "max_embedding_response_bytes" => config.max_embedding_response_bytes = value,
+            "max_provider_request_bytes" => config.max_provider_request_bytes = value,
+            "max_provider_response_bytes" => config.max_provider_response_bytes = value,
             "provider_timeout_ms" => config.provider_timeout_ms = value,
             "query_timeout_ms" => config.query_timeout_ms = value,
             _ => unreachable!(),
@@ -342,6 +363,48 @@ fn limits_names_profiles_and_generation_protocols_are_validated() {
         .unwrap()
         .backend = "fixture-embeddings".to_owned();
     assert!(config.validate().is_err());
+}
+
+#[test]
+fn dedicated_reranking_catalog_accepts_only_rerank_protocols() {
+    for protocol in [
+        AiBackendProtocol::CohereRerankV2,
+        AiBackendProtocol::RerankV1,
+    ] {
+        let mut config = configured();
+        add_reranker(&mut config, protocol);
+        config.validate().unwrap();
+    }
+
+    let mut incompatible = configured();
+    add_reranker(
+        &mut incompatible,
+        AiBackendProtocol::OpenAiChatCompletionsV1,
+    );
+    assert!(incompatible.validate().is_err());
+
+    let mut missing = configured();
+    missing.default_reranking_model = Some("missing/reranker".to_owned());
+    assert!(missing.validate().is_err());
+
+    let old = r#"
+        max_embedding_request_bytes = 1024
+        max_embedding_response_bytes = 2048
+    "#;
+    assert!(toml::from_str::<AiConfig>(old).is_err());
+    let old_capability = r#"
+        [backends.chat]
+        protocol = "openai_chat_completions_v1"
+        endpoint = "http://127.0.0.1:8080/v1/chat/completions"
+        auth = { kind = "none" }
+
+        [generation_models."fixture/chat"]
+        backend = "chat"
+        remote_model = "fixture"
+        max_context_tokens = 1024
+        capabilities = ["rerank"]
+    "#;
+    assert!(toml::from_str::<AiConfig>(old_capability).is_err());
 }
 
 #[test]

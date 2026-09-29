@@ -100,6 +100,12 @@ ONCE = {
     ),
     'p6-cloudflare-sdk': ('official_cloudflare_sdk_matches_live_ocd_contract',),
     'p12-wrangler': ('target_commands_and_wrangler_wrapper_preserve_the_day1_boundary',),
+    'p5-ai-provider-qualification': (
+        'bailian-embedding-deepseek-chat',
+        'bailian-embedding-cohere-rerank-deepseek-chat',
+        'bailian-embedding-bailian-rerank-deepseek-chat',
+    ),
+    's3-provider-qualification': ('production-preflight',),
 }
 
 TIMING = {

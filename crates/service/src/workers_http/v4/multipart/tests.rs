@@ -56,6 +56,53 @@ fn parses_exact_pinned_compatibility_metadata_and_modules() {
 }
 
 #[test]
+fn accepts_wrangler_code_update_strategy_and_rejects_invalid_delays() {
+    for strategy in [
+        r#"{"mode":"immediate"}"#,
+        r#"{"mode":"deferred","max_delay":300}"#,
+        r#"{"mode":"deferred","max_delay":0.001}"#,
+    ] {
+        let metadata = format!(
+            r#"{{"main_module":"index.js","compatibility_date":"2026-09-08","code_update_strategy":{strategy}}}"#
+        );
+        assert!(
+            parse_parts(
+                vec![
+                    part("metadata", "application/json", metadata.as_bytes()),
+                    part(
+                        "index.js",
+                        "application/javascript+module",
+                        b"export default {}",
+                    ),
+                ],
+                BundleLimits::default(),
+            )
+            .is_ok()
+        );
+    }
+
+    for delay in [-0.001, 0.0001, 86_400.001] {
+        let metadata = format!(
+            r#"{{"main_module":"index.js","compatibility_date":"2026-09-08","code_update_strategy":{{"mode":"deferred","max_delay":{delay}}}}}"#
+        );
+        assert!(
+            parse_parts(
+                vec![
+                    part("metadata", "application/json", metadata.as_bytes()),
+                    part(
+                        "index.js",
+                        "application/javascript+module",
+                        b"export default {}",
+                    ),
+                ],
+                BundleLimits::default(),
+            )
+            .is_err()
+        );
+    }
+}
+
+#[test]
 fn commonjs_accepts_only_referenced_blobs_and_source_maps() {
     let parsed = parse_parts(
             vec![

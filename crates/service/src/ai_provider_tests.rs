@@ -10,9 +10,9 @@ use hyper::{Request as HyperRequest, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use open_compute_core::{
     AiAuthConfig, AiBackendConfig, AiBackendProtocol, AiConfig, AiEmbeddingModelConfig,
-    AiEmbeddingProfileConfig, AiGenerationCapability, AiGenerationModelConfig, AiTokenizer,
-    AiTokenizerArtifactConfig, AiTokenizerConfig, AiVlmModelConfig, OperatorProxyPolicy,
-    SecretReference,
+    AiEmbeddingProfileConfig, AiGenerationCapability, AiGenerationModelConfig,
+    AiRerankingModelConfig, AiTokenizer, AiTokenizerArtifactConfig, AiTokenizerConfig,
+    AiVlmModelConfig, OperatorProxyPolicy, SecretReference,
 };
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -237,7 +237,6 @@ fn chat_config(root: &str) -> AiConfig {
     let mut capabilities = BTreeSet::new();
     capabilities.insert(AiGenerationCapability::Chat);
     capabilities.insert(AiGenerationCapability::Rewrite);
-    capabilities.insert(AiGenerationCapability::Rerank);
     config.generation_models.insert(
         "fixture/chat".to_owned(),
         AiGenerationModelConfig {
@@ -249,6 +248,29 @@ fn chat_config(root: &str) -> AiConfig {
         },
     );
     config.default_generation_model = Some("fixture/chat".to_owned());
+    config
+}
+
+fn rerank_config(root: &str, protocol: AiBackendProtocol) -> AiConfig {
+    let mut config = chat_config(root);
+    config.backends.insert(
+        "fixture-rerank".to_owned(),
+        AiBackendConfig {
+            protocol,
+            endpoint: format!("{root}/rerank"),
+            auth: AiAuthConfig::None,
+            headers: Default::default(),
+        },
+    );
+    config.reranking_models.insert(
+        "fixture/rerank".to_owned(),
+        AiRerankingModelConfig {
+            backend: "fixture-rerank".to_owned(),
+            remote_model: "fixture-reranker".to_owned(),
+            provider_revision: Some("rev-1".to_owned()),
+        },
+    );
+    config.default_reranking_model = Some("fixture/rerank".to_owned());
     config
 }
 
@@ -643,16 +665,11 @@ async fn embeddings_times_out_and_connection_failures_are_transient() {
 }
 
 #[tokio::test]
-async fn chat_rewrite_rerank_and_stream_cover_happy_and_error_paths() {
+async fn chat_rewrite_and_stream_cover_happy_and_error_paths() {
     let sse =
         b"data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n\n";
     // ScriptedServer pops from the end; first request uses the last vec entry.
     let responses = vec![
-        (
-            StatusCode::OK,
-            "application/json",
-            chat_ok_body("fixture-chat", "[1]"),
-        ), // bad rerank index for one candidate
         (
             StatusCode::OK,
             "application/json",
@@ -664,11 +681,6 @@ async fn chat_rewrite_rerank_and_stream_cover_happy_and_error_paths() {
             StatusCode::OK,
             "application/json",
             chat_ok_body("fixture-chat", "rewritten query"),
-        ),
-        (
-            StatusCode::OK,
-            "application/json",
-            chat_ok_body("fixture-chat", "[1,0]"),
         ),
         (
             StatusCode::OK,
@@ -695,9 +707,6 @@ async fn chat_rewrite_rerank_and_stream_cover_happy_and_error_paths() {
     assert_eq!(completion.content, "hello");
     assert_eq!(completion.finish_reason, "stop");
 
-    let order = client.rerank("q", &["a".into(), "b".into()]).await.unwrap();
-    assert_eq!(order, vec![1, 0]);
-
     assert_eq!(
         client.rewrite_query("original").await.unwrap(),
         "rewritten query"
@@ -716,20 +725,236 @@ async fn chat_rewrite_rerank_and_stream_cover_happy_and_error_paths() {
         AiProviderError::MalformedResponse
     );
     assert_eq!(
-        client.rerank("q", &["only".into()]).await.unwrap_err(),
-        AiProviderError::MalformedResponse
-    );
-    assert_eq!(
-        client.rerank("q", &[]).await.unwrap_err(),
-        AiProviderError::InvalidRequest
-    );
-    assert_eq!(
         client.chat(&[], 1).await.unwrap_err(),
         AiProviderError::InvalidRequest
     );
     assert_eq!(
         client.chat(&[ChatMessage::user("x")], 0).await.unwrap_err(),
         AiProviderError::InvalidRequest
+    );
+}
+
+#[tokio::test]
+async fn dedicated_rerank_adapters_send_exact_wire_shapes_and_normalize_scores() {
+    for (protocol, expected) in [
+        (
+            AiBackendProtocol::CohereRerankV2,
+            serde_json::json!({
+                "model": "fixture-reranker",
+                "query": "query",
+                "documents": ["first", "second"],
+                "top_n": 2,
+            }),
+        ),
+        (
+            AiBackendProtocol::RerankV1,
+            serde_json::json!({
+                "model": "fixture-reranker",
+                "query": "query",
+                "documents": ["first", "second"],
+            }),
+        ),
+    ] {
+        let response = serde_json::to_vec(&serde_json::json!({
+            "results": [
+                {"index": 1, "relevance_score": 0.75, "ignored": true},
+                {"index": 0, "relevance_score": 0.75}
+            ]
+        }))
+        .unwrap();
+        let (port, captured) = capture_one(response).await;
+        let config = rerank_config(&format!("http://127.0.0.1:{port}"), protocol);
+        let client = RerankClient::new(&config, "fixture/rerank").unwrap();
+        let results = client
+            .rerank("query", &["first".into(), "second".into()])
+            .await
+            .unwrap();
+        assert_eq!(
+            results
+                .iter()
+                .map(|result| result.index)
+                .collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+        let request = captured.await.unwrap();
+        assert_eq!(request.path, "/rerank");
+        assert_eq!(request.headers[CONTENT_TYPE], "application/json");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&request.body).unwrap(),
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn dedicated_rerank_rejects_partial_duplicate_out_of_range_and_invalid_scores() {
+    let bodies = [
+        serde_json::json!({"results": [{"index": 0, "relevance_score": 0.5}]}),
+        serde_json::json!({"results": [
+            {"index": 0, "relevance_score": 0.5},
+            {"index": 0, "relevance_score": 0.4}
+        ]}),
+        serde_json::json!({"results": [
+            {"index": 0, "relevance_score": 0.5},
+            {"index": 2, "relevance_score": 0.4}
+        ]}),
+        serde_json::json!({"results": [
+            {"index": 0, "relevance_score": -0.1},
+            {"index": 1, "relevance_score": 0.4}
+        ]}),
+        serde_json::json!({"results": [
+            {"index": 0, "relevance_score": 0.5},
+            {"index": 1, "relevance_score": 1.1}
+        ]}),
+    ];
+    let responses = bodies
+        .into_iter()
+        .rev()
+        .map(|body| {
+            (
+                StatusCode::OK,
+                "application/json",
+                serde_json::to_vec(&body).unwrap(),
+            )
+        })
+        .collect();
+    let port = ScriptedServer::new(responses).serve().await;
+    let config = rerank_config(
+        &format!("http://127.0.0.1:{port}"),
+        AiBackendProtocol::RerankV1,
+    );
+    let client = RerankClient::new(&config, "fixture/rerank").unwrap();
+    for _ in 0..5 {
+        assert_eq!(
+            client
+                .rerank("query", &["first".into(), "second".into()])
+                .await
+                .unwrap_err(),
+            AiProviderError::MalformedResponse
+        );
+    }
+    assert_eq!(
+        client.rerank("query", &[]).await.unwrap_err(),
+        AiProviderError::InvalidRequest
+    );
+}
+
+#[tokio::test]
+async fn dedicated_rerank_maps_transport_status_and_body_failures() {
+    let valid = serde_json::to_vec(&serde_json::json!({
+        "results": [{"index": 0, "relevance_score": 0.5}]
+    }))
+    .unwrap();
+    let cases = [
+        (
+            StatusCode::UNAUTHORIZED,
+            "application/json",
+            b"{}".to_vec(),
+            AiProviderError::Unauthorized,
+        ),
+        (
+            StatusCode::FORBIDDEN,
+            "application/json",
+            b"{}".to_vec(),
+            AiProviderError::Unauthorized,
+        ),
+        (
+            StatusCode::TOO_MANY_REQUESTS,
+            "application/json",
+            b"{}".to_vec(),
+            AiProviderError::RateLimited {
+                retry_after_seconds: Some(7),
+            },
+        ),
+        (
+            StatusCode::BAD_REQUEST,
+            "application/json",
+            b"{}".to_vec(),
+            AiProviderError::Permanent,
+        ),
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "application/json",
+            b"{}".to_vec(),
+            AiProviderError::Transient,
+        ),
+        (
+            StatusCode::FOUND,
+            "application/json",
+            b"{}".to_vec(),
+            AiProviderError::Permanent,
+        ),
+        (
+            StatusCode::OK,
+            "text/plain",
+            valid.clone(),
+            AiProviderError::MalformedResponse,
+        ),
+        (
+            StatusCode::OK,
+            "application/json",
+            b"{nope".to_vec(),
+            AiProviderError::MalformedResponse,
+        ),
+    ];
+    let responses = cases
+        .iter()
+        .rev()
+        .map(|(status, content_type, body, _)| (*status, *content_type, body.clone()))
+        .collect();
+    let port = ScriptedServer::new(responses).serve().await;
+    let config = rerank_config(
+        &format!("http://127.0.0.1:{port}"),
+        AiBackendProtocol::RerankV1,
+    );
+    let client = RerankClient::new(&config, "fixture/rerank").unwrap();
+    for (_, _, _, expected) in cases {
+        assert_eq!(
+            client
+                .rerank("query", &["document".into()])
+                .await
+                .unwrap_err(),
+            expected
+        );
+    }
+
+    let port = ScriptedServer::new(vec![(StatusCode::OK, "application/json", valid)])
+        .serve()
+        .await;
+    let mut limited = rerank_config(
+        &format!("http://127.0.0.1:{port}"),
+        AiBackendProtocol::RerankV1,
+    );
+    limited.max_provider_response_bytes = 8;
+    assert_eq!(
+        RerankClient::new(&limited, "fixture/rerank")
+            .unwrap()
+            .rerank("query", &["document".into()])
+            .await
+            .unwrap_err(),
+        AiProviderError::MalformedResponse
+    );
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        drop(stream);
+    });
+    let mut slow = rerank_config(
+        &format!("http://127.0.0.1:{port}"),
+        AiBackendProtocol::RerankV1,
+    );
+    slow.provider_timeout_ms = 10;
+    slow.query_timeout_ms = 10;
+    assert_eq!(
+        RerankClient::new(&slow, "fixture/rerank")
+            .unwrap()
+            .rerank("query", &["document".into()])
+            .await
+            .unwrap_err(),
+        AiProviderError::Timeout
     );
 }
 

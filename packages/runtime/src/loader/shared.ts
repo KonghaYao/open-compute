@@ -69,15 +69,15 @@ export const INTERNAL_HEADERS = Object.freeze([
   "x-forwarded-proto",
 ]);
 
-/** Select the one public-only outbound capability for tenant code, or disable it for validation. */
+/** Select the one host-network capability for tenant code, or disable it for validation. */
 export function tenantGlobalOutbound(
   env: LoaderEnv,
   validation: boolean,
 ): Fetcher | null {
   if (validation) return null;
-  if (env.PUBLIC_NETWORK == null)
+  if (env.OUTBOUND_NETWORK == null)
     throw bindingError("VERSION_INVARIANT_VIOLATION");
-  return env.PUBLIC_NETWORK;
+  return env.OUTBOUND_NETWORK;
 }
 
 /** Formal-lock date and tenant-required flags from private system bindings. */
@@ -188,9 +188,10 @@ export async function resolveSnapshot(
       headers: {
         "content-type": "application/json",
         [TOKEN_HEADER]: internalToken,
+        "x-open-compute-startup-generation":
+          currentStartupGeneration(internalToken),
       },
       body: JSON.stringify({
-        startupGeneration: currentStartupGeneration(internalToken),
         key: envelope.loaderKey,
         expectedWorkerCodeSha256: envelope.expected,
         scope: validation ? (probe ? "probe" : "validation") : "runtime",

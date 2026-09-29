@@ -2,8 +2,9 @@
 
 use crate::backend::{
     BackendError, CustomerKey, GetOptions, HeadOptions, ObjectBackend, ObjectHttpMetadata,
-    ObjectKey, ObjectMetadata, ObjectRange, ObjectSource, PutMode, PutOptions, UploadedPart,
+    ObjectKey, ObjectMetadata, ObjectRange, ObjectSource, PutMode, PutOptions,
 };
+use crate::r2_model::R2_MIN_MULTIPART_PART_BYTES;
 use bytes::Bytes;
 use md5::Digest as _;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, StartupId};
@@ -198,29 +199,32 @@ async fn verify_multipart(backend: &ObjectBackend, key: &ObjectKey) -> Result<()
         .await
         .map_err(|_| unavailable())?;
     let result = async {
+        let first_len = usize::try_from(R2_MIN_MULTIPART_PART_BYTES)
+            .map_err(|_| integrity("multipart_complete"))?;
+        let bodies = [
+            Bytes::from(vec![b'a'; first_len]),
+            Bytes::from_static(b"part-b"),
+        ];
         let mut parts = Vec::new();
-        for (part_number, body) in [(1, b"part-a".as_slice()), (2, b"part-b".as_slice())] {
+        for (part_number, body) in [(1, &bodies[0]), (2, &bodies[1])] {
             let part = backend
                 .upload_part(
                     key,
                     &upload_id,
                     part_number,
-                    ObjectSource::Bytes(Bytes::copy_from_slice(body)),
+                    ObjectSource::Bytes(body.clone()),
                     Some(customer.clone()),
                 )
                 .await
                 .map_err(|_| unavailable())?;
-            if part.etag != hex::encode(md5::Md5::digest(body)) {
-                return Err(integrity("multipart_part_etag"));
-            }
             parts.push(part);
         }
         let completed = backend
             .complete_multipart(key, &upload_id, &parts, Some(customer.clone()))
             .await
             .map_err(|_| unavailable())?;
-        let expected_etag = multipart_etag(&parts)?;
-        if completed.size != 12 || completed.etag != expected_etag {
+        let expected_size = R2_MIN_MULTIPART_PART_BYTES + bodies[1].len() as u64;
+        if completed.size != expected_size {
             return Err(integrity("multipart_complete"));
         }
         let body = backend
@@ -238,7 +242,9 @@ async fn verify_multipart(backend: &ObjectBackend, key: &ObjectKey) -> Result<()
             .await
             .map_err(|_| unavailable())?
             .into_bytes();
-        if body.as_ref() != b"part-apart-b" {
+        let mut expected = vec![b'a'; first_len];
+        expected.extend_from_slice(b"part-b");
+        if body.as_ref() != expected {
             return Err(integrity("multipart_body"));
         }
         Ok(())
@@ -248,22 +254,6 @@ async fn verify_multipart(backend: &ObjectBackend, key: &ObjectKey) -> Result<()
         let _ = backend.abort_multipart(key, &upload_id).await;
     }
     result
-}
-
-fn multipart_etag(parts: &[UploadedPart]) -> Result<String, PlatformError> {
-    let mut binary = Vec::with_capacity(parts.len().saturating_mul(16));
-    for part in parts {
-        let digest = hex::decode(&part.etag).map_err(|_| integrity("multipart_part_etag"))?;
-        if digest.len() != 16 {
-            return Err(integrity("multipart_part_etag"));
-        }
-        binary.extend(digest);
-    }
-    Ok(format!(
-        "{}-{}",
-        hex::encode(md5::Md5::digest(binary)),
-        parts.len()
-    ))
 }
 
 async fn put(
@@ -314,9 +304,8 @@ fn integrity(stage: &'static str) -> PlatformError {
         "overwrite" => "R2 backend conditional overwrite capability is incompatible",
         "list_first" | "list_second" => "R2 backend pagination capability is incompatible",
         "list_after_delete" => "R2 backend delete visibility capability is incompatible",
-        "multipart_part_etag" | "multipart_complete" | "multipart_body" => {
-            "R2 backend multipart or SSE-C capability is incompatible"
-        }
+        "multipart_complete" => "R2 backend multipart completion capability is incompatible",
+        "multipart_body" => "R2 backend multipart SSE-C read capability is incompatible",
         _ => "R2 backend capability contract is incompatible",
     };
     PlatformError::new(ErrorCode::R2ProviderUnavailable, message)

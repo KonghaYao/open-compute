@@ -60,12 +60,12 @@ function fixtureInput(overrides = {}) {
     baseline: {
       openapiRevision: REVISION_A,
       openapiSha256: "1".repeat(64),
-      cloudflareSdkVersion: "7.1.0",
+      cloudflareSdkVersion: "7.2.0",
       wranglerVersion: "4.127.1",
     },
     candidateSchema: { revision: REVISION_A, bytes: schemaBytesValue },
     candidateCloudflare: {
-      version: "7.1.0",
+      version: "7.2.0",
       npmShasum: "0".repeat(40),
       npmIntegrity: "sha512-",
     },
@@ -73,6 +73,16 @@ function fixtureInput(overrides = {}) {
       version: "4.127.1",
       npmShasum: "0".repeat(40),
       npmIntegrity: "sha512-",
+    },
+    candidateWranglerEvidence: {
+      packageSha256: "2".repeat(64),
+      packageJsonSha256: "3".repeat(64),
+      configSchemaSha256: "4".repeat(64),
+      cliSha256: "5".repeat(64),
+      missingConfigFields: [],
+      missingBindings: [],
+      missingCommands: [],
+      unknownDifferences: [],
     },
     candidateSdkRoutes: candidateRoutes,
     manifest,
@@ -108,7 +118,7 @@ test("a schema move covered by a moved official SDK is ready", () => {
         },
       ],
       candidateCloudflare: {
-        version: "7.2.0",
+        version: "7.3.0",
         npmShasum: "0".repeat(40),
         npmIntegrity: "sha512-",
       },
@@ -159,7 +169,7 @@ test("a baseline-mapped operation lost from the candidate SDK is breaking", () =
     fixtureInput({
       candidateSchema: { revision: REVISION_B, bytes: schemaBytes() },
       candidateCloudflare: {
-        version: "7.2.0",
+        version: "7.3.0",
         npmShasum: "0".repeat(40),
         npmIntegrity: "sha512-",
       },
@@ -173,7 +183,7 @@ test("a baseline-mapped operation lost from the candidate SDK is breaking", () =
   );
 });
 
-test("a wrangler-only move stays blocked on coordinated evidence", () => {
+test("a wrangler-only move with equivalent selected surface is ready", () => {
   const report = classify(
     fixtureInput({
       candidateWrangler: {
@@ -183,15 +193,53 @@ test("a wrangler-only move stays blocked on coordinated evidence", () => {
       },
     }),
   );
+  assert.equal(report.classification, "ready");
+  assert.match(report.reasons.join(" "), /preserves the selected/);
+});
+
+test("a Wrangler selected config or command removal is breaking", () => {
+  const report = classify(
+    fixtureInput({
+      candidateWrangler: {
+        version: "4.131.2",
+        npmShasum: "0".repeat(40),
+        npmIntegrity: "sha512-",
+      },
+      candidateWranglerEvidence: {
+        ...fixtureInput().candidateWranglerEvidence,
+        missingConfigFields: ["ai_search"],
+        missingCommands: ["ai-search search"],
+      },
+    }),
+  );
+  assert.equal(report.classification, "breaking");
+  assert.match(report.reasons.join(" "), /config field ai_search/);
+  assert.match(report.reasons.join(" "), /command ai-search search/);
+});
+
+test("unknown Wrangler selected-surface drift is blocked", () => {
+  const report = classify(
+    fixtureInput({
+      candidateWrangler: {
+        version: "4.131.2",
+        npmShasum: "0".repeat(40),
+        npmIntegrity: "sha512-",
+      },
+      candidateWranglerEvidence: {
+        ...fixtureInput().candidateWranglerEvidence,
+        unknownDifferences: ["config schema has no RawConfig properties"],
+      },
+    }),
+  );
   assert.equal(report.classification, "blocked");
-  assert.match(report.reasons.join(" "), /wrangler pin move/);
+  assert.deepEqual(report.waitingOn, ["Wrangler selected-surface review"]);
 });
 
 test("manifest-excluded operations do not force blocked or breaking", () => {
   const report = classify(
     fixtureInput({
       candidateCloudflare: {
-        version: "7.2.0",
+        version: "7.3.0",
         npmShasum: "0".repeat(40),
         npmIntegrity: "sha512-",
       },

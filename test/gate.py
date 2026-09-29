@@ -91,6 +91,8 @@ CARGO_TARGETS = {
 TYPED_TARGETS = {
     'p3-contract': (None, 'p3-contract', False),
     'p3-cf-diff': (None, 'p3-cf-diff', True),
+    'p5-ai-provider-qualification': (None, 'p5-ai-provider-qualification', True),
+    's3-provider-qualification': (None, 's3-provider-qualification', True),
 }
 TARGETS = {**CARGO_TARGETS, **TYPED_TARGETS}
 P3_PRODUCT_TARGETS = [
@@ -121,7 +123,7 @@ GROUPS = {
     'p1-8': ['p0-7', 'p1-conformance'],
     'workflow': ['workflow-runtime', 'workflow-recovery', 'workflow-product'],
     'all': [*CARGO_TARGETS, 'p3-contract'],
-    'p5': ['p5-search'],
+    'p5': ['p5-search', 'p5-ai-provider-qualification'],
 }
 
 
@@ -296,10 +298,12 @@ def resolve_targets(selected, workspace):
                 else:
                     found[label] = resolved
     typed = {}
-    if workspace or {'p3-contract', 'p3-cf-diff'} & set(selected):
-        bun = shutil.which('bun')
-        if bun is None:
-            raise ValueError('bun is required for typed conformance targets')
+    if workspace or set(TYPED_TARGETS) & set(selected):
+        bun = None
+        if workspace or {'p3-contract', 'p3-cf-diff', 'p5-ai-provider-qualification'} & set(selected):
+            bun = shutil.which('bun')
+            if bun is None:
+                raise ValueError('bun is required for typed conformance targets')
         if workspace or 'p3-contract' in selected:
             typed['p3-contract'] = TypedTarget(
                 None,
@@ -337,6 +341,53 @@ def resolve_targets(selected, workspace):
                 1800,
                 'external-exclusive',
                 'differential-runner',
+            )
+        if 'p5-ai-provider-qualification' in selected:
+            typed['p5-ai-provider-qualification'] = TypedTarget(
+                None,
+                'p5-ai-provider-qualification',
+                'bun-test',
+                str(ROOT),
+                True,
+                tuple(sorted(ONCE['p5-ai-provider-qualification'])),
+                bun,
+                (str(ROOT / 'test/conformance/ai-provider-qualification.ts'),),
+                ('--list',),
+                (
+                    'PATH', 'HOME', 'OPEN_COMPUTE_TEST_WORKERD',
+                    'OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE', 'BAILIAN_API_HOST',
+                    'BAILIAN_API_KEY', 'DEEPSEEK_API_KEY', 'COHERE_API_KEY',
+                ),
+                1800,
+                'external-exclusive',
+                'ai-provider-qualification',
+            )
+        if 's3-provider-qualification' in selected:
+            shell = shutil.which('sh')
+            if shell is None:
+                raise ValueError('sh is required for the S3 provider qualification')
+            typed['s3-provider-qualification'] = TypedTarget(
+                None,
+                's3-provider-qualification',
+                's3-provider-qualification',
+                str(ROOT),
+                True,
+                tuple(sorted(ONCE['s3-provider-qualification'])),
+                shell,
+                (str(ROOT / 'test/s3-provider-qualification.sh'),),
+                ('--list',),
+                (
+                    'PATH', 'HOME', 'RUSTFLAGS', 'CARGO_HOME', 'RUSTUP_HOME',
+                    'OPEN_COMPUTE_TEST_R2_S3_ENDPOINT',
+                    'OPEN_COMPUTE_TEST_R2_S3_REGION',
+                    'OPEN_COMPUTE_TEST_R2_S3_BUCKET',
+                    'OPEN_COMPUTE_TEST_R2_S3_ACCESS_KEY_ID',
+                    'OPEN_COMPUTE_TEST_R2_S3_SECRET_ACCESS_KEY',
+                    'OPEN_COMPUTE_TEST_R2_S3_MUTATION_ACK',
+                ),
+                1200,
+                'external-exclusive',
+                's3-provider-qualification',
             )
     if workspace:
         missing = CARGO_TARGETS.keys() - found.keys()
@@ -424,7 +475,8 @@ def verify_inputs(*, probe_version=True):
 
 def verify_selected_inputs(targets, *, probe_version=True):
     """L0 typed checks need only frozen manifests; Cargo product Gates need runtime inputs."""
-    if any(not isinstance(target, TypedTarget) for target in targets.values()):
+    if (any(not isinstance(target, TypedTarget) for target in targets.values())
+            or 'p5-ai-provider-qualification' in targets):
         return verify_inputs(probe_version=probe_version)
     return {
         'baseline_sha256': digest(ROOT / 'test/conformance/baseline.json'),

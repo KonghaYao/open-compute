@@ -17,9 +17,9 @@ mod scheduler;
 pub use ai::{
     AiAuthConfig, AiBackendConfig, AiBackendProtocol, AiConfig, AiEmbeddingMetric,
     AiEmbeddingModelConfig, AiEmbeddingProfileConfig, AiGenerationCapability,
-    AiGenerationModelConfig, AiSourceProviderConfig, AiTokenizer, AiTokenizerArtifactConfig,
-    AiTokenizerConfig, AiVlmModelConfig, ResolvedEmbeddingModelContract, ResolvedTokenizerContract,
-    ResolvedVlmModelContract,
+    AiGenerationModelConfig, AiRerankingModelConfig, AiSourceProviderConfig, AiTokenizer,
+    AiTokenizerArtifactConfig, AiTokenizerConfig, AiVlmModelConfig, ResolvedEmbeddingModelContract,
+    ResolvedTokenizerContract, ResolvedVlmModelContract,
 };
 pub use extensions::{
     LocalExtensionConfig, PrivateHttpGrant, PrivateHttpServiceConfig, validate_local_extension_name,

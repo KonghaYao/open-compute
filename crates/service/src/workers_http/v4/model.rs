@@ -4,7 +4,7 @@ use open_compute_core::SecretString;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
 
-/// Cloudflare Worker upload metadata emitted by Wrangler 4.138.0.
+/// Cloudflare Worker upload metadata emitted by Wrangler 4.143.0.
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct WorkerUploadMetadata {
@@ -20,6 +20,8 @@ pub(crate) struct WorkerUploadMetadata {
     /// Wrangler build provenance; accepted and intentionally not persisted.
     #[serde(default)]
     pub package_dependencies: Vec<WorkerUploadPackageDependency>,
+    /// Durable Object code-rollout hint emitted by Wrangler; local deployments switch generations atomically.
+    pub code_update_strategy: Option<WorkerUploadCodeUpdateStrategy>,
     /// Environment and product bindings.
     #[serde(default)]
     pub bindings: Vec<WorkerUploadBinding>,
@@ -54,6 +56,32 @@ pub(crate) struct WorkerUploadPackageDependency {
     pub _package_json_version: String,
     #[serde(rename = "installedVersion")]
     pub _installed_version: String,
+}
+
+/// Closed Wrangler wire shape for Durable Object code rollout.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct WorkerUploadCodeUpdateStrategy {
+    #[serde(rename = "mode")]
+    pub _mode: WorkerUploadCodeUpdateMode,
+    pub max_delay: Option<f64>,
+}
+
+impl WorkerUploadCodeUpdateStrategy {
+    pub(crate) fn is_valid(self) -> bool {
+        self.max_delay.is_none_or(|delay| {
+            (0.0..=86_400.0).contains(&delay)
+                && (delay * 1_000.0 - (delay * 1_000.0).round()).abs() <= 1e-6
+        })
+    }
+}
+
+/// Cloudflare's supported Durable Object code-rollout modes.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum WorkerUploadCodeUpdateMode {
+    Immediate,
+    Deferred,
 }
 
 /// The fixed Wrangler `limits` schema accepted at the v4 boundary. Unknown fields are
@@ -158,6 +186,7 @@ impl std::fmt::Debug for WorkerUploadMetadata {
             .field("compatibility_date", &self.compatibility_date)
             .field("compatibility_flags", &self.compatibility_flags)
             .field("package_dependencies", &self.package_dependencies.len())
+            .field("code_update_strategy", &self.code_update_strategy)
             .field("bindings", &self.bindings.len())
             .field("keep_bindings", &self.keep_bindings)
             .field("annotations", &self.annotations)

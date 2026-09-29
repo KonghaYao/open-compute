@@ -650,7 +650,7 @@ export function AISearchPlayground({
                 <span className="text-kumo-subtle text-sm">
                   {generationModel
                     ? "Reorder results by relevance."
-                    : "Configure a generation model to enable reranking."}
+                    : "Configure a reranking model to enable reranking."}
                 </span>
               </div>
               <Switch

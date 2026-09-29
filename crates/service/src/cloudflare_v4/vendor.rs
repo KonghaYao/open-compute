@@ -15,7 +15,7 @@ use open_compute_storage::{DurableObjectRepository, ResourceRepository, WorkerRe
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
-const WRANGLER_VERSION: &str = "4.138.0";
+const WRANGLER_VERSION: &str = "4.143.0";
 
 mod backups;
 mod d1_resources;

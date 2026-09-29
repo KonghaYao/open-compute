@@ -33,7 +33,7 @@
         "commands"
       ],
       "properties": {
-        "version": { "const": "4.138.0" },
+        "version": { "const": "4.143.0" },
         "configSchemaSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "fields": { "type": "array", "items": { "$ref": "#/$defs/item" } },
         "bindings": { "type": "array", "items": { "$ref": "#/$defs/item" } },

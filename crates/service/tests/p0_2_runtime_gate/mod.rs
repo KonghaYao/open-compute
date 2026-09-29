@@ -54,6 +54,7 @@ use std::time::{Duration, Instant};
 
 mod http;
 mod nodejs;
+mod postgres;
 mod resource_limits_recovery;
 mod wrangler;
 
@@ -70,14 +71,16 @@ async fn deploy_egress(
     worker: open_compute_core::WorkerId,
     fixture: Option<&EgressFixture>,
 ) -> open_compute_storage::VersionRecord {
-    let public_targets = fixture.map_or_else(Vec::new, |fixture| {
+    let allowed_targets = fixture.map_or_else(Vec::new, |fixture| {
         vec![
             fixture.public_ipv4_url.clone(),
             fixture.public_ipv6_url.clone(),
             fixture.public_hostname_url.clone(),
+            fixture.redirect_private_url.clone(),
+            fixture.private_hostname_url.clone(),
         ]
     });
-    let mut denied_targets = vec![
+    let unreachable_targets = vec![
         "http://127.0.0.1:1/".to_owned(),
         "http://10.0.0.1/".to_owned(),
         "http://169.254.169.254/latest/meta-data/".to_owned(),
@@ -88,18 +91,14 @@ async fn deploy_egress(
         "http://localhost/".to_owned(),
         "file:///etc/passwd".to_owned(),
     ];
-    if let Some(fixture) = fixture {
-        denied_targets.push(fixture.redirect_private_url.clone());
-        denied_targets.push(fixture.private_hostname_url.clone());
-    }
     let mut vars = BTreeMap::new();
     vars.insert(
-        "PUBLIC_TARGETS_JSON".to_owned(),
-        serde_json::json!(serde_json::to_string(&public_targets).unwrap()),
+        "ALLOWED_TARGETS_JSON".to_owned(),
+        serde_json::json!(serde_json::to_string(&allowed_targets).unwrap()),
     );
     vars.insert(
-        "DENIED_TARGETS_JSON".to_owned(),
-        serde_json::json!(serde_json::to_string(&denied_targets).unwrap()),
+        "UNREACHABLE_TARGETS_JSON".to_owned(),
+        serde_json::json!(serde_json::to_string(&unreachable_targets).unwrap()),
     );
     if let Some(fixture) = fixture {
         vars.insert(
@@ -139,7 +138,10 @@ async fn deploy_egress(
         secrets: BTreeMap::new(),
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: VersionRuntimeFeatures {
+            compatibility_flags: vec!["nodejs_compat".to_owned()],
+            ..VersionRuntimeFeatures::default()
+        },
         queue_consumers: Vec::new(),
         crons: vec!["3 * * * *".to_owned()],
         deployment_source: None,
@@ -150,6 +152,61 @@ async fn deploy_egress(
     match controller.create_version(request).await.unwrap() {
         CreateVersionOutcome::Applied(result) => result.version,
         CreateVersionOutcome::Replay(_) => panic!("unexpected replay"),
+    }
+}
+
+async fn deploy_postgres(
+    controller: &VersionController<'_>,
+    account: open_compute_core::InstanceId,
+    worker: open_compute_core::WorkerId,
+    address: std::net::SocketAddr,
+) -> open_compute_storage::VersionRecord {
+    let bundle = CanonicalBundle::build(
+        "index.js",
+        vec![ModuleInput {
+            name: "index.js".to_owned(),
+            module_type: ModuleType::EsModule,
+            bytes: include_bytes!("../../../../test/applications/postgres-driver/dist/worker.js")
+                .to_vec(),
+        }],
+        BundleLimits::default(),
+    )
+    .unwrap();
+    let request = CreateVersionRequest {
+        instance_id: account,
+        worker_id: worker,
+        idempotency_key: "deploy-postgres-driver".to_owned(),
+        content: open_compute_workers::VersionContent::Worker {
+            bundle: bundle.into_bytes().into(),
+            assets: None,
+        },
+        vars: BTreeMap::from([
+            (
+                "POSTGRES_HOST".to_owned(),
+                serde_json::json!(address.ip().to_string()),
+            ),
+            (
+                "POSTGRES_PORT".to_owned(),
+                serde_json::json!(address.port().to_string()),
+            ),
+        ]),
+        secrets: BTreeMap::new(),
+        bindings: BTreeMap::new(),
+        services: BTreeMap::new(),
+        runtime_features: VersionRuntimeFeatures {
+            compatibility_flags: vec!["nodejs_compat".to_owned()],
+            ..VersionRuntimeFeatures::default()
+        },
+        queue_consumers: Vec::new(),
+        crons: Vec::new(),
+        deployment_source: None,
+        observability: None,
+        request_id: RequestId::generate(),
+        now_ms: 21,
+    };
+    match controller.create_version(request).await.unwrap() {
+        CreateVersionOutcome::Applied(result) => result.version,
+        CreateVersionOutcome::Replay(_) => panic!("unexpected PostgreSQL driver replay"),
     }
 }
 
@@ -333,8 +390,12 @@ fn assert_raw_tcp_fixture(raw: &serde_json::Value, fixture: &EgressFixture) {
     assert_eq!(sockets["startTls"]["initialUpgraded"], false);
     assert_eq!(sockets["startTls"]["oldSocketNeutered"], true);
     for name in ["privateDns", "loopback"] {
-        assert_eq!(sockets[name]["opened"], false, "{name} raw socket");
-        assert_eq!(sockets[name]["denied"], true, "{name} raw socket");
+        assert_eq!(
+            sockets[name]["bytes"],
+            192 * 1024,
+            "{name} raw socket: {}",
+            sockets[name]
+        );
     }
 
     let node = &raw["node"];
@@ -358,8 +419,12 @@ fn assert_raw_tcp_fixture(raw: &serde_json::Value, fixture: &EgressFixture) {
     assert_eq!(node["timeout"]["timedOut"], true);
     assert_eq!(node["timeout"]["destroyed"], true);
     for name in ["privateDns", "loopback"] {
-        assert_eq!(node[name]["opened"], false, "node {name}");
-        assert_eq!(node[name]["denied"], true, "node {name}");
+        assert_eq!(
+            node[name]["bytes"],
+            192 * 1024,
+            "node {name}: {}",
+            node[name]
+        );
     }
 }
 

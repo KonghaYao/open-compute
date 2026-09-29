@@ -116,13 +116,33 @@ tokenizer = { kind = "qwen3", revision = "pinned-tokenizer-revision", artifact =
 backend = "bailian-embeddings"
 remote_model = "text-embedding-v4"
 profile = "qwen/qwen3-1024"
+
+[ai.backends.cohere-rerank]
+protocol = "cohere_rerank_v2"
+endpoint = "https://api.cohere.com/v2/rerank"
+auth = { kind = "bearer", secret = { env = "COHERE_API_KEY" } }
+
+[ai.reranking_models."company/cohere-rerank"]
+backend = "cohere-rerank"
+remote_model = "rerank-v4.0-fast"
+
+[ai.backends.generic-rerank]
+protocol = "rerank_v1"
+endpoint = "https://provider.example/v1/rerank"
+auth = { kind = "bearer", secret = { env = "RERANK_API_KEY" } }
+
+[ai.reranking_models."company/generic-rerank"]
+backend = "generic-rerank"
+remote_model = "BAAI/bge-reranker-v2-m3"
 ```
 
-创建 AI Search 实例前必须配置 `default_embedding_model`。只有需要 AI Search chat、query rewrite 或 reranking 时，才需要再配置 `default_generation_model` 和对应的 `generation_models` 条目。
+创建 vector AI Search 实例前必须配置 `default_embedding_model`。chat 与 query rewrite 使用 `default_generation_model` 和对应的 `generation_models`；reranking 独立使用 `default_reranking_model` 和 `reranking_models`，不会回退到 generation model。
 
 认证是闭集：`bearer`、单个自定义 secret `header` 或 `none`。需要自定义 key header 时写成 `auth = { kind = "header", name = "X-API-Key", secret = { file = "/run/secrets/provider-key" } }`。可选 `headers` map 只承载非敏感静态 metadata，不能覆盖 `Authorization`、自定义 auth header、host/content header、cookie、proxy 或 hop-by-hop header。`none` 只允许 loopback HTTP；非 loopback endpoint 必须使用 HTTPS。
 
 Profile 让模型事实可复用而不变成隐式猜测。维度、最大输入 token 数、是否发送 `dimensions`，以及 digest-pinned offline tokenizer 都属于 profile；AI Search 的 metric 固定为 cosine。`config check` 只验证 artifact 声明而不读取文件；`ocd` 组合 AI Search 服务时校验本地 bytes，绝不下载 tokenizer。
+
+`cohere_rerank_v2` 发送带 `top_n` 的固定 Cohere v2 shape；`rerank_v1` 发送不含 `top_n` 的 `/v1/rerank` 公共子集。两者都要求完整的 `results[{index,relevance_score}]`。`max_provider_request_bytes` 与 `max_provider_response_bytes` 同时约束 embeddings、chat、rewrite 和 rerank 正文。
 
 ## `[data]`：平台状态与锁
 
@@ -196,7 +216,7 @@ credential = { file = "/run/secrets/inventory-key" }
 allow = [{ account_id = "<instance-id>", worker_id = "<worker-id>", entrypoint = "api" }]
 ```
 
-`ocd` 启动时把 endpoint 解析并固定到私网地址；重定向只返回给调用方，绝不跟随。调用 Worker 不能选择 URL 或 credential；内部 header 与租户认证 header 会被移除，配置 credential 只在 host 侧请求中注入。上传准入和每次调用都会重新检查精确 instance、Worker、可选 Version、entrypoint 与 policy revision。因此新建 Worker 必须先取得稳定 Worker ID，才能添加该 binding。私网 target 只支持 Service Binding HTTP `fetch()`；RPC 与 `connect()` fail closed。普通租户 `fetch()` 仍只允许公网地址。
+`ocd` 启动时把 endpoint 解析并固定到私网地址；重定向只返回给调用方，绝不跟随。调用 Worker 不能选择 URL 或 credential；内部 header 与租户认证 header 会被移除，配置 credential 只在 host 侧请求中注入。上传准入和每次调用都会重新检查精确 instance、Worker、可选 Version、entrypoint 与 policy revision。因此新建 Worker 必须先取得稳定 Worker ID，才能添加该 binding。私网 target 只支持 Service Binding HTTP `fetch()`；RPC 与 `connect()` fail closed。普通租户 `fetch()` 使用宿主网络可路由范围，目标过滤由 operator 的 firewall、namespace、容器或 VM 负责。
 
 ## 其它段
 

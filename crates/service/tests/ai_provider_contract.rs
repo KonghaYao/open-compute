@@ -7,11 +7,11 @@ use axum::http::{HeaderValue, Response, StatusCode};
 use axum::routing::post;
 use open_compute_core::{
     AiAuthConfig, AiBackendConfig, AiBackendProtocol, AiConfig, AiEmbeddingModelConfig,
-    AiEmbeddingProfileConfig, AiGenerationCapability, AiGenerationModelConfig, AiTokenizer,
-    AiTokenizerArtifactConfig, AiTokenizerConfig,
+    AiEmbeddingProfileConfig, AiGenerationCapability, AiGenerationModelConfig,
+    AiRerankingModelConfig, AiTokenizer, AiTokenizerArtifactConfig, AiTokenizerConfig,
 };
 use open_compute_service::ai_provider::{
-    AiProviderError, ChatMessage, OpenAiChatClient, OpenAiProviderClient,
+    AiProviderError, ChatMessage, OpenAiChatClient, OpenAiProviderClient, RerankClient,
 };
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -125,8 +125,6 @@ async fn chat_fixture(body: Bytes) -> Response<String> {
         .unwrap_or_default();
     let content = if system.starts_with("Rewrite") {
         "rewritten query"
-    } else if system.starts_with("Rank") {
-        "[1,0]"
     } else {
         "answer"
     };
@@ -146,6 +144,29 @@ async fn chat_fixture(body: Bytes) -> Response<String> {
         .expect("response")
 }
 
+async fn rerank_fixture(body: Bytes) -> Response<String> {
+    let request: serde_json::Value = serde_json::from_slice(&body).expect("rerank request");
+    assert_eq!(
+        request,
+        json!({
+            "model": "fixture-reranker",
+            "query": "query",
+            "documents": ["first", "second"],
+            "top_n": 2,
+        })
+    );
+    Response::builder()
+        .header("content-type", "application/json")
+        .body(
+            json!({"results": [
+                {"index": 1, "relevance_score": 0.9},
+                {"index": 0, "relevance_score": 0.2}
+            ]})
+            .to_string(),
+        )
+        .expect("response")
+}
+
 async fn client(
     response: FixtureResponse,
     timeout_ms: u64,
@@ -157,6 +178,7 @@ async fn client(
     let app = Router::new()
         .route("/v1/embeddings", post(fixture))
         .route("/v1/chat/completions", post(chat_fixture))
+        .route("/v2/rerank", post(rerank_fixture))
         .with_state(response);
     let task = tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -171,6 +193,15 @@ async fn client(
         AiBackendConfig {
             protocol: AiBackendProtocol::OpenAiEmbeddingsV1,
             endpoint: format!("http://127.0.0.1:{port}/v1/embeddings"),
+            auth: AiAuthConfig::None,
+            headers: Default::default(),
+        },
+    );
+    config.backends.insert(
+        "fixture-rerank".into(),
+        AiBackendConfig {
+            protocol: AiBackendProtocol::CohereRerankV2,
+            endpoint: format!("http://127.0.0.1:{port}/v2/rerank"),
             auth: AiAuthConfig::None,
             headers: Default::default(),
         },
@@ -222,8 +253,15 @@ async fn client(
             capabilities: BTreeSet::from([
                 AiGenerationCapability::Chat,
                 AiGenerationCapability::Rewrite,
-                AiGenerationCapability::Rerank,
             ]),
+        },
+    );
+    config.reranking_models.insert(
+        "fixture/reranking".into(),
+        AiRerankingModelConfig {
+            backend: "fixture-rerank".into(),
+            remote_model: "fixture-reranker".into(),
+            provider_revision: Some("fixture-rerank-revision".into()),
         },
     );
     let contract = config.resolve_embedding_model(None).expect("contract");
@@ -269,17 +307,16 @@ async fn loopback_contract_classifies_success_and_provider_failures() {
         rewrite.rewrite_query("original").await,
         Ok("rewritten query".into())
     );
-    let rerank = OpenAiChatClient::new(
-        &config,
-        "fixture/generation",
-        AiGenerationCapability::Rerank,
-    )
-    .expect("rerank client");
+    let rerank = RerankClient::new(&config, "fixture/reranking").expect("rerank client");
     assert_eq!(
         rerank
             .rerank("query", &["first".into(), "second".into()])
-            .await,
-        Ok(vec![1, 0])
+            .await
+            .expect("rerank")
+            .iter()
+            .map(|result| result.index)
+            .collect::<Vec<_>>(),
+        vec![1, 0]
     );
     task.abort();
 

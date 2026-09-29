@@ -137,38 +137,47 @@ fn cosine_and_hybrid_order_are_deterministic() {
         RankedCandidate {
             chunk_id: "b".into(),
             score: 0.9,
+            reported_score: 0.9,
         },
         RankedCandidate {
             chunk_id: "a".into(),
             score: 0.8,
+            reported_score: 0.8,
         },
     ];
     let keyword = vec![
         RankedCandidate {
             chunk_id: "a".into(),
             score: 0.7,
+            reported_score: 0.07,
         },
         RankedCandidate {
             chunk_id: "b".into(),
             score: 0.6,
+            reported_score: 0.06,
         },
     ];
     let result =
-        fuse_candidates(&vector, &keyword, FusionMethod::ReciprocalRank, 10, 0.0).expect("fusion");
+        fuse_candidates(&vector, &keyword, FusionMethod::ReciprocalRank, 10).expect("fusion");
     assert_eq!(result[0].chunk_id, "a");
     assert_eq!(result[1].chunk_id, "b");
-    assert!(result.iter().all(|candidate| candidate.score > 0.9));
+    assert!(
+        result
+            .iter()
+            .all(|candidate| candidate.retrieval_score > 0.9)
+    );
 
-    let single = fuse_candidates(&vector, &[], FusionMethod::ReciprocalRank, 10, 0.4)
-        .expect("single branch");
+    let single =
+        fuse_candidates(&vector, &[], FusionMethod::ReciprocalRank, 10).expect("single branch");
     assert_eq!(single.len(), 2);
-    assert!(single[0].score > 0.49 && single[0].score < 0.51);
+    assert!(single[0].retrieval_score > 0.49 && single[0].retrieval_score < 0.51);
 
-    let maximum = fuse_candidates(&vector, &keyword, FusionMethod::Maximum, 1, 0.85).unwrap();
+    let maximum = fuse_candidates(&vector, &keyword, FusionMethod::Maximum, 1).unwrap();
     assert_eq!(maximum.len(), 1);
     assert_eq!(maximum[0].chunk_id, "b");
     assert_eq!(maximum[0].vector_rank, Some(1));
     assert_eq!(maximum[0].keyword_rank, Some(2));
+    assert_eq!(maximum[0].keyword_score, Some(0.06));
 }
 
 #[test]
@@ -193,40 +202,36 @@ fn invalid_retrieval_values_fail_closed() {
         RankedCandidate {
             chunk_id: "x".into(),
             score: 1.0,
+            reported_score: 1.0,
         },
         RankedCandidate {
             chunk_id: "x".into(),
             score: 0.5,
+            reported_score: 0.5,
         },
     ];
     assert_eq!(
-        fuse_candidates(&duplicate, &[], FusionMethod::Maximum, 1, 0.0),
+        fuse_candidates(&duplicate, &[], FusionMethod::Maximum, 1),
         Err(RetrievalError::DuplicateCandidate)
     );
     assert_eq!(
-        fuse_candidates(&[], &[], FusionMethod::Maximum, 0, 0.0),
+        fuse_candidates(&[], &[], FusionMethod::Maximum, 0),
         Err(RetrievalError::InvalidLimit)
     );
     assert_eq!(
-        fuse_candidates(&[], &[], FusionMethod::Maximum, 51, 0.0),
+        fuse_candidates(&[], &[], FusionMethod::Maximum, 51),
         Err(RetrievalError::InvalidLimit)
     );
-    for threshold in [f32::NAN, -0.1, 1.1] {
-        assert_eq!(
-            fuse_candidates(&[], &[], FusionMethod::Maximum, 1, threshold),
-            Err(RetrievalError::NonFiniteValue)
-        );
-    }
     assert_eq!(
         fuse_candidates(
             &[RankedCandidate {
                 chunk_id: "x".into(),
                 score: 2.0,
+                reported_score: 2.0,
             }],
             &[],
             FusionMethod::Maximum,
             1,
-            0.0,
         ),
         Err(RetrievalError::NonFiniteValue)
     );

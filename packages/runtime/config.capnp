@@ -24,8 +24,9 @@ const config :Workerd.Config = (
     (name = "runtime-source", external = (http = ())),
     (name = "binding-backend", external = (http = ())),
     (name = "observability-backend", external = (http = ())),
-    (name = "internet", network = (
-      allow = ["public"],
+    (name = "outbound-network", network = (
+      allow = ["network", "local"],
+      deny = ["unix", "unix-abstract"],
       tlsOptions = (trustBrowserCas = true),
     )),
   ],
@@ -46,7 +47,7 @@ const ingressWorker :Workerd.Worker = (
     (name = "LOADER_HOST", service = "loader-host"),
     (name = "DO_ROUTER", service = "do-router"),
   ],
-  globalOutbound = "internet",
+  globalOutbound = "outbound-network",
 );
 
 const loaderHostWorker :Workerd.Worker = (
@@ -138,7 +139,7 @@ const loaderHostWorker :Workerd.Worker = (
     (name = "OBSERVABILITY_BACKEND_TOKEN", text = .observabilityToken),
     (name = "INTERNAL_TOKEN", text = .internalToken),
     (name = "DO_ROUTER", service = "do-router"),
-    (name = "PUBLIC_NETWORK", service = "internet"),
+    (name = "OUTBOUND_NETWORK", service = "outbound-network"),
     (name = "DO_MAX_OBJECT_NAME_BYTES", text = .doMaxObjectNameBytes),
     (name = "DO_MAX_FETCH_BODY_BYTES", text = .doMaxFetchBodyBytes),
     (name = "DO_DISPATCH_TIMEOUT_MS", text = .doDispatchTimeoutMs),
@@ -146,7 +147,7 @@ const loaderHostWorker :Workerd.Worker = (
     (name = "COMPATIBILITY_DATE", text = .compatibilityDate),
     (name = "REQUIRED_COMPATIBILITY_FLAGS", json = .requiredCompatibilityFlagsJson),
   ],
-  globalOutbound = "internet",
+  globalOutbound = "outbound-network",
 );
 
 const doHostWorker :Workerd.Worker = (
@@ -242,7 +243,7 @@ const doHostWorker :Workerd.Worker = (
     (name = "INTERNAL_TOKEN", text = .internalToken),
     (name = "DO_ROUTER", service = "do-router"),
     (name = "DO_HOST", durableObjectNamespace = "DoHost"),
-    (name = "PUBLIC_NETWORK", service = "internet"),
+    (name = "OUTBOUND_NETWORK", service = "outbound-network"),
     (name = "DO_MAX_OBJECT_NAME_BYTES", text = .doMaxObjectNameBytes),
     (name = "DO_MAX_FETCH_BODY_BYTES", text = .doMaxFetchBodyBytes),
     (name = "DO_DISPATCH_TIMEOUT_MS", text = .doDispatchTimeoutMs),
@@ -259,5 +260,5 @@ const doHostWorker :Workerd.Worker = (
     ),
   ],
   durableObjectStorage = (localDisk = "do-storage"),
-  globalOutbound = "internet",
+  globalOutbound = "outbound-network",
 );

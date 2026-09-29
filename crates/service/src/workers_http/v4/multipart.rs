@@ -230,6 +230,12 @@ fn validate_metadata(metadata: &WorkerUploadMetadata) -> Result<(), PlatformErro
     {
         return Err(too_large());
     }
+    if metadata
+        .code_update_strategy
+        .is_some_and(|strategy| !strategy.is_valid())
+    {
+        return Err(invalid());
+    }
     if let Some(exports) = &metadata.exports {
         for (name, export) in exports {
             if name != "default" {

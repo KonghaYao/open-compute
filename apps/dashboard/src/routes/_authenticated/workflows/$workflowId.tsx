@@ -277,7 +277,7 @@ function WorkflowDetailPage() {
         account_id: selectedInstanceId!,
         workflow_name: workflowId,
         instance_id: selectedInstance!,
-        ...(eventBody.trim() ? { body: JSON.parse(eventBody) as unknown } : {}),
+        body: eventBody.trim() ? (JSON.parse(eventBody) as unknown) : null,
       }),
     onSuccess: async () => {
       setEventBody("");

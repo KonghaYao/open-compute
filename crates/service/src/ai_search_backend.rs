@@ -1,9 +1,10 @@
 //! Authorized private backend for AI Search namespace and instance bindings.
 
-use crate::ai_provider::{ChatMessage, OpenAiChatClient, OpenAiProviderClient};
+use crate::ai_provider::{ChatMessage, OpenAiChatClient, OpenAiProviderClient, RerankClient};
 use crate::ai_search_config::{
-    AiSearchCreateInput, AiSearchFusionMethod, AiSearchKeywordMatchMode, AiSearchKeywordTokenizer,
-    ResolvedAiSearchConfig, parse_keyword_only_tokenizer_contract,
+    AiSearchBoost, AiSearchBoostDirection, AiSearchCreateInput, AiSearchFusionMethod,
+    AiSearchKeywordMatchMode, AiSearchKeywordTokenizer, AiSearchMetadataType,
+    ResolvedAiSearchConfig, parse_keyword_only_tokenizer_contract, validate_boosts,
 };
 use crate::ai_search_coordinator::{
     AiSearchChunking, AiSearchCoordinator, AiSearchParseCacheLocks, IsolatedAiSearchDocumentParser,
@@ -66,9 +67,11 @@ mod namespace;
 mod protocol;
 mod r2_source;
 mod search;
+mod search_projection;
 mod search_types;
 use embedding_cache::*;
 use protocol::*;
+use search_projection::*;
 use search_types::*;
 
 #[cfg(test)]

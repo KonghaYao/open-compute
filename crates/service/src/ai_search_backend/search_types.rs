@@ -57,7 +57,7 @@ pub(super) struct RetrievalOptions {
     pub(super) context_expansion: Option<u8>,
     pub(super) metadata_only: Option<bool>,
     pub(super) return_on_failure: Option<bool>,
-    pub(super) boost_by: Option<Value>,
+    pub(super) boost_by: Option<Vec<AiSearchBoost>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

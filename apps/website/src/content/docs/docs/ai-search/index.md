@@ -4,7 +4,7 @@ title: "AI Search"
 
 AI Search indexes files you upload, then runs keyword, vector, or hybrid retrieval and optional chat. Markdown Conversion is exposed on the same standard `env.AI` binding via `toMarkdown()` / `supported()`.
 
-open-compute implements these surfaces with **operator-configured OpenAI-compatible providers**. Full Workers AI model inference (`run()`, `models()`, AutoRAG, and unrelated inference) is **not** provided.
+open-compute uses **operator-configured providers**: OpenAI-compatible embeddings/chat endpoints and dedicated Cohere v2 or generic `/v1/rerank` endpoints. Full Workers AI model inference (`run()`, `models()`, AutoRAG, and unrelated inference) is **not** provided.
 
 > **Text queries only:** AI Search currently accepts text `query` values and messages with string content. Image, file, and mixed text-image queries are not supported and fail closed instead of being downgraded to text search. OCR and optional image descriptions during document ingestion convert source files into indexable text; they do not add multimodal query support.
 
@@ -12,6 +12,7 @@ For example, you can use AI Search for:
 
 - Uploading documents or indexing bounded R2 sources, then searching them from a Worker
 - Hybrid retrieval before generating an answer
+- Metadata relevance boosting followed by dedicated reranking
 - Converting Office/PDF/HTML inputs to Markdown with `env.AI.toMarkdown()`
 
 ```ts
@@ -82,6 +83,8 @@ Official reference: [Cloudflare AI Search](https://developers.cloudflare.com/ai-
 | Query modality            | Text, image, or multimodal when the model supports it | **Text only**                                |
 | Markdown Conversion       | `env.AI.toMarkdown()` / `supported()`               | Same pinned overloads                       |
 | Embeddings / chat models  | Cloudflare-hosted Workers AI                        | Operator-pinned OpenAI-compatible providers |
+| Reranking model           | Cloudflare-hosted Workers AI                        | Operator-pinned `cohere_rerank_v2` or `rerank_v1` provider |
+| Search response           | `query_kind` plus retrieval and reranking scores    | Text success returns `query_kind: "text"`; reranked chunks include `reranking_score` |
 | Full Workers AI inference | `run()` / `models()` / AutoRAG                      | **Not provided**                            |
 | Object bytes              | Hosted storage                                      | Selected Local or S3 authority              |
 | Placement / replication   | Global                                              | Single-node                                 |

@@ -51,6 +51,8 @@ pub struct Recorded {
     pub ssec_key_md5: Option<String>,
     /// Physical S3 storage class requested by the adapter, if any.
     pub storage_class: Option<String>,
+    /// Request body size, used by exact wire fixtures.
+    pub body_len: usize,
 }
 
 #[derive(Clone)]
@@ -105,6 +107,7 @@ struct Inner {
     omit_last_modified: bool,
     head_barrier: Option<Arc<tokio::sync::Barrier>>,
     conditional_put_race: Option<Vec<u8>>,
+    strict_multipart_minimum: bool,
 }
 
 impl MockS3 {
@@ -122,6 +125,7 @@ impl MockS3 {
             omit_last_modified: false,
             head_barrier: None,
             conditional_put_race: None,
+            strict_multipart_minimum: false,
         }));
         let (tx, mut rx) = oneshot::channel();
         let state_clone = Arc::clone(&state);
@@ -225,6 +229,11 @@ impl MockS3 {
 
     pub fn set_omit_last_modified(&self, omit: bool) {
         self.state.lock().expect("lock").omit_last_modified = omit;
+    }
+
+    /// Enforce S3's 5 MiB minimum for every non-final multipart part.
+    pub fn set_strict_multipart_minimum(&self, strict: bool) {
+        self.state.lock().expect("lock").strict_multipart_minimum = strict;
     }
 
     pub fn artifact_gets(&self) -> usize {

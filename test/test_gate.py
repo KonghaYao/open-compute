@@ -342,6 +342,16 @@ class GateTests(unittest.TestCase):
                 gate.main()
             resolve.assert_not_called()
 
+    def test_s3_provider_qualification_does_not_require_bun(self):
+        metadata = {'workspace_members': [], 'packages': []}
+        with patch.object(gate.subprocess, 'check_output', return_value=json.dumps(metadata)), \
+             patch.object(gate.shutil, 'which', side_effect=lambda name: '/bin/sh' if name == 'sh' else None):
+            targets = gate.resolve_targets(['s3-provider-qualification'], False)
+        target = targets['s3-provider-qualification']
+        self.assertEqual(target.executable, '/bin/sh')
+        self.assertEqual(target.cases, ('production-preflight',))
+        self.assertIn('OPEN_COMPUTE_TEST_R2_S3_SECRET_ACCESS_KEY', target.env_allowlist)
+
     def test_final_workspace_runs_complete_inventory_once_and_only_timing_twice_more(self):
         targets = self.targets(['p0-1', 'p1-security', 'p2-1', 'workflow-product'])
         targets['unit'] = gate.Target('package', 'lib', 'lib', '/repo', False)
@@ -552,7 +562,8 @@ class GateTests(unittest.TestCase):
 
     def test_coverage_rejects_extra_rounds_before_tool_checks_or_cleanup(self):
         source = (gate.ROOT/'test/coverage.sh').read_text()
-        self.assertIn('/src/bin/(s3_fixture|supervisor_fixture)\\.rs$', source)
+        self.assertIn(
+            '/src/bin/(s3_fixture|s3_provider_qualification|supervisor_fixture)\\.rs$', source)
         result = subprocess.run([str(gate.ROOT/'test/coverage.sh')], capture_output=True,
                                 env={'OPEN_COMPUTE_GATE_ROUNDS': '3', 'PATH': '/usr/bin:/bin'},
                                 timeout=10)

@@ -10,6 +10,8 @@
 - storage、workers、search 和 images 的职责从 module path、公开面和依赖方向即可辨认，不再依赖重复实现或模糊命名。
 - 零消费者 production API 被删除；测试钩子只在 `cfg(test)` 或 `test-support` 下可达。
 
+
+
 ## 已确认的审查结论与修复
 
 ### 1. R2 生命周期与 transport 分层
@@ -59,6 +61,8 @@
 - root `AGENTS.md` 的 architecture ownership 补充 `search`、`document-parser` 和 `images` 三个叶子 crate，与 `test/check-boundaries.sh` 的实际 DAG 一致。
 - `open-compute-core` Cargo description 删除不准确的 “Dependency-free”，改为基础 config、error、ID、secret、health 与 clock 职责；它没有 workspace-internal dependency 不等于没有 dependency。
 - R2 完成后同步本页、`docs/README.md` 和受影响的持续维护文档；不把历史 review 当成新的兼容合同。
+
+
 
 ## 验收
 

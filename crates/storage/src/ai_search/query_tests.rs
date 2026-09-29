@@ -89,12 +89,13 @@ fn query_catalog_exposes_only_active_generation_with_bounded_pagination() {
     );
     let mut visited = Vec::new();
     store
-        .scan_keyword_chunks_at(1, "hello", false, |chunk| {
-            visited.push(chunk.id);
+        .scan_keyword_chunks_at(1, "hello", false, |chunk, score| {
+            visited.push((chunk.id, score));
             Ok(false)
         })
         .unwrap();
     assert_eq!(visited.len(), 1);
+    assert!(visited[0].1 > 0.0);
     assert_eq!(store.active_chunk_context("item-1", 1, 1).unwrap().len(), 3);
     assert!(
         store

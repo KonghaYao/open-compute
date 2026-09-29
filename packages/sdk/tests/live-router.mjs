@@ -94,7 +94,7 @@ async function identityContract() {
   assert.equal(memberships.result[0].account.id, accountID);
 
   const capabilities = await client.openCompute.capabilities.get();
-  assert.equal(capabilities.wrangler_version, "4.138.0");
+  assert.equal(capabilities.wrangler_version, "4.143.0");
   assert.equal(capabilities.compatibility_date.minimum, "2026-09-08");
   assert.equal(capabilities.compatibility_date.maximum, "2026-09-08");
   assert.ok(Object.keys(capabilities.endpoints).length > 0);
@@ -301,7 +301,6 @@ async function observabilityContract() {
   const now = Date.now();
   const tail = await client.workers.scripts.tail.create("sdk-worker", {
     account_id: accountID,
-    body: { filters: [] },
   });
   assert.match(tail.id, /^[0-9a-f]{32}$/);
   assert.match(tail.url, /^ws:\/\//);

@@ -1,12 +1,14 @@
 //! Operator-owned AI backends, model mappings, and immutable embedding profiles.
 
 mod backend;
+mod rerank;
 mod source_provider;
 mod vlm;
 
 use crate::{ErrorCode, PlatformError};
 pub use backend::{AiAuthConfig, AiBackendConfig, AiBackendProtocol};
 use backend::{canonical_endpoint, headers_digest};
+pub use rerank::AiRerankingModelConfig;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 pub use source_provider::AiSourceProviderConfig;
@@ -15,8 +17,8 @@ use std::path::{Component, Path, PathBuf};
 pub use vlm::{AiVlmModelConfig, ResolvedVlmModelContract};
 
 const MAX_BACKEND_NAME_BYTES: usize = 64;
-const MAX_MODEL_NAME_BYTES: usize = 256;
-const MAX_REVISION_BYTES: usize = 256;
+pub(super) const MAX_MODEL_NAME_BYTES: usize = 256;
+pub(super) const MAX_REVISION_BYTES: usize = 256;
 const MAX_VECTOR_DIMENSIONS: u32 = 1_536;
 const MAX_MODEL_TOKENS: u32 = 4_000_000;
 
@@ -28,16 +30,18 @@ pub struct AiConfig {
     pub default_embedding_model: Option<String>,
     /// Generation alias selected when AI Search chat omits a model.
     pub default_generation_model: Option<String>,
+    /// Reranking alias selected when an enabled AI Search instance omits one.
+    pub default_reranking_model: Option<String>,
     /// Optional VLM alias used to describe admitted images.
     pub default_vlm_model: Option<String>,
     /// Maximum provider requests active across the process.
     pub max_provider_in_flight: u16,
     /// Maximum strings in one embeddings request.
     pub max_embedding_inputs_per_batch: u16,
-    /// Maximum serialized embeddings request bytes.
-    pub max_embedding_request_bytes: u64,
-    /// Maximum serialized embeddings response bytes.
-    pub max_embedding_response_bytes: u64,
+    /// Maximum serialized embeddings, chat, rewrite, or rerank request bytes.
+    pub max_provider_request_bytes: u64,
+    /// Maximum serialized embeddings, chat, rewrite, or rerank response bytes.
+    pub max_provider_response_bytes: u64,
     /// Maximum concurrent VLM requests across the process.
     pub max_vlm_in_flight: u16,
     /// Maximum images described for one document.
@@ -56,8 +60,10 @@ pub struct AiConfig {
     pub embedding_profiles: BTreeMap<String, AiEmbeddingProfileConfig>,
     /// Cloudflare public embedding alias to operator model mapping.
     pub embedding_models: BTreeMap<String, AiEmbeddingModelConfig>,
-    /// Cloudflare public generation/rewrite/rerank alias to operator mapping.
+    /// Cloudflare public generation/rewrite alias to operator mapping.
     pub generation_models: BTreeMap<String, AiGenerationModelConfig>,
+    /// Cloudflare public reranking alias to operator model mapping.
+    pub reranking_models: BTreeMap<String, AiRerankingModelConfig>,
     /// Operator mappings for image-description models.
     pub vlm_models: BTreeMap<String, AiVlmModelConfig>,
     /// Namespaced manual AI Search source providers.
@@ -69,11 +75,12 @@ impl Default for AiConfig {
         Self {
             default_embedding_model: None,
             default_generation_model: None,
+            default_reranking_model: None,
             default_vlm_model: None,
             max_provider_in_flight: 16,
             max_embedding_inputs_per_batch: 96,
-            max_embedding_request_bytes: 2 * 1024 * 1024,
-            max_embedding_response_bytes: 16 * 1024 * 1024,
+            max_provider_request_bytes: 2 * 1024 * 1024,
+            max_provider_response_bytes: 16 * 1024 * 1024,
             max_vlm_in_flight: 2,
             max_vlm_images_per_document: 16,
             max_vlm_request_bytes: 8 * 1024 * 1024,
@@ -84,6 +91,7 @@ impl Default for AiConfig {
             embedding_profiles: BTreeMap::new(),
             embedding_models: BTreeMap::new(),
             generation_models: BTreeMap::new(),
+            reranking_models: BTreeMap::new(),
             vlm_models: BTreeMap::new(),
             source_providers: BTreeMap::new(),
         }
@@ -116,10 +124,10 @@ impl AiConfig {
             || self.max_provider_in_flight > 256
             || self.max_embedding_inputs_per_batch == 0
             || self.max_embedding_inputs_per_batch > 512
-            || self.max_embedding_request_bytes == 0
-            || self.max_embedding_request_bytes > 16 * 1024 * 1024
-            || self.max_embedding_response_bytes == 0
-            || self.max_embedding_response_bytes > 256 * 1024 * 1024
+            || self.max_provider_request_bytes == 0
+            || self.max_provider_request_bytes > 16 * 1024 * 1024
+            || self.max_provider_response_bytes == 0
+            || self.max_provider_response_bytes > 256 * 1024 * 1024
             || self.max_vlm_in_flight == 0
             || self.max_vlm_in_flight > 16
             || self.max_vlm_in_flight > self.max_provider_in_flight
@@ -158,6 +166,10 @@ impl AiConfig {
             validate_model_alias(alias)?;
             model.validate(&self.backends)?;
         }
+        for (alias, model) in &self.reranking_models {
+            validate_model_alias(alias)?;
+            model.validate(&self.backends)?;
+        }
         for (alias, model) in &self.vlm_models {
             validate_model_alias(alias)?;
             model.validate(&self.backends)?;
@@ -184,6 +196,14 @@ impl AiConfig {
             return Err(PlatformError::new(
                 ErrorCode::ConfigInvalid,
                 "ai.default_generation_model does not name a configured generation model",
+            ));
+        }
+        if let Some(default) = &self.default_reranking_model
+            && !self.reranking_models.contains_key(default)
+        {
+            return Err(PlatformError::new(
+                ErrorCode::ConfigInvalid,
+                "ai.default_reranking_model does not name a configured reranking model",
             ));
         }
         if let Some(default) = &self.default_vlm_model
@@ -501,7 +521,7 @@ impl AiTokenizerArtifactConfig {
     }
 }
 
-/// Frozen operator mapping for generation, rewrite, or rerank calls.
+/// Frozen operator mapping for generation or rewrite calls.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AiGenerationModelConfig {
@@ -545,8 +565,6 @@ pub enum AiGenerationCapability {
     Chat,
     /// Query rewrite through the chat-completions adapter.
     Rewrite,
-    /// Candidate reranking through a separately validated adapter contract.
-    Rerank,
 }
 
 /// Secret-free immutable embedding contract stored with an AI Search instance.
@@ -665,14 +683,17 @@ fn validate_name(value: &str, max: usize, message: &'static str) -> Result<(), P
     Ok(())
 }
 
-fn validate_optional_nonempty(value: Option<&str>, max: usize) -> Result<(), PlatformError> {
+pub(super) fn validate_optional_nonempty(
+    value: Option<&str>,
+    max: usize,
+) -> Result<(), PlatformError> {
     match value {
         Some(value) => validate_nonempty(value, max),
         None => Ok(()),
     }
 }
 
-fn validate_nonempty(value: &str, max: usize) -> Result<(), PlatformError> {
+pub(super) fn validate_nonempty(value: &str, max: usize) -> Result<(), PlatformError> {
     if value.is_empty()
         || value.len() > max
         || value.chars().any(char::is_control)

@@ -48,6 +48,7 @@ mod worker_loaders;
 
 const SOURCE_PATH: &str = "/internal/runtime/v1/versions/resolve";
 const ERROR_HEADER: &str = "x-open-compute-error-code";
+const GENERATION_HEADER: &str = "x-open-compute-startup-generation";
 const SERVICE_WEBSOCKET_HANDOFF_HEADER: &str = "x-open-compute-service-websocket-handoffs";
 const MAX_SOURCE_REQUEST: usize = 4096;
 /// Fixed Standard ingress baseline in decimal bytes, independent of operator policy.

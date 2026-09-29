@@ -346,12 +346,12 @@ fn ai_backend_catalog_sha256(loaded: &LoadedConfig) -> Result<String, PlatformEr
     let config = &loaded.config.ai;
     config.validate()?;
     let mut digest = sha2::Sha256::new();
-    digest.update(b"open-compute/ai-backend-catalog/v3\0");
+    digest.update(b"open-compute/ai-backend-catalog/v4\0");
     for value in [
         u64::from(config.max_provider_in_flight),
         u64::from(config.max_embedding_inputs_per_batch),
-        config.max_embedding_request_bytes,
-        config.max_embedding_response_bytes,
+        config.max_provider_request_bytes,
+        config.max_provider_response_bytes,
         u64::from(config.max_vlm_in_flight),
         u64::from(config.max_vlm_images_per_document),
         config.max_vlm_request_bytes,
@@ -373,6 +373,14 @@ fn ai_backend_catalog_sha256(loaded: &LoadedConfig) -> Result<String, PlatformEr
         &mut digest,
         config
             .default_generation_model
+            .as_deref()
+            .unwrap_or("")
+            .as_bytes(),
+    );
+    digest_part(
+        &mut digest,
+        config
+            .default_reranking_model
             .as_deref()
             .unwrap_or("")
             .as_bytes(),
@@ -409,6 +417,11 @@ fn ai_backend_catalog_sha256(loaded: &LoadedConfig) -> Result<String, PlatformEr
         digest_part(&mut digest, contract.contract_sha256.as_bytes());
     }
     for (alias, model) in &config.generation_models {
+        digest_part(&mut digest, alias.as_bytes());
+        let bytes = serde_json::to_vec(model).map_err(|_| bundle_invalid())?;
+        digest_part(&mut digest, &bytes);
+    }
+    for (alias, model) in &config.reranking_models {
         digest_part(&mut digest, alias.as_bytes());
         let bytes = serde_json::to_vec(model).map_err(|_| bundle_invalid())?;
         digest_part(&mut digest, &bytes);

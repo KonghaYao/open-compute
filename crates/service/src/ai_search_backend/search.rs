@@ -104,6 +104,7 @@ impl AiSearchBindingService {
         chunks.truncate(50);
         Ok(json!({
             "search_query": search_query,
+            "query_kind": "text",
             "chunks": chunks,
             "errors": errors,
         }))
@@ -133,6 +134,7 @@ impl AiSearchBindingService {
             filter,
             maximum,
             threshold,
+            boosts,
             keyword_query,
         } = retrieval_plan(payload, &config, &query)?;
         let retrieval_type = retrieval_type.as_str();
@@ -149,9 +151,9 @@ impl AiSearchBindingService {
                     active_index_generation,
                     &fts_query,
                     trigram,
-                    |chunk| {
+                    |chunk, score| {
                         if metadata_matches(&chunk, keyword_filter.as_ref()) {
-                            chunks.push(chunk);
+                            chunks.push((chunk, score));
                         }
                         Ok(chunks.len() < MAX_BRANCH_CANDIDATES)
                     },
@@ -196,7 +198,7 @@ impl AiSearchBindingService {
             let vector_service = self.clone();
             let vector_record = record.clone();
             let vector_filter = filter.clone();
-            let pure_threshold = (retrieval_type == "vector").then_some(threshold as f32);
+            let vector_threshold = threshold as f32;
             let ranked = tokio::task::spawn_blocking(move || {
                 let (vector_store, _) = vector_service.open_store(&vector_record)?;
                 let mut ranked = Vec::<(RankedCandidate, AiSearchChunkRecord)>::new();
@@ -208,13 +210,14 @@ impl AiSearchBindingService {
                     let cosine =
                         cosine_similarity(&query_vector, embedding).map_err(|_| corrupt())?;
                     let score = ((cosine + 1.0) / 2.0).clamp(0.0, 1.0);
-                    if pure_threshold.is_some_and(|threshold| score < threshold) {
+                    if score < vector_threshold {
                         return Ok(());
                     }
                     ranked.push((
                         RankedCandidate {
                             chunk_id: chunk.id.clone(),
                             score,
+                            reported_score: score,
                         },
                         chunk,
                     ));
@@ -239,13 +242,21 @@ impl AiSearchBindingService {
         }
         let mut keyword = if let Some(keyword_task) = keyword_task {
             let mut keyword_chunks = keyword_task.await.map_err(|_| unavailable())??;
-            keyword_chunks.retain(|chunk| metadata_matches(chunk, filter.as_ref()));
+            keyword_chunks.retain(|(chunk, _)| metadata_matches(chunk, filter.as_ref()));
+            let maximum_score = keyword_chunks
+                .iter()
+                .map(|(_, score)| *score)
+                .fold(0.0_f32, f32::max);
             let ranked = keyword_chunks
                 .iter()
-                .enumerate()
-                .map(|(rank, chunk)| RankedCandidate {
+                .map(|(chunk, score)| RankedCandidate {
                     chunk_id: chunk.id.clone(),
-                    score: 1.0 / (rank.saturating_add(1) as f32),
+                    score: if maximum_score == 0.0 {
+                        1.0
+                    } else {
+                        score / maximum_score
+                    },
+                    reported_score: *score,
                 })
                 .collect();
             let existing = chunks
@@ -255,6 +266,7 @@ impl AiSearchBindingService {
             chunks.extend(
                 keyword_chunks
                     .into_iter()
+                    .map(|(chunk, _)| chunk)
                     .filter(|chunk| !existing.contains(&chunk.id)),
             );
             ranked
@@ -276,14 +288,7 @@ impl AiSearchBindingService {
         } else {
             FusionMethod::Maximum
         };
-        let mut fused = fuse_candidates(
-            &vector,
-            &keyword,
-            fusion,
-            usize::from(maximum),
-            threshold as f32,
-        )
-        .map_err(|_| protocol())?;
+        let mut fused = fuse_candidates(&vector, &keyword, fusion, 50).map_err(|_| protocol())?;
         let rerank = payload
             .ai_search_options
             .reranking
@@ -300,6 +305,7 @@ impl AiSearchBindingService {
             .iter()
             .map(|chunk| (chunk.id.as_str(), chunk))
             .collect::<HashMap<_, _>>();
+        apply_boosting(&mut fused, &by_id, &boosts, &config.custom_metadata)?;
         if rerank && !fused.is_empty() {
             let alias = payload
                 .ai_search_options
@@ -318,24 +324,33 @@ impl AiSearchBindingService {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             let _permit = self.provider_permit().await?;
-            let order = OpenAiChatClient::new(&self.ai, alias, AiGenerationCapability::Rerank)
+            let results = RerankClient::new(&self.ai, alias)
                 .map_err(provider_error)?
                 .rerank(&query, &texts)
                 .await
                 .map_err(provider_error)?;
-            fused = order
+            fused = results
                 .into_iter()
-                .map(|index| fused[index].clone())
+                .map(|result| {
+                    let mut candidate = fused[result.index].clone();
+                    candidate.reranking_score = Some(result.relevance_score);
+                    candidate.public_score = result.relevance_score;
+                    candidate
+                })
                 .collect();
-            if let Some(threshold) = payload
+            let threshold = payload
                 .ai_search_options
                 .reranking
                 .as_ref()
                 .and_then(|options| options.match_threshold)
-            {
-                fused.retain(|candidate| f64::from(candidate.score) >= threshold);
-            }
+                .unwrap_or(0.4);
+            fused.retain(|candidate| {
+                candidate
+                    .reranking_score
+                    .is_some_and(|score| f64::from(score) >= threshold)
+            });
         }
+        fused.truncate(usize::from(maximum));
         let expanded = if context_expansion == 0 || fused.is_empty() {
             HashMap::new()
         } else {
@@ -372,34 +387,19 @@ impl AiSearchBindingService {
         let metadata_only = retrieval
             .and_then(|options| options.metadata_only)
             .unwrap_or(false);
-        let result = fused
-            .iter()
-            .map(|candidate| {
-                let chunk = by_id.get(candidate.chunk_id.as_str()).ok_or_else(corrupt)?;
-                let item = search_item_value(&search_store, chunk)?;
-                Ok(json!({
-                    "id": chunk.id,
-                    "type": retrieval_type,
-                    "score": candidate.score,
-                    "text": if metadata_only {
-                        ""
-                    } else {
-                        expanded.get(&candidate.chunk_id).map_or(chunk.text.as_str(), String::as_str)
-                    },
-                    "item": item,
-                    "scoring_details": {
-                        "vector_rank": candidate.vector_rank,
-                        "vector_score": candidate.vector_score,
-                        "keyword_rank": candidate.keyword_rank,
-                        "keyword_score": candidate.keyword_score,
-                    },
-                }))
-            })
-            .collect::<Result<Vec<_>, PlatformError>>()?;
+        let result = project_search_result(
+            &search_store,
+            &by_id,
+            &fused,
+            &expanded,
+            retrieval_type,
+            fusion,
+            metadata_only,
+        )?;
         if !search_store.active_fence_matches(active_index_generation, active_epoch)? {
             return Err(unavailable());
         }
-        Ok(json!({"search_query": query, "chunks": result}))
+        Ok(json!({"search_query": query, "query_kind": "text", "chunks": result}))
     }
 
     async fn rewritten_query(
@@ -434,37 +434,12 @@ impl AiSearchBindingService {
     }
 }
 
-fn search_item_value(
-    store: &AiSearchStore,
-    chunk: &AiSearchChunkRecord,
-) -> Result<Value, PlatformError> {
-    let metadata: Value = serde_json::from_slice(&chunk.metadata_json).map_err(|_| corrupt())?;
-    let mut item = json!({
-        "timestamp": chunk.item_created_at_ms,
-        "key": chunk.item_key,
-        "metadata": metadata,
-    });
-    if let AiSearchSourceReference::Manual(source) =
-        store.get_item(&chunk.item_id)?.ok_or_else(corrupt)?.source
-    {
-        item.as_object_mut().ok_or_else(corrupt)?.insert(
-            "open_compute_source".to_owned(),
-            json!({
-                "provider_id": source.provider_id,
-                "source": source.source,
-                "key": chunk.item_key,
-                "revision": source.revision,
-            }),
-        );
-    }
-    Ok(item)
-}
-
 struct RetrievalPlan {
     retrieval_type: String,
     filter: Option<FilterExpr>,
     maximum: u8,
     threshold: f64,
+    boosts: Vec<AiSearchBoost>,
     keyword_query: Option<(String, bool)>,
 }
 
@@ -474,9 +449,6 @@ fn retrieval_plan(
     query: &str,
 ) -> Result<RetrievalPlan, PlatformError> {
     let retrieval = payload.ai_search_options.retrieval.as_ref();
-    if retrieval.is_some_and(|options| options.boost_by.is_some()) {
-        return Err(unsupported());
-    }
     let retrieval_type = retrieval
         .and_then(|options| options.retrieval_type.clone())
         .unwrap_or_else(|| {
@@ -511,6 +483,10 @@ fn retrieval_plan(
     let threshold = retrieval
         .and_then(|options| options.match_threshold)
         .unwrap_or(config.score_threshold);
+    let boosts = retrieval
+        .and_then(|options| options.boost_by.clone())
+        .unwrap_or_else(|| config.retrieval_options.boost_by.clone());
+    validate_boosts(&boosts, &config.custom_metadata)?;
     let keyword_query = if matches!(retrieval_type.as_str(), "keyword" | "hybrid") {
         let mode = match retrieval.and_then(|options| options.keyword_match_mode.as_deref()) {
             Some("and") => FtsKeywordMatchMode::And,
@@ -535,8 +511,157 @@ fn retrieval_plan(
         filter,
         maximum,
         threshold,
+        boosts,
         keyword_query,
     })
+}
+
+const MAX_METADATA_BOOST: f32 = 0.3;
+
+fn apply_boosting(
+    candidates: &mut [open_compute_search::ai_search::ScoredCandidate],
+    chunks: &HashMap<&str, &AiSearchChunkRecord>,
+    boosts: &[AiSearchBoost],
+    fields: &[crate::ai_search_config::AiSearchMetadataField],
+) -> Result<(), PlatformError> {
+    if boosts.is_empty() || candidates.is_empty() {
+        return Ok(());
+    }
+    let mut totals = vec![0.0_f32; candidates.len()];
+    for boost in boosts {
+        let field_type = if boost.field.eq_ignore_ascii_case("timestamp") {
+            AiSearchMetadataType::Datetime
+        } else {
+            fields
+                .iter()
+                .find(|field| field.field_name.eq_ignore_ascii_case(&boost.field))
+                .map(|field| field.data_type)
+                .ok_or_else(protocol)?
+        };
+        let direction = boost.direction.unwrap_or(match field_type {
+            AiSearchMetadataType::Number | AiSearchMetadataType::Datetime => {
+                AiSearchBoostDirection::Asc
+            }
+            AiSearchMetadataType::Text | AiSearchMetadataType::Boolean => {
+                AiSearchBoostDirection::Exists
+            }
+        });
+        let values = candidates
+            .iter()
+            .map(|candidate| {
+                chunks
+                    .get(candidate.chunk_id.as_str())
+                    .ok_or_else(corrupt)
+                    .and_then(|chunk| boost_value(chunk, &boost.field, field_type))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        match direction {
+            AiSearchBoostDirection::Exists | AiSearchBoostDirection::NotExists => {
+                for (index, value) in values.iter().enumerate() {
+                    let present = value.is_some();
+                    if present == (direction == AiSearchBoostDirection::Exists) {
+                        totals[index] += 1.0;
+                    }
+                }
+            }
+            AiSearchBoostDirection::Asc | AiSearchBoostDirection::Desc => {
+                let mut ranked = values
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, value)| value.as_ref().map(|value| (index, value)))
+                    .collect::<Vec<_>>();
+                ranked.sort_by(|left, right| {
+                    left.1.compare(right.1).then_with(|| {
+                        candidates[left.0]
+                            .chunk_id
+                            .cmp(&candidates[right.0].chunk_id)
+                    })
+                });
+                if direction == AiSearchBoostDirection::Desc {
+                    ranked.reverse();
+                }
+                let divisor = ranked.len().saturating_sub(1).max(1) as f32;
+                for (rank, (index, _)) in ranked.into_iter().enumerate() {
+                    totals[index] += 1.0 - rank as f32 / divisor;
+                }
+            }
+        }
+    }
+    let divisor = boosts.len() as f32;
+    for (candidate, total) in candidates.iter_mut().zip(totals) {
+        let boost = MAX_METADATA_BOOST * total / divisor;
+        candidate.boosting_score = Some(boost);
+        candidate.public_score = candidate.retrieval_score + boost;
+    }
+    let maximum = candidates
+        .iter()
+        .map(|candidate| candidate.public_score)
+        .fold(0.0_f32, f32::max);
+    if maximum > 0.0 {
+        for candidate in candidates.iter_mut() {
+            candidate.public_score /= maximum;
+        }
+    }
+    candidates.sort_by(|left, right| {
+        right
+            .public_score
+            .total_cmp(&left.public_score)
+            .then_with(|| left.chunk_id.cmp(&right.chunk_id))
+    });
+    Ok(())
+}
+
+enum BoostValue {
+    Number(f64),
+    Datetime(jiff::Timestamp),
+    Present,
+}
+
+impl BoostValue {
+    fn compare(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (Self::Number(left), Self::Number(right)) => left.total_cmp(right),
+            (Self::Datetime(left), Self::Datetime(right)) => left.cmp(right),
+            _ => std::cmp::Ordering::Equal,
+        }
+    }
+}
+
+fn boost_value(
+    chunk: &AiSearchChunkRecord,
+    field: &str,
+    field_type: AiSearchMetadataType,
+) -> Result<Option<BoostValue>, PlatformError> {
+    if field.eq_ignore_ascii_case("timestamp") {
+        return Ok(Some(BoostValue::Datetime(
+            jiff::Timestamp::from_millisecond(chunk.item_created_at_ms).map_err(|_| corrupt())?,
+        )));
+    }
+    let metadata: Map<String, Value> =
+        serde_json::from_slice(&chunk.metadata_json).map_err(|_| corrupt())?;
+    let Some(value) = metadata
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(field))
+        .map(|(_, value)| value)
+    else {
+        return Ok(None);
+    };
+    match field_type {
+        AiSearchMetadataType::Number => value
+            .as_f64()
+            .filter(|value| value.is_finite())
+            .map(BoostValue::Number)
+            .map(Some)
+            .ok_or_else(corrupt),
+        AiSearchMetadataType::Datetime => value
+            .as_str()
+            .ok_or_else(corrupt)?
+            .parse::<jiff::Timestamp>()
+            .map(BoostValue::Datetime)
+            .map(Some)
+            .map_err(|_| corrupt()),
+        AiSearchMetadataType::Text | AiSearchMetadataType::Boolean => Ok(Some(BoostValue::Present)),
+    }
 }
 
 fn metadata_matches(chunk: &AiSearchChunkRecord, filter: Option<&FilterExpr>) -> bool {
@@ -555,4 +680,118 @@ fn sort_ranked(candidates: &mut [RankedCandidate]) {
             .total_cmp(&left.score)
             .then_with(|| left.chunk_id.cmp(&right.chunk_id))
     });
+}
+
+#[cfg(test)]
+mod boosting_tests {
+    use super::*;
+    use open_compute_search::ai_search::ScoredCandidate;
+
+    fn chunk(id: &str, metadata: &Value, timestamp: i64) -> AiSearchChunkRecord {
+        AiSearchChunkRecord {
+            id: id.to_owned(),
+            item_id: format!("item-{id}"),
+            ordinal: 0,
+            start_byte: 0,
+            end_byte: 1,
+            text: id.to_owned(),
+            embedding: None,
+            metadata_json: serde_json::to_vec(&metadata).unwrap(),
+            item_key: format!("{id}.txt"),
+            item_created_at_ms: timestamp,
+        }
+    }
+
+    fn candidate(id: &str, score: f32) -> ScoredCandidate {
+        ScoredCandidate {
+            chunk_id: id.to_owned(),
+            retrieval_score: score,
+            boosting_score: None,
+            reranking_score: None,
+            public_score: score,
+            vector_rank: None,
+            vector_score: None,
+            keyword_rank: None,
+            keyword_score: None,
+        }
+    }
+
+    #[test]
+    fn metadata_boosting_is_case_insensitive_additive_and_deterministic() {
+        let first = chunk("first", &json!({"Priority": 1, "draft": true}), 1);
+        let second = chunk("second", &json!({"priority": 9}), 2);
+        let chunks = HashMap::from([(first.id.as_str(), &first), (second.id.as_str(), &second)]);
+        let fields = vec![
+            crate::ai_search_config::AiSearchMetadataField {
+                field_name: "priority".to_owned(),
+                data_type: AiSearchMetadataType::Number,
+            },
+            crate::ai_search_config::AiSearchMetadataField {
+                field_name: "draft".to_owned(),
+                data_type: AiSearchMetadataType::Boolean,
+            },
+        ];
+        let mut candidates = vec![candidate("first", 0.4), candidate("second", 0.3)];
+        apply_boosting(
+            &mut candidates,
+            &chunks,
+            &[
+                AiSearchBoost {
+                    field: "PRIORITY".to_owned(),
+                    direction: Some(AiSearchBoostDirection::Desc),
+                },
+                AiSearchBoost {
+                    field: "draft".to_owned(),
+                    direction: Some(AiSearchBoostDirection::NotExists),
+                },
+            ],
+            &fields,
+        )
+        .unwrap();
+        assert_eq!(candidates[0].chunk_id, "second");
+        assert_eq!(candidates[0].boosting_score, Some(0.3));
+        assert_eq!(candidates[0].public_score, 1.0);
+        assert!((candidates[1].public_score - 2.0 / 3.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn metadata_boosting_matches_hosted_normalized_score_projection() {
+        let low = chunk("low", &json!({"priority": 1}), 1);
+        let middle = chunk("middle", &json!({"priority": 2}), 1);
+        let high = chunk("high", &json!({"priority": 3}), 1);
+        let chunks = HashMap::from([
+            (low.id.as_str(), &low),
+            (middle.id.as_str(), &middle),
+            (high.id.as_str(), &high),
+        ]);
+        let fields = vec![crate::ai_search_config::AiSearchMetadataField {
+            field_name: "priority".to_owned(),
+            data_type: AiSearchMetadataType::Number,
+        }];
+        let mut candidates = vec![
+            candidate("low", 1.0),
+            candidate("middle", 1.0),
+            candidate("high", 1.0),
+        ];
+        apply_boosting(
+            &mut candidates,
+            &chunks,
+            &[AiSearchBoost {
+                field: "priority".to_owned(),
+                direction: Some(AiSearchBoostDirection::Desc),
+            }],
+            &fields,
+        )
+        .unwrap();
+        assert_eq!(
+            candidates
+                .iter()
+                .map(|candidate| candidate.chunk_id.as_str())
+                .collect::<Vec<_>>(),
+            ["high", "middle", "low"]
+        );
+        for (candidate, expected) in candidates.iter().zip([1.0, 1.15 / 1.3, 1.0 / 1.3]) {
+            assert!((candidate.public_score - expected).abs() < 1e-6);
+        }
+    }
 }
