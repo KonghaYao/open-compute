@@ -69,15 +69,15 @@ pywrangler / Wrangler multipart upload
 当前 open-compute 正式 runtime baseline 由
 [`workerd.lock.json`](../packages/runtime/workerd.lock.json)唯一指定：
 
-| 项目 | 当前正式值 |
-| --- | --- |
-| workerd fork release | `v1.20260918.1-open-compute-i102.1c7b89be` |
-| source revision | `1c7b89bea323a39a8511271913820f9fcf39306d` |
-| version output | `workerd 2026-09-18` |
-| effective compatibility date | `2026-09-08` |
-| Pyodide bundle | `314.0.6_2026-08-17_2` |
-| Workers types | `5.20260830.1` |
-| Wrangler snapshot | `4.138.0` |
+| 项目                         | 当前正式值                                 |
+| ---------------------------- | ------------------------------------------ |
+| workerd fork release         | `v1.20260918.1-open-compute-i102.1c7b89be` |
+| source revision              | `1c7b89bea323a39a8511271913820f9fcf39306d` |
+| version output               | `workerd 2026-09-18`                       |
+| effective compatibility date | `2026-09-08`                               |
+| Pyodide bundle               | `314.0.6_2026-08-17_2`                     |
+| Workers types                | `5.20260830.1`                             |
+| Wrangler snapshot            | `4.138.0`                                  |
 
 这些值只说明二进制含有对应 Pyodide bundle，不证明 open-compute upload、binding 或 deploy lifecycle 已支持 Python。P20
 开始实施时先用同一套正式 pin 完成 G0；若官方 upload/SDK 合同需要更新，再按 runtime pin policy 一次性协调升级并重新跑全部
@@ -110,18 +110,18 @@ pywrangler / Wrangler multipart upload
 
 ## 4. 当前差距
 
-| 层 | 当前行为 | 与官方合同的差距 |
-| --- | --- | --- |
-| upload | `main_module` 固定按 `EsModule` 解析；`text/x-python` 被拒绝 | 无法上传 `.py` 主模块或 Python module |
-| immutable bundle | `ModuleType` 没有 Python | manifest、digest、download round-trip 都不能表达 Python |
-| RuntimeSource | runtime protocol 没有 `py` | 不能把 Python module 交给 Worker Loader |
-| loader | `moduleValue()` 只映射 JS/CJS/text/json/data/wasm | 没有 `{ py: string }` / `pythonModule` |
-| entrypoint | 每个 tenant 都生成平台 JS main wrapper | 会遮蔽 workerd 官方 Python entrypoint |
-| binding | facade 在 JS wrapper 内创建 | Python official entrypoint 收不到最终 binding object |
-| compatibility | 只接受当前 JavaScript flag 子集 | `python_workers` 等无法进入 immutable Version |
-| package | 没有 pywrangler upload qualification | package modules、wheel、SDK pin 未验证 |
-| prepare | 没有 dedicated snapshot lifecycle | cold start 与官方普通部署行为不一致 |
-| capability/docs | `python_modules` 为 unsupported，网站仍写 beta/loader demo | 对外状态与官方当前产品不一致 |
+| 层               | 当前行为                                                     | 与官方合同的差距                                        |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------------------------- |
+| upload           | `main_module` 固定按 `EsModule` 解析；`text/x-python` 被拒绝 | 无法上传 `.py` 主模块或 Python module                   |
+| immutable bundle | `ModuleType` 没有 Python                                     | manifest、digest、download round-trip 都不能表达 Python |
+| RuntimeSource    | runtime protocol 没有 `py`                                   | 不能把 Python module 交给 Worker Loader                 |
+| loader           | `moduleValue()` 只映射 JS/CJS/text/json/data/wasm            | 没有 `{ py: string }` / `pythonModule`                  |
+| entrypoint       | 每个 tenant 都生成平台 JS main wrapper                       | 会遮蔽 workerd 官方 Python entrypoint                   |
+| binding          | facade 在 JS wrapper 内创建                                  | Python official entrypoint 收不到最终 binding object    |
+| compatibility    | 只接受当前 JavaScript flag 子集                              | `python_workers` 等无法进入 immutable Version           |
+| package          | 没有 pywrangler upload qualification                         | package modules、wheel、SDK pin 未验证                  |
+| prepare          | 没有 dedicated snapshot lifecycle                            | cold start 与官方普通部署行为不一致                     |
+| capability/docs  | `python_modules` 为 unsupported，网站仍写 beta/loader demo   | 对外状态与官方当前产品不一致                            |
 
 以上不是几个独立的小缺陷。根因是当前 runtime assembly 把“语言 entrypoint”和“open-compute binding facade”耦合在同一层 JS
 wrapper 中。P20 必须先拆开这两个职责，逐项放行 MIME 或 flag 不能形成可维护的 Python 支持。
@@ -158,18 +158,18 @@ JavaScript Worker 可以继续使用 wrapper 来适配 entrypoint 行为，但 b
 3. 现有 open-compute TypeScript facade 作为一个 `wrappedBinding` module；
 4. 没有可验证实现则该 binding 对 Python 保持 unsupported，不能退回 raw internal Fetcher。
 
-| binding | 目标对象 | backend 复用方式 | P20 动作 |
-| --- | --- | --- | --- |
-| KV | workerd native `KvNamespace` | adapter 把标准 KV subrequest 映射到现有 KV authority | 删除 public `KVNamespace` facade 路径 |
-| R2 | workerd native `R2Bucket` | adapter 映射到现有 R2 object authority/S3 backend | 删除 public `R2Bucket` facade 路径 |
-| D1 | upstream `cloudflare-internal:d1-api` wrapped binding | 保留现有 D1 engine，提供其标准 Fetcher wire | 删除 open-compute 重复 public D1 facade |
-| Queue | workerd native `WorkerQueue` 或固定 upstream wrapper | 现有 queue descriptor/transport | 移除 wrapper-only construction |
-| Durable Object | native `DurableObjectNamespace` | 现有 router、identity 和 output gate | 保持 native object，不转成 JSON/RPC DTO |
-| Service | native `Fetcher` / RPC stub | 现有 service routing和 generation fence | 直接进入 env |
-| Workflow | 固定 upstream wrapper；不足部分用一个 wrapped binding | 现有 workflow authority | 同一个对象供 JS/Python 使用 |
-| Assets/Cache | native Fetcher/Cache 或现有 wrapped binding | 现有 asset/cache backend | 从 entrypoint wrapper 下沉 |
-| AI/Vectorize/Images | 固定公开 class；必要时使用现有 facade wrapped binding | 现有 product transport | 复用 facade source，不复制 Python 实现 |
-| AI Search/Artifacts | open-compute extension wrapped binding | 现有 extension transport | 明确为 vendor extension，不冒充 Cloudflare 产品 |
+| binding             | 目标对象                                              | backend 复用方式                                     | P20 动作                                        |
+| ------------------- | ----------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------- |
+| KV                  | workerd native `KvNamespace`                          | adapter 把标准 KV subrequest 映射到现有 KV authority | 删除 public `KVNamespace` facade 路径           |
+| R2                  | workerd native `R2Bucket`                             | adapter 映射到现有 R2 object authority/S3 backend    | 删除 public `R2Bucket` facade 路径              |
+| D1                  | upstream `cloudflare-internal:d1-api` wrapped binding | 保留现有 D1 engine，提供其标准 Fetcher wire          | 删除 open-compute 重复 public D1 facade         |
+| Queue               | workerd native `WorkerQueue` 或固定 upstream wrapper  | 现有 queue descriptor/transport                      | 移除 wrapper-only construction                  |
+| Durable Object      | native `DurableObjectNamespace`                       | 现有 router、identity 和 output gate                 | 保持 native object，不转成 JSON/RPC DTO         |
+| Service             | native `Fetcher` / RPC stub                           | 现有 service routing和 generation fence              | 直接进入 env                                    |
+| Workflow            | 固定 upstream wrapper；不足部分用一个 wrapped binding | 现有 workflow authority                              | 同一个对象供 JS/Python 使用                     |
+| Assets/Cache        | native Fetcher/Cache 或现有 wrapped binding           | 现有 asset/cache backend                             | 从 entrypoint wrapper 下沉                      |
+| AI/Vectorize/Images | 固定公开 class；必要时使用现有 facade wrapped binding | 现有 product transport                               | 复用 facade source，不复制 Python 实现          |
+| AI Search/Artifacts | open-compute extension wrapped binding                | 现有 extension transport                             | 明确为 vendor extension，不冒充 Cloudflare 产品 |
 
 `workers-runtime-sdk` 的 env wrapper 只负责把已经存在的 JavaScript binding 变成更 Pythonic 的对象；它不是 KV、D1 或 R2
 backend。因此仅“复用 Python SDK”不能完成注入，必须先让 `env.KV`、`env.DB`、`env.BUCKET` 本身成为正确的 workerd binding。
@@ -200,17 +200,17 @@ authority 直接访问 SQLite 或对象目录。流式 body 保持 bounded backp
 
 当前 `__open_compute__/entry.js` 还承担 cache、scheduled workflow、loopback、observability 和错误清理。P20 逐项归位：
 
-| 当前职责 | 目标位置 |
-| --- | --- |
-| binding facade creation | language-neutral materializer |
-| resource permission/generation | Rust authority + backend adapter |
-| request identity/observability | Gateway/host dispatch context |
-| stable error sanitization | product adapter和 service response boundary |
-| scheduled/queue dispatch | workerd native Python handler dispatch |
-| Workflow entrypoint | official Python `WorkflowEntrypoint` + shared workflow binding |
-| Durable Object wrapping | native Python DO entrypoint + existing object host policy |
-| automatic cache policy | host/cache binding policy，不依赖 tenant main language |
-| dynamic forwarding | shared materializer；只转发明确允许的 typed capabilities |
+| 当前职责                       | 目标位置                                                       |
+| ------------------------------ | -------------------------------------------------------------- |
+| binding facade creation        | language-neutral materializer                                  |
+| resource permission/generation | Rust authority + backend adapter                               |
+| request identity/observability | Gateway/host dispatch context                                  |
+| stable error sanitization      | product adapter和 service response boundary                    |
+| scheduled/queue dispatch       | workerd native Python handler dispatch                         |
+| Workflow entrypoint            | official Python `WorkflowEntrypoint` + shared workflow binding |
+| Durable Object wrapping        | native Python DO entrypoint + existing object host policy      |
+| automatic cache policy         | host/cache binding policy，不依赖 tenant main language         |
+| dynamic forwarding             | shared materializer；只转发明确允许的 typed capabilities       |
 
 只有 JavaScript export-shape adaptation 仍留在 JS wrapper。任何安全策略如果 Python 绕过 wrapper 就失效，说明它仍在错误层，P20
 不得以“Python 特例”复制一份。
@@ -399,9 +399,44 @@ loaded-isolate wrapper。仍需保持：
 ## 11. 验收矩阵
 
 所有 product Gate 使用正式 verified workerd、真实进程、真实 SQLite、当前对象 backend 和 fresh process。Miniflare、mock binding 或
-stock upstream binary只能用于差异定位，不能代替最终证据。
+stock upstream binary 只能用于差异定位，不能代替最终证据。
 
-### 11.1 entrypoint 与 runtime
+### 11.1 主 Python 链 blocking Gate
+
+P20 实施时必须新增产品目标 `p20-python-main`，并纳入 `all`、`p3` 和最终 `--workspace` 的单轮计划。它不是可选
+qualification；该目标不存在、未注册、被忽略或未通过时，普通 Python Worker 必须继续标为 unsupported。
+
+`test/gate_cases.py` 只登记一个拥有整条真实进程链路的 `TIMING` case：
+
+```text
+python_main::p20_python_main_upload_prepare_dispatch_restart_rollback
+```
+
+该 case 在同一个隔离 test scope 中依次证明：
+
+1. 使用固定 pywrangler 生成、已记录版本和 digest 的 multipart fixture，经真实 v4 endpoint 上传 `.py` main、多 module、
+   package data、vars、secret、KV、D1 与 R2 binding；
+2. admission 固定 module type、compatibility date/flags、bundle digest 和 binding descriptor，拒绝错误 MIME、缺失 main、未知 flag、
+   duplicate/reserved module 和损坏 package；
+3. 真实 verified formal-pin workerd 执行官方 Python entrypoint，prepare 只发生一次并发布加密 immutable prepared artifact；
+4. promotion 后通过公开 Worker endpoint 调用 Python `fetch`，同时读写 KV、D1、R2，并验证 response、stream、exception、secret
+   redaction 和 host-network outbound policy；
+5. 终止并重新启动 workerd generation，再调用同一 deployment，证明使用同一 prepared identity restore，而不是 request-time
+   install、compile、prepare 或 warm-memory fallback；
+6. 上传第二个 Python Version、promote 后再 rollback，证明 route/deployment pin、binding generation 和旧 snapshot identity 精确恢复；
+7. 在 test-support fault point 注入 partial/corrupt prepared artifact，证明 failed prepare/restore 不改变 active deployment，重启后
+   仍 fail closed，且不遗留进程、listener、临时文件或 plaintext secret；
+8. 最终核对 active Version、deployment、prepared artifact、KV/D1/R2 数据和进程清理状态，并输出去 secret 的 Gate evidence。
+
+case 内部的两次 Version、重启、rollback 与确定性 fault point 是一个不可拆的 lifecycle matrix，不计为重复 Gate round，也不允许
+失败自动重试。fixture 必须是开发侧预先生成并提交的静态输入；Gate 不运行 `uv`/`pywrangler`、不下载 package、不访问 Cloudflare
+账号。实现第一个可执行 case 时，同一变更必须完成 `test/gate.py` target、`test/gate_cases.py` 注册、`--list` inventory、
+`docs/references/testing.md` 映射和 `p3-contract` capability/case 双射；不得先注册空 target 或只在文档中声称 Gate 存在。
+
+`p20-python-main` 只拥有普通 Python Worker 主链。框架/package 扩展矩阵和 Dynamic Python 使用独立 case/target；它们不能替代此
+blocking Gate，也不能让同一个主链 case 在 workspace 中被第二次调度。
+
+### 11.2 entrypoint 与 runtime
 
 - fetch：request/body/headers/streaming response、exception、`waitUntil`；
 - named entrypoint 与 RPC method，包括 Python/JS structured value round-trip；
@@ -410,7 +445,7 @@ stock upstream binary只能用于差异定位，不能代替最终证据。
 - supported stdlib 与官方 excluded/non-functional module inventory；
 - filesystem 仅 isolate ephemeral，销毁后不可依赖。
 
-### 11.2 bindings
+### 11.3 bindings
 
 每个声明 supported 的 binding 至少覆盖：
 
@@ -423,16 +458,17 @@ stock upstream binary只能用于差异定位，不能代替最终证据。
 
 KV、D1、R2 必须作为首批 blocking Gate；它们未通过时不能宣称 Python binding parity。
 
-### 11.3 packages
+### 11.4 packages
 
 - multi-module import、relative/package import、package data；
 - pure-Python、PyEmscripten、Pyodide package；
 - unsupported native wheel 的稳定拒绝；
 - FastAPI、Flask、Django；
 - top-level import error、missing module、corrupt wheel/data、bundle limit；
-- requests/httpx 只经统一 public outbound capability，SSRF/address policy 与 JavaScript 一致。
+- requests/httpx 只经统一 host-network outbound capability；与 JavaScript 一样由宿主 firewall、network namespace、容器或 VM
+  负责地址过滤，不新增 Python 专用代理或规则层。
 
-### 11.4 prepared artifact 与生命周期
+### 11.5 prepared artifact 与生命周期
 
 - clean deploy 生成一次、后续请求只 restore；
 - daemon/workerd restart 后加载同一 identity；
@@ -442,7 +478,7 @@ KV、D1、R2 必须作为首批 blocking Gate；它们未通过时不能宣称 P
 - snapshot、temporary file、process 和 listener 全部清理，无 orphan；
 - cold isolate latency 与 memory budget 满足固定产品 limit。
 
-### 11.5 differential evidence
+### 11.6 differential evidence
 
 对 Cloudflare remote、固定 upstream workerd 和 open-compute 分别记录：
 
@@ -461,7 +497,8 @@ identity、加密和恢复不变量。
 - `ocd` 仍是唯一公开 listener 和 deployment identity authority；
 - Python isolate只看到声明的 vars、secrets 和 public bindings；
 - RuntimeSource、SQLite/S3 handles、internal Fetcher/token、prepare service 和 control API 永不进入 tenant env；
-- Python/FFI outbound 与 JavaScript 共用单一 `Network(allow = ["public"])` address policy；
+- Python/FFI outbound 与 JavaScript 共用单一 `Network(allow = ["network"])` IP capability；Unix／abstract-Unix endpoint
+  不开放，validation 及未委托 outbound 的执行保持 `globalOutbound = null`；
 - tenant 不能通过 Python object、pickle、FFI、Frankenvalue 或 RPC 构造额外 capability；
 - upload、prepare、restore、binding adapter 和 SDK mismatch 均返回稳定 sanitized error；
 - traceback 可指向 tenant module，但必须清理绝对路径、源码外 secret、signed URL、authorization 和内部拓扑；
@@ -497,7 +534,9 @@ P20 采用直接 current-model 迁移，不保留过渡兼容层。完成时删�
 
 P20 只有同时满足以下条件才可移入 `docs/implemented/`：
 
-1. pywrangler 的固定普通部署 fixtures 能通过标准 Cloudflare v4 endpoint 创建、部署、调用和回滚 Python Worker；
+1. `p20-python-main` 的注册 inventory 与唯一主链 case 存在；开发阶段选择 `./test/gate.py p20-python-main` 时必须通过，源码冻结后
+   只由最终 `--workspace` 单轮执行该 case，不在同一 final iteration 重复运行；固定 pywrangler 普通部署 fixture 能通过标准
+   Cloudflare v4 endpoint 创建、部署、调用、重启和回滚 Python Worker；
 2. official Python entrypoint、Pyodide 和未 fork 的 workers-runtime-sdk 运行；
 3. open-compute declared binding surface 对 Python/JavaScript 使用同一 language-neutral materializer，并通过 differential；
 4. KV、D1、R2、Queue、DO、Service、Workflow 及其失败/权限/restart Gate 全部通过；
