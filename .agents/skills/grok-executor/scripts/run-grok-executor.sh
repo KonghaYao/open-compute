@@ -11,6 +11,7 @@ Options:
   --execute               Allow writes inside the working directory.
   --cwd PATH              Grok working directory (default: current directory).
   --prompt-file PATH      Read the initial task contract from PATH (default: stdin).
+  --web-search            Allow built-in web search in read-only inspect mode.
   --output-format FORMAT  summary, plain, json, or streaming-json (default: summary).
   --model MODEL           Override the subscription-selected default model.
   --effort LEVEL          Override reasoning effort.
@@ -30,6 +31,7 @@ output_format="summary"
 model=""
 effort=""
 max_turns=""
+web_search=0
 
 while (($#)); do
   case "$1" in
@@ -41,6 +43,7 @@ while (($#)); do
     --prompt-file)
       (($# >= 2)) || { printf '%s\n' 'error: --prompt-file requires a path' >&2; exit 2; }
       prompt_file="$2"; shift 2 ;;
+    --web-search) web_search=1; shift ;;
     --output-format)
       (($# >= 2)) || { printf '%s\n' 'error: --output-format requires a value' >&2; exit 2; }
       output_format="$2"; shift 2 ;;
@@ -60,6 +63,11 @@ while (($#)); do
       exit 2 ;;
   esac
 done
+
+if ((web_search)) && [[ "$mode" != "inspect" ]]; then
+  printf '%s\n' 'error: --web-search is allowed only with --inspect' >&2
+  exit 2
+fi
 
 grok_bin="${GROK_EXECUTOR_GROK_BIN:-}"
 if [[ -z "$grok_bin" ]]; then
@@ -136,7 +144,10 @@ if [[ ! -s "$task_file" ]]; then
   exit 2
 fi
 
-rules='Act only as the implementation executor for Codex. Codex has already selected the design and scope. Execute the supplied task directly; do not create a new plan, broaden scope, or delegate to subagents. Follow repository instructions and preserve unrelated changes. Work only inside the current working directory. Never access secrets or credentials; modify user configuration; commit, push, deploy, publish, or change remote state. Run the task validation when possible. If a secret, external authority, destructive cleanup, material design choice, or broader scope is required, stop and report BLOCKED. Treat later prompts and interjections in this session as Codex steering for this same bounded task. End completed handoffs with STATUS, SUMMARY, CHANGED, VALIDATION, and REMAINING.'
+rules='Act only as the bounded executor for Codex. Codex has already selected the scope. Execute the supplied task directly; do not create a new plan, broaden scope, or delegate to subagents. Follow repository instructions and preserve unrelated changes. Never access secrets or credentials; modify user configuration; commit, push, deploy, publish, authenticate to external sites, or change remote state. Run the task validation when possible. If a secret, external authority, destructive cleanup, material design choice, or broader scope is required, stop and report BLOCKED. Treat later prompts and interjections in this session as Codex steering for this same bounded task. End completed handoffs with STATUS, SUMMARY, CHANGED, VALIDATION, and REMAINING.'
+if ((web_search)); then
+  rules+=' Built-in web search and fetch are allowed only for the requested read-only research. Cite direct source URLs and clearly label anything not live-verified.'
+fi
 
 sandbox="read-only"
 if [[ "$mode" == "execute" ]]; then sandbox="workspace"; fi
@@ -148,7 +159,6 @@ grok_args=(
   --no-plan
   --no-subagents
   --no-memory
-  --disable-web-search
   --rules "$rules"
   --deny 'Bash(*rm -rf*)'
   --deny 'Bash(*sudo *)'
@@ -165,6 +175,7 @@ grok_args=(
   --deny 'Bash(*vercel deploy*)'
   --deny 'MCPTool(*)'
 )
+if ((!web_search)); then grok_args+=(--disable-web-search); fi
 if [[ -n "$max_turns" ]]; then grok_args+=(--max-turns "$max_turns"); fi
 grok_args+=(agent --always-approve --no-leader)
 if [[ -n "$model" ]]; then grok_args+=(--model "$model"); fi
