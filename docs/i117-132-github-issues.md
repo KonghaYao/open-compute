@@ -1,9 +1,87 @@
-# I117、I130、I132：剩余 GitHub issues
+# I117、I130、I132：剩余 GitHub issues 与 AI Search Gate
 
 状态：**planned**。本批只包含仍需实施的
 [GitHub issue #117](https://github.com/elliothux/open-compute/issues/117)、
 [GitHub issue #130](https://github.com/elliothux/open-compute/issues/130) 与
 [GitHub issue #132](https://github.com/elliothux/open-compute/issues/132)。Python issues 已归入 P20，rerank issue 已归入 P19。
+
+## 共用 Gate：完整 AI Search 与集中 provider 协议验收
+
+P19 实施时扩展现有 `p5-search`，不要为 embedding、rewrite、chat 和两个 rerank 协议分别建立互不相干的测试入口。验收分成两个目标，
+由同一个 `p5` Gate group 统一登记、发现和报告：
+
+1. `p5-search` 是普通 workspace Gate，使用进程内有界 HTTP fixture 和正式 pinned workerd，完整执行 upload／index → embedding →
+   vector／keyword／hybrid retrieval → boosting → reranking → Search／Chat。它不读取真实 provider credential，也不访问公网；CI 和
+   `./test/gate.py --workspace` 必须始终可重复执行。
+2. `p5-ai-provider-qualification` 是显式 live Gate，使用已经配置的 CI environment secrets 调用真实 provider，并通过生产
+   `AiBackendProtocol` client 和 AI Search service 执行完整链路。它不是独立 curl probe，不允许为通过 qualification 写第二套 JSON codec、
+   response parser 或排序逻辑。
+
+### 协议与端到端矩阵
+
+`p5-search` 的本地 fixture 冻结并覆盖以下全部协议；每个 fixture 都校验 method、path、Content-Type、Authorization、固定 request body、
+response size limit 和稳定错误分类：
+
+| 能力 | protocol | 普通 Gate fixture | live Gate provider |
+| --- | --- | --- | --- |
+| 文档与 query embedding | `openai_embeddings_v1` | OpenAI-compatible `/v1/embeddings` | 阿里云百炼 |
+| query rewrite、Chat、SSE | `openai_chat_completions_v1` | OpenAI-compatible `/v1/chat/completions` | DeepSeek |
+| 专用 rerank | `cohere_rerank_v2` | Cohere `POST /v2/rerank` exact fixture | Cohere |
+| 通用专用 rerank | `rerank_v1` | 通用 `POST /v1/rerank` exact fixture | 阿里云百炼 |
+
+本地产品矩阵至少包含两个完整 rerank 流：同一批固定文档分别经 `cohere_rerank_v2` 和 `rerank_v1` 运行，验证 provider index
+归一化、确定性 tie-break、`reranking.match_threshold`、`scoring_details.reranking_score`、最终 top-level `score`、namespace merge 及
+Chat context 顺序。另以 reranking disabled 路径证明不会调用任一 rerank provider。vector、keyword 和 hybrid 三种 retrieval、query
+rewrite、non-stream Chat、SSE、restart 后同一 alias 解析，以及 P19 规定的 malformed／partial／越界 score、401/403、429、4xx、5xx、
+timeout 和超限 body 都留在本地 fixture Gate，不能依赖真实供应商偶然返回错误来覆盖。
+
+live Gate 使用最小固定 corpus，把协议探测合并为三个端到端 case：
+
+- 百炼 embedding + DeepSeek rewrite／Chat，不启用 rerank；
+- 百炼 embedding + Cohere `cohere_rerank_v2` + DeepSeek Chat；
+- 百炼 embedding + 百炼 `rerank_v1` + DeepSeek Chat。
+
+每个 case 必须证明索引、文本 Search、reranking score 和最终 Chat 都来自同一生产 AI Search workflow；仅验证 HTTP 200、直接调用
+provider client 或绕过 SQLite／Vectorize／workerd 均不算通过。输入保持为少量非敏感固定文本，请求次数和 token 数有显式上限；不做
+自动重试，429、timeout 或 provider contract drift 直接失败并保留 sanitized evidence。
+
+### CI environment 与调度
+
+CI 只向 `p5-ai-provider-qualification` allowlist 下列现有变量；不得把它们设置为 workflow 全局环境，也不得传给普通 workspace target：
+
+```text
+BAILIAN_API_HOST
+BAILIAN_API_KEY
+DEEPSEEK_API_KEY
+COHERE_API_KEY
+```
+
+model、protocol、endpoint suffix 和预期 response contract 固定在受 review 的 qualification manifest 中，不再增加 model env 或从 provider
+动态 discovery。`BAILIAN_API_HOST` 只作为百炼 base authority，production config 按 manifest 组装 embeddings 与 rerank endpoint；日志、
+错误、Gate report 和 retained failure evidence 都不能包含 credential、Authorization、query、document、response body 或 host 中可能携带的
+workspace identity。
+
+GitHub Actions 使用受保护的 `ai-search-qualification` environment，在 trusted `main` push、release qualification 或手动
+`workflow_dispatch` 上执行；fork PR 和不受信任的 PR 不接收 secrets，只执行本地 `p5-search`。job 先确认四个变量均为非空，再由 Gate
+runner 的 per-target environment allowlist 传入 test process；缺失变量是明确的 configuration failure，不能 skip、降级为 fixture 或只跑
+部分协议。`setup-open-compute` 继续提供 verified `OPEN_COMPUTE_TEST_WORKERD`，不复制 workerd pin 或下载 runtime。
+
+CI 的 AI Search job 顺序固定为：`bun run build`、`cargo fetch --locked`、本地 `./test/gate.py p5-search --jobs 1`，随后在允许 secrets 的
+trusted job 执行 `./test/gate.py p5-ai-provider-qualification --jobs 1`。最终 CI aggregator 同时要求适用事件上的两个 job 成功；live
+qualification 不暗中加入 `--workspace`，从而不破坏无网络、本地和 fork PR 验收，但它仍由同一 Gate case registry、exact discovery、
+单轮执行、超时、清理和报告机制管理。
+
+### 完成条件
+
+- `test/gate_cases.py` 对本地完整 AI Search case 和三条 live flow 各登记一次，并确保四种外部协议都有真实覆盖；新增、遗漏、重复或
+  ignored case 在调用 provider 前失败；
+- `p5-search` 在无任何 AI provider env 时通过完整本地协议、产品、restart 和失败矩阵；
+- `p5-ai-provider-qualification` 使用上述四个变量，通过三条真实端到端 flow，并在 sanitized report 中记录 provider、protocol、固定
+  model/revision、HTTP status 类别、耗时和 response schema digest，不记录 payload；
+- CI workflow 不在 fork PR 暴露 secrets，不使用 `pull_request_target` 执行 PR checkout，不把 credential 写入 artifact、cache、命令行或
+  `$GITHUB_OUTPUT`；
+- P19 文档、`docs/references/testing.md`、CI workflow 与 Gate group 同步为这一边界：普通 workspace Gate 使用本地 exact fixture，受保护
+  live Gate 集中验证真实 provider protocol 与完整 AI Search flow。
 
 ## I117：开放普通主机 IP 网络并加固内部端点
 

@@ -2,12 +2,12 @@
 
 状态：**planned**。本方案解决
 [#131](https://github.com/elliothux/open-compute/issues/131)，把 AI Search reranking 从 Chat Completions 提示词调用改为专用
-reranker provider，并首批实现三个闭集协议：`cohere_rerank_v2`、`rerank_v1` 和 `tei_rerank_v1`。同一阶段关闭当前
+reranker provider，并首批实现两个闭集协议：`cohere_rerank_v2` 和 `rerank_v1`。同一阶段关闭当前
 AI Search text query 路径上已确认的 Cloudflare API shape／score／threshold／boosting 缺口；不能只替换 provider 后继续宣称完整兼容。
 
 ## 1. 用户结果与结论
 
-- operator 可以把 AI Search 的 reranking alias 映射到 Cohere v2、通用 `/v1/rerank` 或 Hugging Face TEI `/rerank`
+- operator 可以把 AI Search 的 reranking alias 映射到 Cohere v2 或通用 `/v1/rerank`
   endpoint；tenant 继续只选择公开 model alias，不能提供 endpoint、credential、header 或 wire protocol。
 - AI Search 先完成 vector／keyword／hybrid retrieval，再把有界候选集一次发送给专用 cross-encoder；provider 返回原始候选
   `index` 与 `relevance_score`，open-compute 据此排序、过滤并返回 Cloudflare-compatible scoring fields。
@@ -24,7 +24,7 @@ AI Search text query 路径上已确认的 Cloudflare API shape／score／thresh
 - provider 不可用、返回不完整 index、非有限／越界 score、超限 body 或 malformed JSON 时整次 search fail closed；不能静默返回
   rerank 前顺序，也不能把上游响应正文暴露给 tenant 或日志。
 
-这里的“通用”只指 open-compute 内部统一的 rerank contract。外部没有 OpenAI Rerank 标准，三个协议 token 各自固定准确的 wire
+这里的“通用”只指 open-compute 内部统一的 rerank contract。外部没有 OpenAI Rerank 标准，两个协议 token 各自固定准确的 wire
 shape；不提供任意 JSON template、脚本 adapter 或按 provider 名称猜测协议。
 
 ## 2. 当前问题
@@ -56,8 +56,6 @@ Completions backend；[`OpenAiChatClient::rerank`](../crates/service/src/ai_prov
   [Voyage Reranker API](https://docs.voyageai.com/reference/reranker-api)、
   [Jina Reranker API](https://jina.ai/en-US/reranker/)及实际接入 gateway 的固定 trace 交叉验证；品牌不是配置或实现
   authority，只有本节冻结的公共子集属于 `rerank_v1`；
-- [Hugging Face Text Embeddings Inference reranker](https://huggingface.co/docs/text-embeddings-inference/quick_tour)及固定 TEI
-  source revision：`POST /rerank`、`query`、`texts`、`raw_scores` 与 `{index,score}[]`；
 - [Cloudflare AI Search reranking](https://developers.cloudflare.com/ai-search/configuration/retrieval/reranking/)、
   [result controls](https://developers.cloudflare.com/ai-search/configuration/retrieval/result-controls/)、
   [relevance boosting](https://developers.cloudflare.com/ai-search/configuration/retrieval/boosting/)和
@@ -122,12 +120,11 @@ provider score 写入 SQLite。backend、remote model 或 provider revision 改�
 
 ### 5.1 Protocol 与 backend
 
-`AiBackendProtocol` 增加三个闭集值：
+`AiBackendProtocol` 增加两个闭集值：
 
 ```text
 cohere_rerank_v2
 rerank_v1
-tei_rerank_v1
 ```
 
 backend 继续使用 P5.2 的 operation-specific 完整 endpoint，不追加 path：
@@ -168,12 +165,9 @@ AiConfig::default_reranking_model: Option<String>
 
 ```text
 backend
-remote_model       # Cohere v2 与 rerank_v1 必填；TEI 禁止
+remote_model       # 必填
 provider_revision  # 可选，仅在上游提供真实不可变 revision 时填写
 ```
-
-TEI 一个 server endpoint 已固定一个启动模型，请求不接受 model 字段，因此 mapping 省略 `remote_model`。配置验证按 backend
-protocol 强制 required／forbidden，不能发送空 model 或依赖 TEI 忽略未知字段。
 
 `AiGenerationModelConfig.capabilities` 收敛为 `chat` 与 `rewrite`；删除 `AiGenerationCapability::Rerank`。旧配置中的
 `capabilities = ["rerank"]` 直接拒绝，operator 必须迁移到 `reranking_models`；不保留 alias、隐式转换或 chat fallback。
@@ -220,7 +214,7 @@ Embedding 与 reranking 不使用 model 是否存在来隐式启用：
 因此 provider 配置表达 availability，instance 字段表达默认 policy，request 字段表达单次 override。operator 新增 backend 不得
 让现有 instance 突然增加费用、延迟或改变排序。
 
-## 6. 三个 wire adapter
+## 6. 两个 wire adapter
 
 所有 adapter 接收同一个内部输入：
 
@@ -284,35 +278,9 @@ struct RerankResult {
 `results[{index,relevance_score}]` 核心结构。需要不同必填字段或不同 response shape 的 endpoint 不属于此协议，不能通过附加任意
 JSON 配置接入。
 
-### 6.3 `tei_rerank_v1`
-
-请求使用 TEI native contract，并显式要求归一化 score、禁止回传文本：
-
-```json
-{
-  "query": "search query",
-  "texts": ["first", "second"],
-  "raw_scores": false,
-  "return_text": false
-}
-```
-
-首版不设置 `truncate` 或 `truncation_direction`，使用固定 TEI contract 的默认行为并在文档中明确记录；open-compute 自身仍以
-request byte limit 和 AI Search chunk bounds 控制输入。响应是顶层数组：
-
-```json
-[
-  { "index": 1, "score": 0.91 },
-  { "index": 0, "score": 0.22 }
-]
-```
-
-adapter 把 `score` 映射为内部 `relevance_score`。不调用 TEI `/info` 做启动或请求期 capability discovery；operator 负责让 endpoint
-运行 reranker model，错误 model type 由实际请求 fail closed。
-
 ## 7. 响应归一化与失败语义
 
-三个 adapter decode 后统一执行：
+两个 adapter decode 后统一执行：
 
 1. result 数量必须与输入 documents 数量完全相同；
 2. 每个 index 必须 `< documents.len()`，且所有 index 唯一、完整；
@@ -402,10 +370,10 @@ unsupported/config error，不回退到 generation model。
 
 ## 10. 实施 ownership
 
-- `crates/core/src/config/ai/backend.rs`：增加三个 protocol token 与 operation validation。
+- `crates/core/src/config/ai/backend.rs`：增加两个 protocol token 与 operation validation。
 - 新建 `crates/core/src/config/ai/rerank.rs`：拥有 reranking model config、validation 与解析；避免继续扩大接近 800 行的
   `config/ai.rs`。
-- 新建 `crates/service/src/ai_provider/rerank.rs`：拥有 `RerankClient`、三个 codec 与统一 response validation；删除
+- 新建 `crates/service/src/ai_provider/rerank.rs`：拥有 `RerankClient`、两个 codec 与统一 response validation；删除
   `OpenAiChatClient::rerank`，不把 `ai_provider.rs` 推过 production file budget。
 - `crates/service/src/ai_search_config.rs`：解析 default／instance alias 并验证独立 model catalog。
 - `crates/search/src/ai_search/`：从 fusion helper 删除错误的 fusion-score threshold；保留独立阶段 score，不让一个通用字段承担
@@ -427,10 +395,9 @@ unsupported/config error，不回退到 generation model。
 
 ### 11.1 Config 与 codec tests
 
-- 三种 backend protocol 与 model mapping 的成功配置；错误 protocol、缺失 backend、错误 default、TEI 携带 remote model、其他协议
-  缺少 remote model 全部拒绝。
+- 两种 backend protocol 与 model mapping 的成功配置；错误 protocol、缺失 backend、错误 default、缺少 remote model 全部拒绝。
 - 每个 adapter 固定 exact request JSON、最终 endpoint、Content-Type、auth/header 和不追加 path。
-- Cohere、generic v1 与 TEI 的成功 response 都归一化为相同结果；乱序输入得到确定性降序输出。
+- Cohere 与 generic v1 的成功 response 都归一化为相同结果；乱序输入得到确定性降序输出。
 - duplicate/missing/out-of-range index、partial response、NaN/Infinity/out-of-range score、错误 JSON/root shape/content type、超限
   response 全部失败。
 - 401/403、429/Retry-After、redirect、4xx、5xx、transport failure 和 timeout 保持现有稳定分类，且测试错误与日志不含 response
@@ -464,19 +431,19 @@ provider 调用只能作为另行授权的 qualification，不能成为普通开
   当前分支；
 - image query、file query、multimodal embedding／retrieval／reranking。当前只支持 text query，并必须在 repository docs、能力矩阵、
   Dashboard 提示和英中文网站公开这一限制；
-- provider discovery、模型下载、TEI 进程管理、启动探测、health polling、负载均衡、成本路由或自动重试；
+- provider discovery、启动探测、health polling、负载均衡、成本路由或自动重试；
 - 改变 embedding、indexing、chunking 或独立 Vectorize 的模型和持久化合同。
 
 ## 13. 完成条件
 
 P19 只有同时满足以下条件才能移入 `docs/implemented/`：
 
-1. 三个协议均通过 exact wire fixture、错误矩阵与 AI Search product regression；
+1. 两个协议均通过 exact wire fixture、错误矩阵与 AI Search product regression；
 2. chat rerank 实现与配置能力已完全删除；
 3. current text-query public API 的 `boost_by`、`query_kind`、scoring details、最终顶层 score、namespace merge 和两个 threshold 语义均有
    固定 OpenAPI／hosted differential／fixture 证据；
 4. image、file 和 multimodal query 在 public boundary fail closed，所有 text Search response 返回 `query_kind: "text"`；
-5. operator 英中文文档能分别给出 Cohere v2、通用 `/v1/rerank` 与 TEI 配置；repository docs、Dashboard 和英中文网站均显著声明
+5. operator 英中文文档能分别给出 Cohere v2 与通用 `/v1/rerank` 配置；repository docs、Dashboard 和英中文网站均显著声明
    AI Search 当前不支持多模态 query；
 6. `OC-AI-SEARCH-001` 与 capability matrix 不再声称 rerank 使用 OpenAI-compatible Chat API，也不把 text-only query 宣称为
    multimodal support；
