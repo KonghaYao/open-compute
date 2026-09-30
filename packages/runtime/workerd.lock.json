@@ -35,25 +35,25 @@
   "targets": {
     "darwin-arm64": {
       "archiveName": "workerd-darwin-arm64.gz",
-      "archiveUrl": null,
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-darwin-arm64.gz",
       "archiveSha256": "632d2ee13c684e70200bacd0bf1583360d430ad1054ef3cb29e0c20ef52481e0",
       "binarySha256": "d489faf23b0ecf7bfa8edccac5e6d5295f262f7f02f392c7ae92b06d95f55ddf"
     },
     "darwin-x64": {
       "archiveName": "workerd-darwin-64.gz",
-      "archiveUrl": null,
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-darwin-64.gz",
       "archiveSha256": "cd7c543b688120ccb5fdc57706c0e0bddbdde6ee140b55fd7f30cc3e3524c015",
       "binarySha256": "9149f00c2f2b7bd576f6b164e924ed306562845ca72a8207d99ff6774c58753e"
     },
     "linux-arm64": {
       "archiveName": "workerd-linux-arm64.gz",
-      "archiveUrl": null,
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-arm64.gz",
       "archiveSha256": "76d00935975e38c1b114771903cac54644dc1cde9a9c1b68a1afbd6829822f6b",
       "binarySha256": "744a56e9b28728ead237765abc6cbded98560acc4bbfb5339d21e184394839d5"
     },
     "linux-x64": {
       "archiveName": "workerd-linux-64.gz",
-      "archiveUrl": null,
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-64.gz",
       "archiveSha256": "5145314dbd608857bbd765cc479a609619f0cf380bb91d9704303d218816fa48",
       "binarySha256": "40424924678782e02d6a68a1af512b1a9dacdf93b16e47c2d7f4825a09f5e336"
     }

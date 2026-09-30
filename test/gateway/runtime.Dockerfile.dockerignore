@@ -5,14 +5,6 @@ node_modules
 .temp/*
 !.temp/workerd-build
 !.temp/workerd-build/**
+!.temp/runtime-inputs
+!.temp/runtime-inputs/**
 third_party/workerd
-share/workerd/*
-!share/workerd/linux-arm64
-!share/workerd/linux-arm64/**
-!share/workerd/linux-x64
-!share/workerd/linux-x64/**
-share/caddy/*
-!share/caddy/linux-arm64
-!share/caddy/linux-arm64/**
-!share/caddy/linux-x64
-!share/caddy/linux-x64/**

@@ -84,7 +84,7 @@ reflection 准确投影。排序、UTF-8、重复 key 和 JSON formatting 固定
 
 ## 4. 构建、pin 与单二进制
 
-`bun run build` 已经验证正式 Git LFS workerd 的 archive／binary digest。验证完成后，构建流程对该 exact binary 调用 compatibility
+`bun run build` 已经验证 formal lock 指定的 GitHub Release workerd archive／binary digest。验证完成后，构建流程对该 exact binary 调用 compatibility
 introspection，规范化并保存 catalog 到 `.temp/workerd-build/`，然后才允许 Cargo 消费 runtime assets。不得从 `PATH` 查找另一份 workerd，也
 不得在 Cargo build、`ocd` startup 或 capability 请求时下载／探测 runtime。
 

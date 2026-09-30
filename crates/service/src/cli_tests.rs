@@ -1529,7 +1529,7 @@ async fn caddy_version_uses_the_embedded_manifest_without_configuration() {
     let output = String::from_utf8(stdout).unwrap();
     assert_eq!(code, ExitCode::SUCCESS);
     assert!(output.contains("v2.11.4"));
-    assert!(output.contains("pin v2.11.4-open-compute.1"));
+    assert!(output.contains("pin v2.11.4-open-compute.2"));
     assert!(stderr.is_empty());
 
     for command in ["list-modules", "validate", "reload", "status"] {

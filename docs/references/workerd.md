@@ -31,7 +31,7 @@ fork 保留 upstream Worker runtime、module validation、RPC、Durable Objects 
 | Native host extensions     | 私有 `HostExtensionFactory` / `HostExtensionPort`、generation broker fd 4、session-scoped Cap'n Proto unary/stream transport                                                      | 让 operator-owned native Provider 通过普通 Service Binding facade 服务 Worker；该 ABI 不是 Cloudflare 标准 API             |
 | Dynamic binding forwarding | 私有 `openComputePrivateEnv`、host-issued Loader grant、handler-only capability table 与 generation/revocation fence                                                              | 由 `open-compute:worker-loader` 显式转发 KV、D1、R2、Queue 和普通值，同时不把根 binding 变成可 structured-clone 的公共对象 |
 | Compatibility catalog      | `compatibility-catalog` 从编入 binary 的 maximum date 与 `CompatibilityFlags` schema annotations 生成确定性 JSON；不加载配置或启动 listener                                       | 让 build、CLI、management API、SDK 与 Dashboard 从 exact binary 发现同一 date/flag 合同                                    |
-| Reproducible binaries      | 四目标优化构建 workflow、固定编译器/Bazel/config 与 canonical archive 生成输入                                                                                                    | 为 formal pin、Git LFS build input 和跨平台产品 Gate 提供可复现来源                                                        |
+| Reproducible binaries      | 四目标优化构建 workflow、固定编译器/Bazel/config 与 canonical release archive 生成输入                                                                                            | 为 formal pin、GitHub Release build input 和跨平台产品 Gate 提供可复现来源                                                 |
 
 这些扩展不代表 Cloudflare 托管平台采用相同内部实现。公开 Cloudflare-compatible surface 与 open-compute
 私有扩展仍分别记录；实验性 Loader 控制、完整 Workers for Platforms 和 dispatch namespace 不会因为使用 fork 而自动获得支持。
@@ -42,24 +42,26 @@ fork 保留 upstream Worker runtime、module validation、RPC、Durable Objects 
 
 ## 单独下载 workerd
 
-以下是 open-compute `v0.2.2` 固定并验证的**未压缩可执行文件**。链接指向 release tag 下的 Git LFS 对象，而不是
-Cloudflare release；SHA-256 必须与 formal lock 一致。
+以下 archive 来自 fork 的不可变 GitHub Release，而不是 Cloudflare release。下载后必须同时核对 archive 与解压 binary
+SHA-256；唯一 authority 仍是 formal lock。
 
 二进制沿用 workerd 的 Apache 2.0 license，并包含 upstream source tree 记录的第三方组件；它们由 open-compute
 项目发布和支持，不是 Cloudflare 官方发行物。
 
-| Target           | 下载                                                                                               | Binary SHA-256                                                     | 发行范围                             |
-| ---------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------ |
-| macOS ARM64      | [workerd](https://github.com/elliothux/open-compute/raw/v0.2.2/share/workerd/darwin-arm64/workerd) | `f9adf7bd167f5ddedb1d952e0729219763ac11d59034e5c37bca1f707f7cf33d` | 正式输入                             |
-| Linux GNU ARM64  | [workerd](https://github.com/elliothux/open-compute/raw/v0.2.2/share/workerd/linux-arm64/workerd)  | `289e5ce01435333e7aed351f2094b8adb6ff3fdf2d84fe2443166f0654b18a2b` | 正式输入                             |
-| Linux GNU x86-64 | [workerd](https://github.com/elliothux/open-compute/raw/v0.2.2/share/workerd/linux-x64/workerd)    | `7b8a7e2a6cdd77ec3a2996c0f1ac494af42927b595df2e4344604185e5553f3d` | 正式输入                             |
-| macOS x86-64     | [workerd](https://github.com/elliothux/open-compute/raw/v0.2.2/share/workerd/darwin-x64/workerd)   | `80d741fb70a0df2c3effc4045cc9934f3fe72fdad559dc8321dd15965c171619` | 仅手动构建，不属于正式 `ocd` release |
+| Target           | Archive                                                                                                                                           | Archive SHA-256                                                    | Binary SHA-256                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| macOS ARM64      | [workerd-darwin-arm64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-darwin-arm64.gz) | `632d2ee13c684e70200bacd0bf1583360d430ad1054ef3cb29e0c20ef52481e0` | `d489faf23b0ecf7bfa8edccac5e6d5295f262f7f02f392c7ae92b06d95f55ddf` |
+| Linux GNU ARM64  | [workerd-linux-arm64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-arm64.gz)   | `76d00935975e38c1b114771903cac54644dc1cde9a9c1b68a1afbd6829822f6b` | `744a56e9b28728ead237765abc6cbded98560acc4bbfb5339d21e184394839d5` |
+| Linux GNU x86-64 | [workerd-linux-64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-64.gz)         | `5145314dbd608857bbd765cc479a609619f0cf380bb91d9704303d218816fa48` | `40424924678782e02d6a68a1af512b1a9dacdf93b16e47c2d7f4825a09f5e336` |
+| macOS x86-64     | [workerd-darwin-64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-darwin-64.gz)       | `cd7c543b688120ccb5fdc57706c0e0bddbdde6ee140b55fd7f30cc3e3524c015` | `9149f00c2f2b7bd576f6b164e924ed306562845ca72a8207d99ff6774c58753e` |
 
 例如下载 Linux x86-64 版本：
 
 ```sh
-curl -fL https://github.com/elliothux/open-compute/raw/v0.2.2/share/workerd/linux-x64/workerd -o workerd
-echo '7b8a7e2a6cdd77ec3a2996c0f1ac494af42927b595df2e4344604185e5553f3d  workerd' | sha256sum -c -
+curl -fL https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-64.gz -o workerd.gz
+echo '5145314dbd608857bbd765cc479a609619f0cf380bb91d9704303d218816fa48  workerd.gz' | sha256sum -c -
+gzip -dc workerd.gz > workerd
+echo '40424924678782e02d6a68a1af512b1a9dacdf93b16e47c2d7f4825a09f5e336  workerd' | sha256sum -c -
 chmod +x workerd
 ./workerd --version
 ```
@@ -71,8 +73,8 @@ open-compute 安装。
 ## 升级与源码
 
 fork 源码由 [`third_party/workerd/`](../../third_party/workerd/) submodule 固定。每次升级必须一起更新 fork revision、
-upstream base、四目标二进制、archive/binary digest、binary maximum、compatibility catalog schema/digest、system Worker
-date/flags、Git LFS 对象和真实 runtime Gate；不能只替换其中一个文件。四目标 workflow 必须执行 introspection 两次并比较全部
+upstream base、四目标 release asset、archive/binary digest、binary maximum、compatibility catalog schema/digest、system Worker
+date/flags 和真实 runtime Gate；不能只替换其中一个文件。四目标 workflow 必须执行 introspection 两次并比较全部
 catalog 字节；根 build 再对 host binary 重算 catalog，任何 revision/binary/maximum/catalog drift 都在 Cargo 前失败。上游能力与
 fork-ahead 审查见 [workerd upstream](workerd-upstream.md)，构建和内嵌合同见
 [单二进制分发](single-binary.md)。

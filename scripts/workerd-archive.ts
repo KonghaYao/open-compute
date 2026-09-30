@@ -4,7 +4,6 @@ import { lstat, open, readFile, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, parse, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
-import { bundledWorkerdArchive } from "./bundled-workerd.ts";
 
 export const repository = fileURLToPath(new URL("../", import.meta.url));
 const maxArchive = 64 * 1024 * 1024;
@@ -89,10 +88,7 @@ export async function loadPin(target = hostTarget()) {
   }
   const release = string(lock.release);
   const archiveName = string(entry.archiveName);
-  const archiveUrl =
-    entry.archiveUrl === null || entry.archiveUrl === undefined
-      ? undefined
-      : string(entry.archiveUrl);
+  const archiveUrl = string(entry.archiveUrl);
   const archiveSha256 = string(entry.archiveSha256);
   const binarySha256 = string(entry.binarySha256);
   const expectedVersion = string(lock.expectedVersionOutput);
@@ -101,9 +97,8 @@ export async function loadPin(target = hostTarget()) {
     lock.schemaVersion !== 4 ||
     !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(release) ||
     archiveName !== expectedName ||
-    (archiveUrl !== undefined &&
-      archiveUrl !==
-        `${sourceRepository}/releases/download/${release}/${archiveName}`) ||
+    archiveUrl !==
+      `${sourceRepository}/releases/download/${release}/${archiveName}` ||
     !/^[a-f0-9]{64}$/.test(archiveSha256) ||
     !/^[a-f0-9]{64}$/.test(binarySha256)
   ) {
@@ -238,6 +233,25 @@ export function command(
   return result.stdout;
 }
 
+/** Download one formally pinned bounded release asset. */
+export async function downloadBounded(
+  url: string,
+  maximum: number,
+  name: string,
+): Promise<Buffer> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+  if (!response.ok || !response.body)
+    throw new Error(`pinned ${name} download failed`);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for await (const chunk of response.body) {
+    total += chunk.byteLength;
+    if (total > maximum) throw new Error(`${name} download exceeds its bound`);
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 export async function prepareWorkerd(
   directory: string,
   archivePath: string | undefined,
@@ -247,35 +261,23 @@ export async function prepareWorkerd(
     throw new Error("choose at most one of --archive ABS or --download");
   const pin = await loadPin();
   let archive: Buffer;
-  if (!download && archivePath === undefined)
-    archivePath = await bundledWorkerdArchive(repository, pin);
   if (archivePath !== undefined) {
     if (!isAbsolute(archivePath) || !(await lstat(archivePath)).isFile())
       throw new Error("archive must be an absolute regular file");
     if ((await lstat(archivePath)).size > maxArchive)
       throw new Error("archive exceeds the size bound");
     archive = await readFile(archivePath);
-  } else {
+  } else if (download) {
     // The only runtime download path is this explicitly requested build-time operation.
-    if (pin.archiveUrl === undefined)
-      throw new Error(
-        "pinned fork archive is unpublished; provide its verified local --archive path",
-      );
-    const response = await fetch(pin.archiveUrl, {
-      signal: AbortSignal.timeout(120_000),
-    });
-    if (!response.ok || !response.body)
-      throw new Error("pinned workerd archive download failed");
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for await (const chunk of response.body) {
-      total += chunk.byteLength;
-      if (total > maxArchive)
-        throw new Error("download exceeds the archive size bound");
-      chunks.push(chunk);
-    }
-    archive = Buffer.concat(chunks);
-  }
+    archive = await downloadBounded(
+      pin.archiveUrl,
+      maxArchive,
+      "workerd archive",
+    );
+  } else
+    throw new Error(
+      "provide a verified --archive or explicitly use --download",
+    );
   if (archive.length > maxArchive || sha256(archive) !== pin.archiveSha256)
     throw new Error("archive SHA-256 does not match the formal pin");
   const binary = gunzipSync(archive, { maxOutputLength: maxBinary });

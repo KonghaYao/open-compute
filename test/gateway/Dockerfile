@@ -4,11 +4,11 @@ FROM golang:1.26.4-bookworm@sha256:b305420a68d0f229d91eb3b3ed9e519fcf2cf5461da4b
 
 ENV GOTOOLCHAIN=local
 WORKDIR /src
-COPY packages/caddy/ packages/caddy/
+COPY third_party/caddy/ third_party/caddy/
 COPY test/gateway/ test/gateway/
 COPY test/gateway/managed.caddyfile /data/gateway/managed.caddyfile
 RUN mkdir -p /data/gateway/run /data/gateway/storage
-WORKDIR /src/packages/caddy
+WORKDIR /src/third_party/caddy
 RUN go mod download
 RUN go test ./...
 RUN go build -trimpath -o /usr/local/bin/oc-caddy .

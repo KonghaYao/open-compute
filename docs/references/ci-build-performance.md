@@ -216,7 +216,7 @@ SKU，单独增加 SKU 预算不能覆盖它。要允许 cache 写入，Actions 
   插桩和宿主，不能拿一个替代另一个；package 的 native binary 也不能由 main 的 `cargo check` 代替。
 - 固定输入变化的最小选择：只改 docs/notes 只做文档检查；只改 SDK 做 SDK typecheck/test/pack；
   只改 Rust 代码做受影响 crate/Gate，源码冻结前再做一次完整 workspace；修改 `workerd.lock.json`、
-  `share/workerd/**`、runtime loader、Cap'n Proto 或 compatibility baseline 时，至少重跑
+  `workerd.lock.json`、`caddy.lock.json`、对应 submodule、runtime loader、Cap'n Proto 或 compatibility baseline 时，至少重跑
   `bun run build`、`p3-contract`、所有依赖真实 workerd 的 P0/P1/P2/Workflow/P3 targets、coverage
   和三平台 package。发布 tag 仍按 release workflow 的完整矩阵执行，不以窄选集冒充正式资格。
 - Gate registry 统计当前 49 个 ONCE cases、55 个 TIMING cases；同一物理 target 的重叠选择只调度一次，

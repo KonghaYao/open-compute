@@ -1,5 +1,5 @@
 name: Set up open-compute
-description: Install pinned toolchains, restore shared caches, and prepare the Git LFS pinned workerd binary
+description: Install pinned toolchains, restore caches, and prepare release-pinned runtime inputs
 
 inputs:
   rust-components:
@@ -103,8 +103,9 @@ runs:
         workspaces: ${{ inputs.rust-workspaces }}
         cache-all-crates: true
 
-    - name: Prepare bundled pinned workerd
+    - name: Download and verify pinned runtime inputs
       shell: bash
       run: |
         set -euo pipefail
-        bun scripts/prepare-workerd.ts --dest "${RUNNER_TEMP}/open-compute-build-runtime" >> "$GITHUB_ENV"
+        bun scripts/prepare-workerd.ts --dest "${RUNNER_TEMP}/open-compute-build-workerd" --download >> "$GITHUB_ENV"
+        bun scripts/prepare-caddy.ts --dest "${RUNNER_TEMP}/open-compute-build-caddy" --download >> "$GITHUB_ENV"

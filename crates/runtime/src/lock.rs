@@ -139,9 +139,9 @@ pub struct RuntimeTarget {
     /// Archive file name.
     #[serde(rename = "archiveName")]
     pub archive_name: String,
-    /// Published fork archive URL, absent until publication. Local builds use an explicit archive.
+    /// Published fork archive URL.
     #[serde(rename = "archiveUrl")]
-    pub archive_url: Option<String>,
+    pub archive_url: String,
     /// SHA-256 of the compressed archive.
     #[serde(rename = "archiveSha256")]
     pub archive_sha256: String,
@@ -316,44 +316,42 @@ impl RuntimeTarget {
                 "archive name must be a file name",
             ));
         }
-        if let Some(archive_url) = &self.archive_url {
-            let url = Url::parse(archive_url).map_err(|_| {
-                PlatformError::new(ErrorCode::RuntimeInvalid, "archive URL is malformed")
-            })?;
-            if url.scheme() != "https" {
-                return Err(PlatformError::new(
-                    ErrorCode::RuntimeInvalid,
-                    "archive URL must be https",
-                ));
-            }
-            if url.username() != "" || url.password().is_some() {
-                return Err(PlatformError::new(
-                    ErrorCode::RuntimeInvalid,
-                    "archive URL must not contain credentials",
-                ));
-            }
-            if url.host_str() != Some("github.com") {
-                return Err(PlatformError::new(
-                    ErrorCode::RuntimeInvalid,
-                    "archive URL must be the pinned GitHub release host",
-                ));
-            }
-            if url.query().is_some() || url.fragment().is_some() {
-                return Err(PlatformError::new(
-                    ErrorCode::RuntimeInvalid,
-                    "archive URL must not contain a query or fragment",
-                ));
-            }
-            let expected_url = format!(
-                "{repository}/releases/download/{release}/{}",
-                self.archive_name
-            );
-            if archive_url != &expected_url {
-                return Err(PlatformError::new(
-                    ErrorCode::RuntimeInvalid,
-                    "archive URL path must match the release and archive name",
-                ));
-            }
+        let url = Url::parse(&self.archive_url).map_err(|_| {
+            PlatformError::new(ErrorCode::RuntimeInvalid, "archive URL is malformed")
+        })?;
+        if url.scheme() != "https" {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "archive URL must be https",
+            ));
+        }
+        if url.username() != "" || url.password().is_some() {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "archive URL must not contain credentials",
+            ));
+        }
+        if url.host_str() != Some("github.com") {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "archive URL must be the pinned GitHub release host",
+            ));
+        }
+        if url.query().is_some() || url.fragment().is_some() {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "archive URL must not contain a query or fragment",
+            ));
+        }
+        let expected_url = format!(
+            "{repository}/releases/download/{release}/{}",
+            self.archive_name
+        );
+        if self.archive_url != expected_url {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "archive URL path must match the release and archive name",
+            ));
         }
         let expected_archive = match target_name {
             "darwin-arm64" => "workerd-darwin-arm64.gz",

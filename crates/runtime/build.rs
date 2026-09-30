@@ -17,16 +17,16 @@ const MAX_PYODIDE_BUNDLE: u64 = 32 * 1024 * 1024;
 
 fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-env-changed=OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE");
+    println!("cargo:rerun-if-env-changed=OPEN_COMPUTE_BUILD_CADDY");
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join("../..");
     let target = build_target()?;
     let lock_bytes = tracked(&root.join("packages/runtime/workerd.lock.json"))?;
     let lock: serde_json::Value = serde_json::from_slice(&lock_bytes)?;
     let selected = &lock["targets"][target];
-    verify_bundled_binary(&root, target, selected)?;
-    let caddy_lock_bytes = tracked(&root.join("packages/caddy/caddy.lock.json"))?;
+    let caddy_lock_bytes = tracked(&root.join("packages/runtime/caddy.lock.json"))?;
     let caddy_lock: serde_json::Value = serde_json::from_slice(&caddy_lock_bytes)?;
-    let (caddy, caddy_hash) = verified_caddy(&root, target, &caddy_lock["targets"][target])?;
-    let (archive, archive_hash) = verified_archive(&root, target, selected)?;
+    let (caddy, caddy_hash) = verified_caddy(&caddy_lock["targets"][target])?;
+    let (archive, archive_hash) = verified_archive(selected)?;
     let (pyodide_archive, pyodide_archive_hash) = verified_pyodide_archive(&root, &lock)?;
     let catalog = verified_compatibility_catalog(&root, &lock)?;
     let assets = runtime_assets(&root, lock_bytes, caddy_lock_bytes, catalog)?;
@@ -50,20 +50,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     )
 }
 
-fn verified_caddy(
-    root: &Path,
-    target: &str,
-    selected: &serde_json::Value,
-) -> Result<(Vec<u8>, String), Box<dyn Error>> {
-    let path = root.join("share/caddy").join(target).join("caddy");
+fn verified_caddy(selected: &serde_json::Value) -> Result<(Vec<u8>, String), Box<dyn Error>> {
+    let path = PathBuf::from(
+        env::var_os("OPEN_COMPUTE_BUILD_CADDY")
+            .ok_or("OPEN_COMPUTE_BUILD_CADDY must select an explicitly prepared release binary")?,
+    );
+    if !path.is_absolute() {
+        return Err("OPEN_COMPUTE_BUILD_CADDY must be absolute".into());
+    }
     println!("cargo:rerun-if-changed={}", path.display());
     if !fs::symlink_metadata(&path)?.is_file() {
-        return Err("bundled Caddy must be a regular file; hydrate Git LFS files".into());
+        return Err("prepared Caddy must be a regular file".into());
     }
     let binary = read_bounded(&path, MAX_CADDY_BINARY)?;
     let hash = hex::encode(Sha256::digest(&binary));
     if selected["binarySha256"].as_str() != Some(&hash) {
-        return Err("bundled Caddy does not match the formal pin".into());
+        return Err("prepared Caddy does not match the formal pin".into());
     }
     Ok((binary, hash))
 }
@@ -79,53 +81,15 @@ fn build_target() -> Result<&'static str, Box<dyn Error>> {
     Ok(target)
 }
 
-fn verify_bundled_binary(
-    root: &Path,
-    target: &str,
-    selected: &serde_json::Value,
-) -> Result<(), Box<dyn Error>> {
-    let bundled = root.join("share/workerd").join(target).join("workerd");
-    println!("cargo:rerun-if-changed={}", bundled.display());
-    if !fs::symlink_metadata(&bundled)?.is_file()
-        || selected["binarySha256"].as_str()
-            != Some(&hex::encode(Sha256::digest(read_bounded(
-                &bundled, MAX_BINARY,
-            )?)))
-    {
-        return Err("bundled workerd does not match the formal pin; hydrate Git LFS files".into());
+fn verified_archive(selected: &serde_json::Value) -> Result<(Vec<u8>, String), Box<dyn Error>> {
+    let archive_path = PathBuf::from(env::var_os("OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE").ok_or(
+        "OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE must select an explicitly prepared release archive",
+    )?);
+    if !archive_path.is_absolute() {
+        return Err("OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE must be absolute".into());
     }
-    Ok(())
-}
-
-fn verified_archive(
-    root: &Path,
-    target: &str,
-    selected: &serde_json::Value,
-) -> Result<(Vec<u8>, String), Box<dyn Error>> {
-    let archive_path = match env::var_os("OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE") {
-        Some(path) => {
-            let path = PathBuf::from(path);
-            if !path.is_absolute() {
-                return Err("OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE must be absolute".into());
-            }
-            path
-        }
-        None => root
-            .join(".temp/workerd-build")
-            .join(target)
-            .join(
-                selected["archiveSha256"]
-                    .as_str()
-                    .ok_or("missing archive digest")?,
-            )
-            .join(
-                selected["archiveName"]
-                    .as_str()
-                    .ok_or("missing archive name")?,
-            ),
-    };
     if !fs::symlink_metadata(&archive_path)
-        .map_err(|_| "run bun run build to prepare the bundled workerd archive")?
+        .map_err(|_| "prepared workerd archive is unavailable")?
         .is_file()
     {
         return Err("the pinned build archive must be a regular file".into());

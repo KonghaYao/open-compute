@@ -423,7 +423,7 @@ mod tests {
                 "darwin-arm64".to_owned(),
                 RuntimeTarget {
                     archive_name: "workerd-darwin-arm64.gz".to_owned(),
-                    archive_url: Some("https://github.com/elliothux/workerd/releases/download/v1.20260830.1/workerd-darwin-arm64.gz".to_owned()),
+                    archive_url: "https://github.com/elliothux/workerd/releases/download/v1.20260830.1/workerd-darwin-arm64.gz".to_owned(),
                     archive_sha256: "aa".repeat(32),
                     binary_sha256: "bb".repeat(32),
                 },

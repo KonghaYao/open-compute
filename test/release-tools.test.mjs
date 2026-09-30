@@ -22,6 +22,7 @@ import {
   stableVersionFromTag,
   workspaceVersion,
 } from "../scripts/assemble-release.ts";
+import { loadCaddyPin, prepareCaddy } from "../scripts/caddy-archive.ts";
 import { verifyReleaseExecutable } from "../scripts/verify-release-executable.ts";
 import {
   absoluteDestination,
@@ -93,7 +94,7 @@ esac
   await writeTestCommand(directory, "sync", "#!/bin/sh\nexit 0\n");
 }
 
-test("build inputs default to bundled binaries and require a pinned supported host", async () => {
+test("build inputs require an explicit release asset source and a pinned supported host", async () => {
   assert.equal(
     sourceArguments(["--dest", "/tmp/new", "--archive", "/tmp/pin.gz"]).archive,
     "/tmp/pin.gz",
@@ -115,22 +116,23 @@ test("build inputs default to bundled binaries and require a pinned supported ho
   const pin = await loadPin();
   assert.equal(pin.target, hostTarget());
   assert.match(pin.archiveSha256, /^[a-f0-9]{64}$/);
-  if (pin.archiveUrl !== undefined) {
-    assert.match(
-      pin.archiveUrl,
-      /^https:\/\/github\.com\/elliothux\/workerd\/releases\/download\//,
+  assert.match(
+    pin.archiveUrl,
+    /^https:\/\/github\.com\/elliothux\/workerd\/releases\/download\//,
+  );
+  assert.match(
+    (await loadCaddyPin()).archiveUrl,
+    /^https:\/\/github\.com\/elliothux\/open-compute-caddy\/releases\/download\//,
+  );
+  const directory = await mkdtemp(join(tmpdir(), "oc-explicit-runtime-"));
+  try {
+    await assert.rejects(
+      prepareWorkerd(directory, undefined, false),
+      /explicitly use --download/,
     );
-  } else {
-    const directory = await mkdtemp(join(tmpdir(), "oc-unpublished-runtime-"));
-    try {
-      await assert.rejects(
-        prepareWorkerd(directory, undefined, true),
-        /unpublished.*--archive/,
-      );
-      assert.deepEqual(await readdir(directory), []);
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
+    assert.deepEqual(await readdir(directory), []);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
 
@@ -176,7 +178,10 @@ test("wrong archives fail without download, execution, or publication", async ()
     await writeFile(archive, "not a formal archive");
     await assert.rejects(prepareWorkerd(root, archive, false), /SHA-256/);
     await assert.rejects(prepareWorkerd(root, archive, true), /at most one/);
+    await assert.rejects(prepareCaddy(root, archive, false), /SHA-256/);
+    await assert.rejects(prepareCaddy(root, archive, true), /at most one/);
     await assert.rejects(readFile(join(root, "workerd")));
+    await assert.rejects(readFile(join(root, "caddy")));
     assert.equal(
       sha256(Buffer.from("abc")),
       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
@@ -369,7 +374,11 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   }
   assert.doesNotMatch(
     localDryRun,
-    /--download|playwright install|docker\.sock|--privileged|--network host|npm publish|git (?:push|tag)/,
+    /playwright install|docker\.sock|--privileged|--network host|npm publish|git (?:push|tag)/,
+  );
+  assert.match(
+    localDryRun,
+    /if \[ "\$phase" = hydrate \]; then[\s\S]*?prepare-workerd\.ts[^\n]*--download[\s\S]*?prepare-caddy\.ts[^\n]*--download[\s\S]*?return[\s\S]*?\[ "\$phase" = qualify \]/,
   );
   assert.doesNotMatch(localDryRun, /test -[nz] "\$\(git status/);
   assert.deepEqual(localDryRunDockerfile.match(/^FROM .*$/gm), [

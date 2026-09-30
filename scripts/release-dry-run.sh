@@ -54,9 +54,19 @@ inside() {
   git lfs fsck
 
   mkdir -p "$BUN_INSTALL_CACHE_DIR" "$CARGO_HOME"
+  output=$OPEN_COMPUTE_RELEASE_DRY_RUN_OUTPUT
+  case "$output" in
+    "$root"/.temp/release-dry-run/output/*) ;;
+    *) fail "output must stay under the release dry-run directory" ;;
+  esac
+  [ -d "$output" ] || fail "output directory is missing"
+  runtime="$output/build-runtime"
+  caddy_runtime="$output/build-caddy"
   if [ "$phase" = hydrate ]; then
     bun install --frozen-lockfile --ignore-scripts
     cargo fetch --locked
+    bun scripts/prepare-workerd.ts --dest "$runtime" --download >/dev/null
+    bun scripts/prepare-caddy.ts --dest "$caddy_runtime" --download >/dev/null
     return
   fi
   [ "$phase" = qualify ] || fail "unknown container phase: $phase"
@@ -66,17 +76,10 @@ inside() {
   bun test/conformance/check.ts --case baseline-identity
   node --test test/release-tools.test.mjs
 
-  output=$OPEN_COMPUTE_RELEASE_DRY_RUN_OUTPUT
-  case "$output" in
-    "$root"/.temp/release-dry-run/output/*) ;;
-    *) fail "output must stay under the release dry-run directory" ;;
-  esac
-  [ -d "$output" ] || fail "output directory is missing"
-  runtime="$output/build-runtime"
-  bun scripts/prepare-workerd.ts --dest "$runtime" >/dev/null
   archive="$runtime/workerd-linux-arm64.gz"
   export OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE="$archive"
   export OPEN_COMPUTE_TEST_WORKERD="$runtime/workerd"
+  export OPEN_COMPUTE_BUILD_CADDY="$caddy_runtime/caddy"
 
   version=$(workspace_version)
   destination="$output/ocd-v$version-linux-arm64"

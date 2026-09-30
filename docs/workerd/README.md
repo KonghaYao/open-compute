@@ -61,8 +61,8 @@ git clone --recurse-submodules https://github.com/elliothux/open-compute.git
 共享父仓库更新前必须确保被引用的提交已在 fork 远端可获取；push 仍需相应外部写入授权。
 迁移后子仓库 Git 元数据由父仓库 `.git/modules/third_party/workerd/` 管理，旧源码目录不保留副本或别名。
 
-构建平台默认使用 [share/workerd](../../share/workerd/README.md) 中 Git LFS 管理的三个正式平台固定二进制；
-由根 build 生成并验证正式 archive，不要求初始化 submodule。源码辅助的 conformance 校验在子仓库初始化后，
+构建平台从 formal lock 指定的 fork GitHub Release 显式下载并验证目标 archive；根 build 不隐式联网。
+源码辅助的 conformance 校验在子仓库初始化后，
 通过 `git show <正式 pin revision>:<path>` 读取固定版本，不把开发 checkout 当作正式运行时或 npm types 基线；
 缺少所需 Git 对象时校验失败，不自动下载或改用 HEAD。后续源码与 pin 升级需保持这些对象可获取。
 

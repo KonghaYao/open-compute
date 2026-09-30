@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 2,
+  "release": "v2.11.4-open-compute.2",
+  "expectedVersionOutput": "v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=",
+  "targets": {
+    "darwin-arm64": {
+      "archiveName": "caddy-darwin-arm64.gz",
+      "archiveUrl": "https://github.com/elliothux/open-compute-caddy/releases/download/v2.11.4-open-compute.2/caddy-darwin-arm64.gz",
+      "archiveSha256": "80f498f28adc022697b91e539a29d40c187650e3034cd4fa717da954fcfeeb53",
+      "binarySha256": "750fd68b3da3fe64abeee99aa643c7a118e504ffbaadada831d0a9ea6df314dd"
+    },
+    "darwin-x64": {
+      "archiveName": "caddy-darwin-x64.gz",
+      "archiveUrl": "https://github.com/elliothux/open-compute-caddy/releases/download/v2.11.4-open-compute.2/caddy-darwin-x64.gz",
+      "archiveSha256": "621cc9a2f1b940ce1d9710d5db41277515df3d77aca8619226d49995a2f73cd0",
+      "binarySha256": "e55e8d9ac7c97327845fee04c168b0941e4194c613d4b2f53067c9080fb0338d"
+    },
+    "linux-arm64": {
+      "archiveName": "caddy-linux-arm64.gz",
+      "archiveUrl": "https://github.com/elliothux/open-compute-caddy/releases/download/v2.11.4-open-compute.2/caddy-linux-arm64.gz",
+      "archiveSha256": "1b81d293fd323beadf568d6302af7744b6774c188990a92c5b9f21e5f297bab8",
+      "binarySha256": "0d07cda52804d4bc9424494047c4663fb2e8e308dce01565bfc4eb9e4d2a6376"
+    },
+    "linux-x64": {
+      "archiveName": "caddy-linux-x64.gz",
+      "archiveUrl": "https://github.com/elliothux/open-compute-caddy/releases/download/v2.11.4-open-compute.2/caddy-linux-x64.gz",
+      "archiveSha256": "f4cca964160f847f1b5e3678f0003d16e880e922ced014319a735cce873b147c",
+      "binarySha256": "0d84c10442aa090cf5a729b90aafc0c7656223ac3f8ca3b9d62a3b8d18924cb2"
+    }
+  },
+  "source": {
+    "repository": "https://github.com/elliothux/open-compute-caddy",
+    "revision": "77abbead037338a2f289b633779ed9c2da14ff30",
+    "caddyVersion": "v2.11.4",
+    "goVersion": "1.26.4",
+    "builderImage": "golang:1.26.4-bookworm@sha256:b305420a68d0f229d91eb3b3ed9e519fcf2cf5461da4bef997bf927e8c0bfd2b",
+    "build": "CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags=-s\\ -w\\ -buildid=",
+    "workflowRun": "https://github.com/elliothux/open-compute-caddy/actions/runs/36724918165"
+  }
+}

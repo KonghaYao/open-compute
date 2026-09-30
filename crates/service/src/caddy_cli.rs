@@ -291,7 +291,7 @@ fn require_success(output: &open_compute_runtime::BoundedOutput) -> Result<(), P
 fn lock() -> Result<CaddyLock, PlatformError> {
     let lock: CaddyLock = serde_json::from_slice(open_compute_runtime::embedded_caddy_lock()?)
         .map_err(|_| tool_error("embedded Caddy lock is invalid"))?;
-    if lock.schema_version != 1 || !lock.targets.is_object() || !lock.source.is_object() {
+    if lock.schema_version != 2 || !lock.targets.is_object() || !lock.source.is_object() {
         return Err(tool_error("embedded Caddy lock is invalid"));
     }
     Ok(lock)

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { link, mkdtemp, open, readFile, rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { prepareCaddy } from "./caddy-archive.ts";
 import { verifyReleaseExecutable } from "./verify-release-executable.ts";
 import {
   absoluteDestination,
@@ -24,6 +25,13 @@ let ownsTemporary = false;
 const temporary = join(dirname(destination), `.ocd-${randomUUID()}`);
 try {
   const pin = await prepareWorkerd(work, input.archive, input.download);
+  const caddy =
+    process.env.OPEN_COMPUTE_BUILD_CADDY ??
+    (input.download
+      ? (await prepareCaddy(work, undefined, true)).binary
+      : undefined);
+  if (!caddy)
+    throw new Error("prepare Caddy or explicitly package with --download");
   const target = {
     "darwin-arm64": "aarch64-apple-darwin",
     "darwin-x64": "x86_64-apple-darwin",
@@ -31,7 +39,13 @@ try {
     "linux-x64": "x86_64-unknown-linux-gnu",
   }[pin.target];
   if (!target) throw new Error("unsupported native Cargo target");
-  command("bun", ["run", "build"]);
+  const buildEnvironment = {
+    ...process.env,
+    OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE: pin.archive,
+    OPEN_COMPUTE_TEST_WORKERD: pin.binary,
+    OPEN_COMPUTE_BUILD_CADDY: caddy,
+  };
+  command("bun", ["run", "build"], buildEnvironment);
   command("bun", ["run", "check:generated"]);
   command(
     "cargo",
@@ -48,8 +62,7 @@ try {
       "ocd",
     ],
     {
-      ...process.env,
-      OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE: pin.archive,
+      ...buildEnvironment,
       OPEN_COMPUTE_GIT_REVISION: revision,
       // CI may isolate release dependencies from debug/test artifacts. The
       // exact native target below still prevents selecting unrelated output.

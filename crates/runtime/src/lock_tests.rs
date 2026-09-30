@@ -62,8 +62,8 @@ fn private_lock_helpers_cover_unavailable_target_and_visitor_contracts() {
 
     let target = RuntimeTarget {
         archive_name: "workerd-unknown.gz".to_owned(),
-        archive_url: Some("https://github.com/elliothux/workerd/releases/download/v1.20260830.1/workerd-unknown.gz"
-                .to_owned()),
+        archive_url: "https://github.com/elliothux/workerd/releases/download/v1.20260830.1/workerd-unknown.gz"
+            .to_owned(),
         archive_sha256: "aa".repeat(32),
         binary_sha256: "bb".repeat(32),
     };

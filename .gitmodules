@@ -4,3 +4,6 @@
 [submodule "third_party/gitserver"]
 	path = third_party/gitserver
 	url = https://github.com/elliothux/gitserver.git
+[submodule "third_party/caddy"]
+	path = third_party/caddy
+	url = https://github.com/elliothux/open-compute-caddy.git

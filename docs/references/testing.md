@@ -13,13 +13,15 @@
 ## 显式准备输入
 
 ```sh
-git lfs pull --include="share/workerd/**"
+git lfs pull --include="share/pyodide/**,share/tessdata/**,share/xberg-tesseract-cache/**"
 bun install --frozen-lockfile --ignore-scripts
+runtime_inputs=$(mktemp -d "$PWD/.temp/runtime-inputs.XXXXXX")
+eval "$(bun scripts/prepare-workerd.ts --dest "$runtime_inputs/workerd" --download)"
+eval "$(bun scripts/prepare-caddy.ts --dest "$runtime_inputs/caddy" --download)"
 bun run build
 bun run check:generated
 bun run test:js
 export RUSTFLAGS='-D warnings'
-export OPEN_COMPUTE_TEST_WORKERD="$PWD/share/workerd/darwin-arm64/workerd" # 按宿主目标选择
 # 仅 p5-search：本机 OpenAI-compatible embedding fixture
 export OPEN_COMPUTE_TEST_EMBEDDING_API_KEY=fixture-secret
 export OPEN_COMPUTE_TEST_EMBEDDING_BASE_URL=http://127.0.0.1:8080/v1
@@ -28,9 +30,8 @@ export OPEN_COMPUTE_TEST_EMBEDDING_BASE_URL=http://127.0.0.1:8080/v1
 唯一正式 pin 是 `packages/runtime/workerd.lock.json`。`packages/runtime/dist/` 不提交 Git；
 每个 CI job 及干净检出都必须先构建。Rust 校验 archive、binary、生成模块、完整清单及
 源码/工具配置摘要，拒绝过期资产。生产启动离线，不依赖 JS 工具链。
-根 build 从 Git LFS 固定二进制生成 Cargo 所需的正式压缩包；无需设置 archive 环境变量。
-输入准备工具 `bun scripts/prepare-workerd.ts --dest /abs/new-dir` 默认使用同一固定依赖并拒绝覆盖；
-可用 `--archive /abs/pinned.gz` 指定同一正式 pin 的另一份压缩包。`--download`、发布打包和特权网络夹具需要单独授权。
+准备工具只有显式 `--download` 才读取 lock 指定的 GitHub Release，也可用 `--archive /abs/pinned.gz` 提供同一 pin；
+目标目录必须不存在。workerd 与 Caddy 均在 Cargo 前验证摘要和身份，生产启动仍离线。
 W3 Provider fixture 不属于发行物；它是本仓库 `test-support` feature 下的 Cargo 测试二进制
 `crates/service/src/bin/host_extension_test_provider/`（schema 拷贝、Cap'n Proto 绑定与 `OCP2` attach 循环），
 随测试目标一起由 cargo 构建，`p3-services-product` 通过 `CARGO_BIN_EXE` 直接定位，无需外部 fixture、环境变量或 Bazel。
@@ -75,28 +76,28 @@ workspace 顺序先做 CLI、single-binary 和独占的 p5-search，再进入普
 旧 `test-p*.sh` 递归入口已删除，
 仅保留需要授权和清理的 Linux egress wrapper。
 
-| 选择                                                       | 实际目标                                                                                                                                                                                                               |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `p0-1` … `p0-8`、`p0-exit`                                 | 对应 service 集成测试；P0.1 本体只有一轮                                                                                                                                                                               |
-| `p1-conformance`、`p1-security`、`p1-crash`、`p1-snapshot` | 对应当前 P1 集成测试；恢复 staging 拒绝矩阵归 `p1-snapshot`                                                                                                                                                            |
-| `p1-8`                                                     | P0.7 WebSocket/hibernation 与 P1 capability；保留该别名用于当前产品回归，不恢复旧 No-Go 实现                                                                                                                           |
-| `p2-1`、`p2-2`、`p2-exit`                                  | 对应 scheduler、queue producer、产品链集成测试                                                                                                                                                                         |
-| `p2-3`                                                     | P0.2 同一 Worker/Queue/Cron 矩阵，不再重复调度                                                                                                                                                                         |
-| `workflow-runtime`                                         | 当前 Workflow 的真实 runtime、suspension、timeout、parallel 与 native output gate                                                                                                                                      |
-| `workflow-recovery`                                        | 当前 Workflow 的 snapshot、进程恢复、transport fault 与产品 binding 路径                                                                                                                                               |
-| `workflow-product`                                         | 当前 durable execution 与大结果/批次边界                                                                                                                                                                               |
-| `workflow`                                                 | 上述三个 Workflow 目标；`p2` 也包含它们                                                                                                                                                                                |
-| `p3-contract`                                              | baseline/catalog、capability/type/config/deviation/case/source 双射；无 workerd、网络或外部 mutation                                                                                                                   |
-| `p3-assets`、`p3-services`、`p3-cache-images`              | 对应静态资产、Service binding（含事件源与 SIGKILL cleanup）、Cache/Images 真实 runtime 产品矩阵                                                                                                                        |
-| `p3-isolation`、`p3-recovery`                              | 两账户 fail-closed 与 P3 产品隔离；进程/快照/跨产品 crash recovery 与清理                                                                                                                                              |
-| `p3`                                                       | `p3-contract`、P0/P1/P2/Workflow 与全部 P3/L6 本地目标，不含外部 differential                                                                                                                                          |
-| `p3-cf-diff`                                               | 显式真实 Cloudflare portable differential；不属于 `all` 或 `--workspace`                                                                                                                                               |
+| 选择                                                       | 实际目标                                                                                                                                                                                                 |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `p0-1` … `p0-8`、`p0-exit`                                 | 对应 service 集成测试；P0.1 本体只有一轮                                                                                                                                                                 |
+| `p1-conformance`、`p1-security`、`p1-crash`、`p1-snapshot` | 对应当前 P1 集成测试；恢复 staging 拒绝矩阵归 `p1-snapshot`                                                                                                                                              |
+| `p1-8`                                                     | P0.7 WebSocket/hibernation 与 P1 capability；保留该别名用于当前产品回归，不恢复旧 No-Go 实现                                                                                                             |
+| `p2-1`、`p2-2`、`p2-exit`                                  | 对应 scheduler、queue producer、产品链集成测试                                                                                                                                                           |
+| `p2-3`                                                     | P0.2 同一 Worker/Queue/Cron 矩阵，不再重复调度                                                                                                                                                           |
+| `workflow-runtime`                                         | 当前 Workflow 的真实 runtime、suspension、timeout、parallel 与 native output gate                                                                                                                        |
+| `workflow-recovery`                                        | 当前 Workflow 的 snapshot、进程恢复、transport fault 与产品 binding 路径                                                                                                                                 |
+| `workflow-product`                                         | 当前 durable execution 与大结果/批次边界                                                                                                                                                                 |
+| `workflow`                                                 | 上述三个 Workflow 目标；`p2` 也包含它们                                                                                                                                                                  |
+| `p3-contract`                                              | baseline/catalog、capability/type/config/deviation/case/source 双射；无 workerd、网络或外部 mutation                                                                                                     |
+| `p3-assets`、`p3-services`、`p3-cache-images`              | 对应静态资产、Service binding（含事件源与 SIGKILL cleanup）、Cache/Images 真实 runtime 产品矩阵                                                                                                          |
+| `p3-isolation`、`p3-recovery`                              | 两账户 fail-closed 与 P3 产品隔离；进程/快照/跨产品 crash recovery 与清理                                                                                                                                |
+| `p3`                                                       | `p3-contract`、P0/P1/P2/Workflow 与全部 P3/L6 本地目标，不含外部 differential                                                                                                                            |
+| `p3-cf-diff`                                               | 显式真实 Cloudflare portable differential；不属于 `all` 或 `--workspace`                                                                                                                                 |
 | `p5-search`                                                | 本机有界 provider fixtures + pinned workerd 的 AI Search upload/index、vector/keyword/hybrid retrieval、boosting、两个 rerank 协议、Search/Chat/SSE/restart 和失败矩阵；不读取真实 credential 或访问公网 |
-| `p5-ai-provider-qualification`                             | 显式 live Gate：百炼 embedding、Cohere/百炼 rerank 与 DeepSeek rewrite/Chat 的三条生产链；只接收四个受保护 provider 变量，记录去敏协议证据，不属于 `all` 或 `--workspace` |
-| `p5`                                                       | 上述本地与 live 两个目标；仅在已授权且四个 provider 变量齐全时显式选择 |
-| `s3-provider-qualification`                                | 显式 hosted S3 Gate：以 production S3 client 运行 object authority 与完整 R2 preflight（含严格 multipart），使用每轮唯一前缀并复查清理；不属于 `all` 或 `--workspace` |
-| `runtime`、`single-binary`                                 | supervisor、单文件离线首启/重启/损坏路径，以及单 daemon 双实例实进程隔离                                                                                                                                               |
-| `p0`、`p1`、`p2`、`all`                                    | 对应集合；多个选择取并集，每个选定目标与 case 执行一次                                                                                                                                                                 |
+| `p5-ai-provider-qualification`                             | 显式 live Gate：百炼 embedding、Cohere/百炼 rerank 与 DeepSeek rewrite/Chat 的三条生产链；只接收四个受保护 provider 变量，记录去敏协议证据，不属于 `all` 或 `--workspace`                                |
+| `p5`                                                       | 上述本地与 live 两个目标；仅在已授权且四个 provider 变量齐全时显式选择                                                                                                                                   |
+| `s3-provider-qualification`                                | 显式 hosted S3 Gate：以 production S3 client 运行 object authority 与完整 R2 preflight（含严格 multipart），使用每轮唯一前缀并复查清理；不属于 `all` 或 `--workspace`                                    |
+| `runtime`、`single-binary`                                 | supervisor、单文件离线首启/重启/损坏路径，以及单 daemon 双实例实进程隔离                                                                                                                                 |
+| `p0`、`p1`、`p2`、`all`                                    | 对应集合；多个选择取并集，每个选定目标与 case 执行一次                                                                                                                                                   |
 
 `p3-cf-diff` 每个 fixture 只使用随机 `oc-p34-*` Worker 名；Cloudflare 使用 workers.dev endpoint，
 open-compute 使用 test-support 数据面。两个 provider 都通过固定 Wrangler 与官方 v4 API 创建同前缀且
@@ -223,7 +224,7 @@ production Rust 行覆盖率；不得把生产模块移入 `examples/` 规避门
 、dashboard、website 或 toolchain 变更只运行对应的 JavaScript typecheck/test/build/pack 检查；混合
 变更按更宽的 scope 处理。修改 SDK 生成面时运行 SDK typecheck/test/pack；普通 Rust 代码按受影响
 crate 与 Gate 做一次 focused check，源码冻结后再做一次完整 workspace。修改
-`packages/runtime/workerd.lock.json`、`share/workerd/**`、runtime loader、
+`packages/runtime/workerd.lock.json`、`packages/runtime/caddy.lock.json`、对应 submodule、runtime loader、
 Cap'n Proto 或 Cloudflare compatibility baseline 时，真实 workerd 行为可能变化，必须重建 runtime
 并至少执行 `p3-contract`、受影响的 P0/P1/P2/Workflow/P3 targets、coverage 和三平台 package；
 正式 tag 仍由 release workflow 执行完整矩阵。只更新 fixture 或文档不能把旧 workerd 结果冒充新 pin

@@ -1,34 +1,34 @@
 import { mkdir, open, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { verifyBundledCaddy } from "./bundled-caddy.ts";
 import { verifyBundledPyodide } from "./bundled-pyodide.ts";
 import { verifyBundledTesseractSources } from "./bundled-tesseract.ts";
-import {
-  bundledCompatibilityCatalog,
-  bundledWorkerdArchive,
-} from "./bundled-workerd.ts";
+import { loadCaddyPin, verifyCaddyBinary } from "./caddy-archive.ts";
 import {
   hostTarget,
   loadPin,
   loadPyodidePin,
   repository,
 } from "./workerd-archive.ts";
+import { compatibilityCatalog } from "./workerd-catalog.ts";
 
-// Prepare the official release targets from their checked-in binaries; never download.
-// The darwin-x64 pin remains available for explicit manual Intel builds.
+// Validate the complete release manifests without downloading other targets.
 for (const target of [
   "darwin-arm64",
   "darwin-x64",
   "linux-arm64",
   "linux-x64",
 ]) {
-  const pin = await loadPin(target);
-  await bundledWorkerdArchive(repository, pin);
-  console.log(`Verified bundled workerd: ${target}`);
+  await loadPin(target);
+  await loadCaddyPin(target);
 }
 
 const hostPin = await loadPin(hostTarget());
-const catalog = await bundledCompatibilityCatalog(repository, hostPin);
+const workerd = process.env.OPEN_COMPUTE_TEST_WORKERD;
+if (!workerd)
+  throw new Error(
+    "OPEN_COMPUTE_TEST_WORKERD is required; explicitly prepare the pinned release asset",
+  );
+const catalog = await compatibilityCatalog(workerd, hostPin);
 const catalogDirectory = join(
   repository,
   ".temp",
@@ -57,7 +57,14 @@ console.log(
   `Verified bundled workerd compatibility catalog: ${hostPin.catalogSha256}`,
 );
 
-console.log(`Verified bundled Caddy: ${await verifyBundledCaddy()}`);
+const caddy = process.env.OPEN_COMPUTE_BUILD_CADDY;
+if (!caddy)
+  throw new Error(
+    "OPEN_COMPUTE_BUILD_CADDY is required; explicitly prepare the pinned release asset",
+  );
+const caddyPin = await loadCaddyPin();
+await verifyCaddyBinary(caddy, caddyPin);
+console.log(`Verified Caddy release: ${caddyPin.release}`);
 
 const pyodide = await loadPyodidePin();
 await verifyBundledPyodide(repository, pyodide);

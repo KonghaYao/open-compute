@@ -166,15 +166,15 @@ package，不能把 ticket staple 到当前裸 executable 或一次性 ZIP。因
 
 ## 6. 内嵌 workerd 边界
 
-P23 第一阶段只签最终公开 `ocd`，不在 release CI 中临时重签 `share/workerd/darwin-arm64/workerd`：
+P23 第一阶段只签最终公开 `ocd`，不在 release CI 中临时重签 formal workerd Release asset：
 
-- workerd 是正式 lock 固定、gzip 内嵌的数据；CI 重签会改变 binary digest、archive digest、Git LFS bytes 和 build identity；
+- workerd 是正式 lock 固定、gzip 内嵌的数据；CI 重签会改变 binary digest、archive digest、Release asset 和 build identity；
 - 外层 Developer ID signature 覆盖 `ocd` Mach-O 中的内嵌 archive bytes；
 - 首次物化继续按正式 lock 校验 archive/binary digest，物化文件不是独立下载的公开 release asset；
 - 当前 workerd 的 ad-hoc/linker signature 不能在文档或 manifest 中宣称为 Developer ID signature。
 
 若 Apple 对精确 `ocd` submission 拒绝内嵌 executable，或真实 Gatekeeper/launchd 验收证明物化 workerd 需要 Developer ID，必须
-停止发布并执行一次协调的 workerd fork release/pin 更新：在 fork 构建阶段签 workerd，更新三个正式目标输入、lock、LFS、
+停止发布并执行一次协调的 workerd fork release/pin 更新：在 fork 构建阶段签 workerd，更新正式目标 Release assets、lock、
 摘要与跨平台 Gate。不得在 P23 job 中重签后跳过 formal pin。
 
 ## 7. Release manifest 与流水线所有权

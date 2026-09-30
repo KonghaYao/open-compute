@@ -28,10 +28,11 @@ npm provenance（OIDC trusted publishing）在当前 token 流程下不可用，
 `open-compute.dev` 可以提供人类可读的下载入口，但必须链接到上述不可变 GitHub Release assets，
 不能维护第二套可独立替换的二进制镜像。
 
-构建 job 必须以 `lfs: true` 检出 `share/workerd/` 的固定依赖。setup action 从宿主二进制
-离线准备正式 archive；根 build 验证三个正式目标。无需预先发布 fork archive，也不下载 stock runtime。
-更新依赖须同步三个正式目标的 LFS 对象及 `packages/runtime/workerd.lock.json`；macOS Intel 的固定输入仅供手动编译，向远端推送前用
-`git lfs fsck` 检查本地对象，不能只上传 pointer。生产分发仍只包含每个平台的 `ocd`。
+构建 job 的 `lfs: true` 只检出 Pyodide/OCR 等保留输入。setup action 从 workerd 与 Caddy lock 指定的 GitHub Release
+显式下载宿主 asset，校验 archive/binary digest、版本与 Caddy module；不下载 stock runtime。更新任一原生依赖须先在其独立
+submodule 仓库构建并发布四目标 Release，再同步 gitlink、lock 和验证证据。生产分发仍只包含每个平台的 `ocd`。
+两个依赖仓库均由手动 `workflow_dispatch` 输入不可变 release tag；workflow 在同一次 run 中测试、构建四目标、生成
+`SHA256SUMS` 并发布。workerd 不再保留 daily 或 push 自动构建，避免重复的长时间编译。
 
 ## 三条工作流
 

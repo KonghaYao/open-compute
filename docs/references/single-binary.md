@@ -3,8 +3,9 @@
 2026-09-30 正式 lock 已固定用户 fork `e3bdb07f52affc6a618f02ed2b731a581b0b2f69`，
 release 为 `v1.20260930.0-open-compute-r3.e3bdb07f5`，见[workerd 方案](../workerd/README.md)。
 三个正式产品平台加 macOS Intel 手动输入的 archive/binary 摘要、upstream base 与构建输入统一记录于 lock。
-四个平台的原始二进制作为固定依赖保存在 `share/workerd/` 并由 Git LFS 管理；macOS Intel 仍不进入官方 `ocd` release。
-构建工具从这些字节确定性生成正式 gzip；`archiveUrl` 为 `null`，构建不依赖单独发布的 archive。
+四个平台的 gzip 由 workerd fork 的 GitHub Release 托管，lock 固定 URL、archive/binary digest 与构建身份；macOS Intel
+仍不进入官方 `ocd` release。Caddy 使用独立的 `elliothux/open-compute-caddy` 源码 submodule、Release 与
+[`caddy.lock.json`](../../packages/runtime/caddy.lock.json)，不与 `ocd` 产品 Release 混用。
 平台无关的 Pyodide `314.0.6_2026-08-17_6` Cap'n Proto bundle 以固定 gzip 保存在
 `share/pyodide/` 并由同一 lock 记录压缩与解压 SHA-256；它同样通过 Git LFS 进入构建输入。
 
@@ -42,24 +43,25 @@ TS 源码、Bun、Node、Rolldown、用户 bundle、数据库、master key、S3 
 ### Windows 和 macOS Intel 手动编译
 
 这两个平台不进入官方 `ocd` release 矩阵，也不会出现在 GitHub Release。维护者需要在目标机安装
-Rust 1.98、Bun 1.3.14 和 Git LFS，检出 `share/workerd/` 的匹配输入，再按目标平台自行
-完成 `ocd` 编译、启动与 Gate 验证。macOS Intel 可使用 lock 中固定并由手动 fork workflow 构建的 `darwin-x64`
-archive；执行 `bun scripts/prepare-workerd.ts --dest /abs/build-input` 后，把输出的
-`OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE` 传给 `cargo build`。Windows 需要使用适用的 Rust target
+Rust 1.98、Bun 1.3.14 和 Git LFS，按 lock 显式准备匹配输入，再完成 `ocd` 编译、启动与 Gate 验证。
+macOS Intel 可使用 lock 中的 `darwin-x64` archive。Windows 需要使用适用的 Rust target
 和本机编译的 workerd；仓库不提供 Windows 的预构建 archive、交叉编译配置或兼容性保证。
 
 ```sh
-git lfs pull --include="share/workerd/**,share/pyodide/**,share/tessdata/**,share/xberg-tesseract-cache/**"
+git lfs pull --include="share/pyodide/**,share/tessdata/**,share/xberg-tesseract-cache/**"
+bun install --frozen-lockfile --ignore-scripts
+runtime_inputs=$(mktemp -d "$PWD/.temp/runtime-inputs.XXXXXX")
+eval "$(bun scripts/prepare-workerd.ts --dest "$runtime_inputs/workerd" --download)"
+eval "$(bun scripts/prepare-caddy.ts --dest "$runtime_inputs/caddy" --download)"
 bun run build
 bun run check:generated
 cargo build --locked --release -p open-compute-service --bin ocd
 ```
 
-根 build 先校验三个正式平台的 LFS 二进制、平台无关的 Pyodide gzip，以及静态 OCR source inputs；用固定 Bun 压缩器生成
-`.temp/workerd-build/<target>/<archive-sha256>/<archive-name>`；已存在但损坏的缓存直接拒绝。
-Cargo 默认选择编译目标对应的路径；可选的 `OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE` 必须是
-同一正式 pin 的绝对路径。它不是运行时覆盖选项。
-Cargo build script 检查仓库二进制、目标、workerd/Pyodide 压缩包与解压字节的 SHA-256、大小上限、生成 manifest
+准备工具只在显式 `--download` 时获取 lock 指定的 GitHub Release asset，并校验 URL、大小、archive/binary digest、版本与
+Caddy module；已存在目标拒绝覆盖。根 build 校验 host 输入、四目标 lock、平台无关 Pyodide gzip和静态 OCR source inputs。
+Cargo 要求 `OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE` 与 `OPEN_COMPUTE_BUILD_CADDY` 指向同一正式 pin 的绝对路径；它们不是运行时覆盖选项。
+Cargo build script 检查目标、workerd/Pyodide/Caddy 压缩包与解压字节的 SHA-256、大小上限、生成 manifest
 、文件集合及源码/锁文件摘要，再把同一批已验证字节编入程序。
 检出目录使用 `packages/runtime/`，daemon 离线物化到 `<OCD_DIR>/cache/packages/`；`dist/` 必须显式构建。没有已校验构建输入时直接报错，不搜索 PATH 或其他缓存。
 
@@ -69,9 +71,8 @@ Cargo build script 检查仓库二进制、目标、workerd/Pyodide 压缩包与
 ./scripts/package-release.sh --dest /abs/releases/ocd
 ```
 
-`--dest` 是一个必须不存在的文件，不是目录。默认读取仓库固定二进制；也可通过
-`--archive /abs/pinned-workerd.gz` 指定同一 pin 的压缩包。只有明确选择 `--download` 且
-formal lock 记录可用发布 URL 时才允许下载；当前未发布的 fork 会直接失败。
+`--dest` 是一个必须不存在的文件，不是目录。打包脚本显式准备 lock 固定的 workerd 与 Caddy Release asset；也可通过
+`--archive /abs/pinned-workerd.gz` 指定同一 pin 的 workerd 压缩包。只有明确选择 `--download` 才允许下载。
 生产程序没有 archive 下载代码。
 脚本使用原生目标 release 构建，验证 workerd 版本、ocd 版本、源码 revision 和内嵌
 release identity，再 fsync、原子无覆盖发布单文件，输出大小与 SHA-256。
@@ -83,15 +84,14 @@ GitHub Actions；所有资格校验成功后，三个正式平台分别运行同
 精确 asset 名称、权限边界和失败处理见[版本与发布流程](releasing.md)。
 
 本地开发、测试和 CI 的输入准备可显式运行
-`bun scripts/prepare-workerd.ts --dest /abs/new-build-input`；
-它输出构建和底层运行时测试所需的两个环境变量。此工具不分发、不由 ocd 调用。
+`bun scripts/prepare-workerd.ts --dest /abs/new-workerd --download` 与
+`bun scripts/prepare-caddy.ts --dest /abs/new-caddy --download`；
+它们输出构建和底层运行时测试所需的环境变量，不由 ocd 调用。
 下载和正式包装属于显式运维操作，不能用作默认本地检查。
 
-CI 构建 job 使用 `actions/checkout` 的 `lfs: true` 检出固定依赖，setup action 离线准备
-宿主目标并导出两个环境变量；随后根 build 校验三个正式目标并生成资产。LFS pointer、摘要不符、
-缺少二进制或过期生成资产均失败，不退回 stock。LFS hydration 属于开发依赖获取，生产启动不调用它。
-更换依赖必须同步三个正式平台文件、正式 lock 和验证证据，详见 [固定二进制](../../share/workerd/README.md)。
-向 GitHub 推送 LFS 对象、发布 archive 与 release packaging 仍是单独授权的操作。
+CI 的 `lfs: true` 只检出 Pyodide/OCR 等保留的固定依赖；setup action 从两个 lock 显式下载、验证并导出 host
+workerd/Caddy。缺失 asset、摘要不符或过期生成资产均失败，不退回 stock。生产启动不联网。
+更换依赖必须同步对应 submodule gitlink、正式 lock、Release asset 与验证证据。
 
 ## 运行契约
 
