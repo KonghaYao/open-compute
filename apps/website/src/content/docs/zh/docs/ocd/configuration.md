@@ -202,7 +202,7 @@ path = "./extensions/local-files"
 
 ## `[private_services.<name>]`：固定私网 HTTP Service target
 
-operator 可以通过标准 Service Binding `fetch()` 暴露一个固定的私网或回环 HTTP endpoint，而不向租户开放通用私网出站：
+operator 可以通过标准 Service Binding `fetch()` 暴露一个固定的私网或回环 HTTP endpoint，并由宿主固定目标、caller policy 与注入 credential：
 
 ```toml
 [private_services.inventory]

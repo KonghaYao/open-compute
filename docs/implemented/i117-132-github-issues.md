@@ -1,6 +1,6 @@
 # I117、I130、I132：网络、R2 preflight 与 Cloudflare 上游刷新
 
-状态：**implemented、verified**（2026-09-30）。本批关闭
+状态：**implemented、verified**（2026-09-30）。本批覆盖
 [#117](https://github.com/elliothux/open-compute/issues/117)、
 [#130](https://github.com/elliothux/open-compute/issues/130) 与
 [#132](https://github.com/elliothux/open-compute/issues/132)。当前支持面仍以

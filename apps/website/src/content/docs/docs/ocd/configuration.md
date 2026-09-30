@@ -202,7 +202,7 @@ The path is resolved relative to the loaded instance config. The directory must 
 
 ## `[private_services.<name>]`: fixed private HTTP Service targets
 
-An operator may expose one fixed private or loopback HTTP endpoint through the standard Service Binding `fetch()` interface without opening general tenant egress to private addresses:
+An operator may expose one fixed private or loopback HTTP endpoint through the standard Service Binding `fetch()` interface with a host-pinned destination, caller policy, and injected credential:
 
 ```toml
 [private_services.inventory]
@@ -216,7 +216,7 @@ credential = { file = "/run/secrets/inventory-key" }
 allow = [{ account_id = "<instance-id>", worker_id = "<worker-id>", entrypoint = "api" }]
 ```
 
-The endpoint is resolved to a private address and pinned when `ocd` starts. Redirects are returned, never followed. The caller cannot choose the URL or credential; internal and tenant authentication headers are stripped, and the configured credential is injected only on the host-side request. Upload admission and every invocation recheck the exact instance, Worker, optional Version, entrypoint, and policy revision. A newly created Worker therefore needs its stable Worker ID before this binding can be added. Private targets support Service Binding HTTP `fetch()` only; RPC and `connect()` fail closed. Ordinary tenant `fetch()` remains public-address-only.
+The endpoint is resolved to a private address and pinned when `ocd` starts. Redirects are returned, never followed. The caller cannot choose the URL or credential; internal and tenant authentication headers are stripped, and the configured credential is injected only on the host-side request. Upload admission and every invocation recheck the exact instance, Worker, optional Version, entrypoint, and policy revision. A newly created Worker therefore needs its stable Worker ID before this binding can be added. Private targets support Service Binding HTTP `fetch()` only; RPC and `connect()` fail closed. General tenant outbound can reach host-routable IPs; the operator owns destination filtering through the host firewall, namespace, container, or VM.
 
 ## Other sections
 

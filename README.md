@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>One binary. One data directory.</strong><br/>
+  <strong>One binary. One daemon. Isolated instances.</strong><br/>
   A self-hosted, Cloudflare Workers-compatible platform for a single machine.
 </p>
 
@@ -37,7 +37,7 @@
 
 You already know how to write Cloudflare Workers. **open-compute runs the compatible Workers programming model** — module workers, familiar bindings, and Wrangler workflows — on a single machine you own.
 
-**One binary. One data directory. One object authority.** Local filesystem is the default; S3-compatible storage is optional.
+**One binary. One shared daemon. One object authority per instance.** Local filesystem is the default; S3-compatible storage is optional.
 
 No Kubernetes. No Redis. No service mesh. No distributed control plane to babysit. No vendor lock-in.
 
@@ -109,7 +109,7 @@ Write standard module workers (`export default { fetch }`) with the bindings you
 | Surface                      | Status                                                                            |
 | ---------------------------- | --------------------------------------------------------------------------------- |
 | Cloudflare v4 API            | █████████░ 90% — local `/client/v4` works with Wrangler and the official SDK      |
-| Wrangler                     | █████████▉ 99% ✅ — Wrangler `4.138.0` deploys and manages the supported products |
+| Wrangler                     | █████████▉ 99% ✅ — Wrangler `4.143.0` deploys and manages the supported products |
 | Dashboard                    | ████████░░ 80% — operator UI built on the same `/client/v4` API                   |
 | Workers Logs / realtime tail | █████████░ 90% — logs, queries, `wrangler tail`, and live tail on one node        |
 
@@ -178,12 +178,12 @@ sudo ocd setup --system --yes
 In a normal Worker project, keep Wrangler project-local for development and use `ocd wrangler` for a real open-compute target:
 
 ```sh
-npm install --save-dev wrangler@4.138.0
+npm install --save-dev wrangler@4.143.0
 npx wrangler dev
 ocd wrangler deploy
 ```
 
-Production remains **one release executable, one config, and one data directory**. Runtime payloads are embedded and verified; daemon startup does not download or search `PATH` for workerd.
+Production remains **one release executable and one shared daemon**, with explicit per-instance configuration and data directories. Runtime payloads are embedded and verified; daemon startup does not download or search `PATH` for workerd.
 
 For the complete installation path, remote targets, CI, environments, tail, and rollback, see [Get started](https://open-compute.dev/docs/get-started/) and [Develop](https://open-compute.dev/docs/develop/).
 
@@ -250,7 +250,7 @@ Honest boundaries beat surprises in production:
 
 - **Not Cloudflare's global edge.** One node on infrastructure you run — no Anycast, no cross-region replication, no POP fabric. That tradeoff is exactly what buys you strong local consistency.
 - **Not a universal drop-in.** Compatibility is tracked surface by surface, and every deviation is documented rather than glossed over.
-- **Not a multi-replica HA cluster.** One data directory, one process, one machine — by design.
+- **Not a multi-replica HA cluster.** One daemon, one machine, and isolated per-instance authorities — by design.
 
 ## Documentation
 
@@ -267,9 +267,9 @@ Honest boundaries beat surprises in production:
 
 ## Security
 
-- One `ocd` per data directory — enforced by lock, not documentation.
+- One `ocd` per user or system scope, with exclusive locks for every instance data directory.
 - Internal tokens never appear in argv, environment, logs, status, or metrics.
-- Tenant outbound is public-only; private, loopback, link-local, and metadata addresses are rejected at the address layer.
+- Tenant outbound can reach host-routable public, private, loopback, link-local, and metadata IPs; operators own destination filtering through the host firewall, namespace, container, or VM.
 
 ## Sponsors
 

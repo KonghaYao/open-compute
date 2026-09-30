@@ -1,6 +1,6 @@
 # P19：AI Search 专用 Rerank provider
 
-状态：**implemented、verified**（2026-09-30）。本阶段关闭
+状态：**implemented、verified**（2026-09-30）。本阶段覆盖
 [#131](https://github.com/elliothux/open-compute/issues/131)。当前公开合同与 deviation 以
 [Cloudflare 兼容矩阵](../references/cloudflare-compatibility.md)和
 [能力偏差](../references/p1-deviations.md)为准。
