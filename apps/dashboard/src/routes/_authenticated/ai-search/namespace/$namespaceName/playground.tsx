@@ -11,6 +11,7 @@ import {
 } from "../../../../../components/dashboard-page";
 import { SearchInput } from "../../../../../components/search-input";
 import { useAuth } from "../../../../../features/auth/auth-atoms";
+import { queryKeys } from "../../../../../lib/query-options";
 
 export const Route = createFileRoute(
   "/_authenticated/ai-search/namespace/$namespaceName/playground",
@@ -24,7 +25,11 @@ function NamespacePlaygroundPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const instances = useQuery({
-    queryKey: ["ai-search", selectedInstanceId, namespaceName, "instances"],
+    queryKey: queryKeys.aiSearch(
+      selectedInstanceId,
+      namespaceName,
+      "instances",
+    ),
     queryFn: ({ signal }) =>
       client!.aiSearch.namespaces.instances.list(
         namespaceName,

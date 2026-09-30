@@ -321,7 +321,7 @@ pub(super) async fn run() {
         &hex::encode(binding.descriptor_sha256),
         "put",
         b"",
-        Some(open_compute_storage::KV_MAX_VALUE_BYTES + 64 * 1024 + 1),
+        Some(open_compute_storage::kv::KV_MAX_VALUE_BYTES + 64 * 1024 + 1),
     )
     .await;
     assert_eq!(oversized.status(), StatusCode::PAYLOAD_TOO_LARGE);
@@ -392,7 +392,7 @@ pub(super) async fn run() {
         .unwrap()
         .insert(
             "gate".to_owned(),
-            vec![b'x'; open_compute_storage::KV_MAX_VALUE_BYTES + 1],
+            vec![b'x'; open_compute_storage::kv::KV_MAX_VALUE_BYTES + 1],
         );
     let result_limit = dispatch(
         &transport,

@@ -3,7 +3,7 @@
 macOS 的文档解析功能完整保留，但解析子进程尚无可强制执行的内存硬上限。
 0.1.0 接受该限制；CPU、输入/输出、并发和超时约束继续生效。
 该进程复用同一个 `ocd`，不属于 workerd Worker isolate 的额度，也不增加 sidecar 分发文件。
-宿主内存压力仍可能影响主服务，后续工作见 [macOS 内存限制 TODO](../p5-8-macos-document-parser.md)。
+宿主内存压力仍可能影响主服务；这是当前明确接受的支持边界。
 
 open-compute 只发布标准稳定版本和三个正式平台的原生单文件 `ocd`。版本使用不带预发布或构建后缀的
 SemVer：Cargo 版本写作 `X.Y.Z`，Git tag 写作 `vX.Y.Z`。不使用 `alpha`、`beta`、`rc`、
@@ -28,10 +28,11 @@ npm provenance（OIDC trusted publishing）在当前 token 流程下不可用，
 `open-compute.dev` 可以提供人类可读的下载入口，但必须链接到上述不可变 GitHub Release assets，
 不能维护第二套可独立替换的二进制镜像。
 
-构建 job 必须以 `lfs: true` 检出 `share/workerd/` 的固定依赖。setup action 从宿主二进制
-离线准备正式 archive；根 build 验证三个正式目标。无需预先发布 fork archive，也不下载 stock runtime。
-更新依赖须同步三个正式目标的 LFS 对象及 `packages/runtime/workerd.lock.json`；macOS Intel 的固定输入仅供手动编译，向远端推送前用
-`git lfs fsck` 检查本地对象，不能只上传 pointer。生产分发仍只包含每个平台的 `ocd`。
+构建 job 的 `lfs: true` 只检出 Pyodide/OCR 等保留输入。setup action 从 workerd 与 Caddy lock 指定的 GitHub Release
+显式下载宿主 asset，校验 archive/binary digest、版本与 Caddy module；不下载 stock runtime。更新任一原生依赖须先在其独立
+submodule 仓库构建并发布四目标 Release，再同步 gitlink、lock 和验证证据。生产分发仍只包含每个平台的 `ocd`。
+两个依赖仓库均由手动 `workflow_dispatch` 输入不可变 release tag；workflow 在同一次 run 中测试、构建四目标、生成
+`SHA256SUMS` 并发布。workerd 不再保留 daily 或 push 自动构建，避免重复的长时间编译。
 
 ## 三条工作流
 
@@ -42,7 +43,7 @@ Rust 1.98 workspace/all-targets check、production hygiene、metadata 和依赖�
 workspace Gate、coverage 或发行打包。
 full scope 将 core checks、Clippy 与 production executable hygiene 分成三个并行 matrix leg；每个 Cargo leg
 都先执行完整 `bun run build`，汇总 `ci` 只有在三者全部成功后才通过。
-只修改 release/recovery/dry-run workflow、release assembler/test 和随附文档时使用 `release-tooling`
+只修改 release/recovery workflow、本地 Docker release 诊断、release assembler/test 和随附文档时使用 `release-tooling`
 scope，只执行 TypeScript、format、文档与 release contract；修改 `ci.yml`、共享 setup action、Rust/runtime
 或未明确归属的路径仍执行 full scope。baseline 只有 `sourceDigest` 字段变化时是随附身份更新，不会单独扩大
 owning change 的 scope；若它作为修复提交单独 push，分类器会回溯到上一次 baseline revision，并对期间所有
@@ -100,14 +101,17 @@ lock SHA-256、文件大小与文件 SHA-256，然后生成 `release.json` 和 `
 GitHub Release，上传五个公开 assets，再全部下载回来逐字节比较并执行 `sha256sum --check`；全部通过
 后才把 Draft 变成正式 latest release。任一目标或回读校验失败时，不会出现部分公开 release。
 
-`.github/workflows/release-dry-run.yml` 是只读发布预检入口。手动指定 `ref` 和 `target` 后，它构建并验证
-SDK、原生包及 `single-binary` Gate；构建前同样运行 source/release-tool `failfast`，`target=all` 另外验证
-三平台 artifact 组装。该 workflow 不创建
-GitHub Release、不发布 npm、不创建或移动 tag，也不替代正式 tag workflow 的 coverage、workspace Gate、
-受控 egress 和公开资产回读。
-单目标输入只创建对应平台 runner；package 在 cache 可用时只读恢复 main 的 default Rust target cache 来复用
-`single-binary` 测试 harness 依赖（没有对应平台 cache 时正常冷编译），release profile 编译继续使用独立 bounded sccache，且产物仍从当前源码
-按正式 release profile 完整构建和验证。
+`./scripts/release-dry-run.sh` 是本地 Docker 隔离的 Linux ARM64 package 诊断，不是第二套远端发布资格。
+它只接受干净的当前 `HEAD`，在保留的 detached worktree 中准备锁定依赖，然后断网执行 source/release-tool
+fail-fast、正式 `package-release.sh`、一次 `single-binary` Gate 和与正式 Linux ARM64 package job 相同的
+Dashboard smoke。工具链镜像固定 Rust 1.98.0、Bun 1.3.14、Node 26.8.1 和 Playwright 1.63.0；容器不挂载
+宿主 HOME、凭据、SSH agent 或 Docker socket。候选二进制、package report、runtime 和 Dashboard server
+日志保留在 `.temp/release-dry-run/output/`；Gate 与 Playwright 的详细失败树保留在 retained
+worktree 的 `.temp/release-dry-run/source/.temp/` 和 `apps/dashboard/test-results/`。
+
+远端 `release-dry-run` workflow 已删除：它耗时接近正式 release，产物和缓存又不被正式 release 消费。
+本地诊断不创建 GitHub Release、不发布 npm、不创建或移动 tag，也不替代正式 tag workflow 的 macOS
+workspace Gate、coverage、Linux x64/Darwin package、受控 egress、SDK tarball、artifact 组装和公开资产回读。
 
 CI 和 release 都使用 `bun run test:js:ci` 的平台工具/runtime 测试集合。第三方应用 qualification
 独立执行，不属于 workspace Gate 或此次原生二进制发行资格。当前 `test:js` 额外包含的 vinext
@@ -136,11 +140,13 @@ vinext/Next.js 端到端或 hosted Cloudflare differential。其冻结摘要和�
    `bun -e 'import { sourceIdentity } from "./test/conformance/checks/context.ts"; console.log(sourceIdentity())'`
    计算当前值并写回 baseline，然后执行一次 `./test/gate.py p3-contract` 确认匹配。它是源码内容摘要，
    不是 Git commit ID；凡影响摘要范围的源码、测试、工具链、manifest 或 `docs/references/**` 变更，都要一起更新。
-   随后在本地干净 checkout 完成发布预检。必须显式准备正式 workerd，先运行 `bun run build` 和静态检查，
-   再用宿主对应的 `OPEN_COMPUTE_TEST_WORKERD` 依次执行一次
+   随后在本地干净 checkout 完成最终验收。若当前冻结源码尚未完成最终验收，必须显式准备正式 workerd，
+   先运行 `bun run build` 和静态检查，再用宿主对应的 `OPEN_COMPUTE_TEST_WORKERD` 依次执行一次
    `./test/coverage.sh --jobs 2` 与一次 `./test/gate.py --workspace --jobs 2`。coverage 的插桩 Gate 和最终
-   未插桩 Gate 各有不同验收职责；除此之外不再运行重复 aggregate。90% Rust 行覆盖率和最终 Gate
-   必须通过后才能 push/tag。保存失败证据，不自动重试；本地预检用于尽早拦截，不替代 tag workflow
+   未插桩 Gate 各有不同验收职责；冻结源码已经有这两项成功证据时直接复用，不再为了发布重复执行不变
+   输入。除此之外不运行重复 aggregate。90% Rust 行覆盖率和最终 Gate
+   必须通过后才能 push/tag。需要隔离验证正式 Linux ARM64 package 路径时，再从干净的冻结 `HEAD` 运行一次
+   `./scripts/release-dry-run.sh`；保存失败证据，不自动重试。该本地诊断用于尽早拦截，不替代 tag workflow
    的独立 runner 资格。
 5. 新建 `docs/releases/X.Y.Z.md` 并加入 `docs/releases/README.md`。该文件是 GitHub Release 的正文片段，
    不写 `# open-compute X.Y.Z` 或其他一级标题；workflow 的 `--title "open-compute X.Y.Z"` 是唯一页面标题。
@@ -219,9 +225,7 @@ sudo install -m 0755 ocd-v0.1.0-linux-x64 /usr/local/bin/ocd
 
 macOS 使用 `shasum -a 256 -c` 校验筛选后的对应行。校验后仍应按
 [单二进制分发与部署](single-binary.md)与[安装与首次启动](runbooks/install-and-first-start.md)完成配置、
-`config check` 和首次启动。运维命令面见
-[P11 实现](../implemented/p11-ocd-operator-experience.md)；三目标正式安装冒烟资格见
-[P11 验收计划](../acceptance/p11-operator-experience-acceptance.md)。
+`config check` 和首次启动。运维命令面见 [P11 实现](../implemented/p11-ocd-operator-experience.md)。
 
 ## 失败、重跑与修复版本
 

@@ -9,7 +9,8 @@ use open_compute_core::config::{
     DashboardConfig, ObjectStorageConfig, PlatformConfig, SecretReference,
 };
 use open_compute_core::{DaemonServerConfig, ErrorCode, PlatformError};
-use open_compute_storage::{PlatformStorage, ensure_dir_secure};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::fs::ensure_dir_secure;
 use rand::TryRngCore;
 use std::fs::{self, OpenOptions};
 use std::io::{IsTerminal, Write};

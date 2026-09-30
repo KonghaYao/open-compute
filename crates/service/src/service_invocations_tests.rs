@@ -3,9 +3,10 @@ use crate::local_extensions::LocalExtensionRegistry;
 use open_compute_core::clock::SystemClock;
 use open_compute_core::config::DataConfig;
 use open_compute_core::{InstanceId, RequestId, WorkerId};
-use open_compute_storage::{
-    NewVersion, NewVersionProducts, NewVersionService, PlatformStorage, ServiceTarget,
-    VersionContentKind, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::services::{NewVersionService, ServiceTarget};
+use open_compute_storage::worker_repository::{
+    NewVersion, NewVersionProducts, VersionContentKind, WorkerRepository,
 };
 use sha2::{Digest as _, Sha256};
 use std::collections::BTreeMap;
@@ -147,7 +148,9 @@ fn insert_ready(
             worker_code_sha256: worker_digest,
             compatibility_date: "2026-09-08".into(),
             compatibility_flags: Vec::new(),
-            resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+            resource_limits:
+                open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(
+                ),
             vars: BTreeMap::new(),
             secrets: BTreeMap::new(),
             request_id: request,

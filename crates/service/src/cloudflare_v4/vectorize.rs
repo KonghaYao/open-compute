@@ -21,7 +21,7 @@ use axum::routing::{get, post};
 use bytes::{Bytes, BytesMut};
 use http_body_util::LengthLimitError;
 use open_compute_core::{InstanceId, PlatformError, ResourceState};
-use open_compute_storage::{
+use open_compute_storage::vectorize::{
     VectorMutationInput, VectorMutationKind, VectorizeEngine, VectorizeIndexRecord,
     VectorizeIndexRepository, VectorizePaths,
 };

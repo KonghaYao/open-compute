@@ -114,7 +114,7 @@ fn validate_entrypoint(entrypoint: Option<&str>) -> Result<(), PlatformError> {
 
 pub(super) fn prepare_cron_config(
     request: &CreateVersionRequest,
-    workflow_bindings: &[open_compute_storage::WorkflowBindingDescriptor],
+    workflow_bindings: &[open_compute_storage::workflows::WorkflowBindingDescriptor],
 ) -> Result<NewCronConfig, PlatformError> {
     let mut targets: BTreeMap<String, (bool, Vec<String>)> = BTreeMap::new();
     for expression in &request.crons {

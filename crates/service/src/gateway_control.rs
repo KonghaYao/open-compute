@@ -166,7 +166,7 @@ impl GatewayControl {
             .gateway_dir
             .join("config-state")
             .join(format!("candidate-{}", uuid::Uuid::now_v7()));
-        open_compute_storage::ensure_dir_secure(&candidate)?;
+        open_compute_storage::fs::ensure_dir_secure(&candidate)?;
         let result = self.reload_candidate(&candidate, &domains, &mut state);
         match result {
             Ok(digest) => {
@@ -193,7 +193,7 @@ impl GatewayControl {
             .gateway_dir
             .join("config-state")
             .join(format!("validate-{}", uuid::Uuid::now_v7()));
-        open_compute_storage::ensure_dir_secure(&candidate)?;
+        open_compute_storage::fs::ensure_dir_secure(&candidate)?;
         let result = self.adapt_candidate(&candidate, &guard.domains);
         if result.is_ok() {
             let _ = fs::remove_dir_all(&candidate);
@@ -213,7 +213,7 @@ impl GatewayControl {
         state.last_error = Some("adapt_failed");
         let adapted = self.adapt_candidate(candidate, domains)?;
         state.last_error = Some("load_failed");
-        open_compute_storage::atomic_write(&candidate.join("candidate.json"), &adapted)?;
+        open_compute_storage::fs::atomic_write(&candidate.join("candidate.json"), &adapted)?;
         admin_request(
             &self.admin_path,
             "POST",
@@ -227,9 +227,9 @@ impl GatewayControl {
         if current.exists() {
             let bytes = fs::read(&current)
                 .map_err(|_| control_error("failed to preserve prior Caddy snapshot"))?;
-            open_compute_storage::atomic_write(&state_dir.join("previous.json"), &bytes)?;
+            open_compute_storage::fs::atomic_write(&state_dir.join("previous.json"), &bytes)?;
         }
-        open_compute_storage::atomic_write(&current, &adapted)?;
+        open_compute_storage::fs::atomic_write(&current, &adapted)?;
         let meta = SnapshotMeta {
             schema_version: 2,
             intent_sha256: intent_digest(&self.shared, domains)?,
@@ -238,7 +238,7 @@ impl GatewayControl {
         };
         let meta = serde_json::to_vec(&meta)
             .map_err(|_| control_error("failed to encode Caddy snapshot metadata"))?;
-        open_compute_storage::atomic_write(&state_dir.join("current.meta.json"), &meta)?;
+        open_compute_storage::fs::atomic_write(&state_dir.join("current.meta.json"), &meta)?;
         crate::gateway_caddyfile::write_managed(
             &self.shared,
             domains,
@@ -265,8 +265,11 @@ impl GatewayControl {
             &self.upstream_path,
             &self.provider_path,
         )?;
-        open_compute_storage::atomic_write(&managed_path, managed.as_bytes())?;
-        open_compute_storage::atomic_write(&candidate.join("Caddyfile"), entrypoint.as_bytes())?;
+        open_compute_storage::fs::atomic_write(&managed_path, managed.as_bytes())?;
+        open_compute_storage::fs::atomic_write(
+            &candidate.join("Caddyfile"),
+            entrypoint.as_bytes(),
+        )?;
         let source = fs::read(candidate.join("Caddyfile"))
             .map_err(|_| control_error("failed to read Caddy reload candidate"))?;
         let adapted_response = admin_request(
@@ -456,7 +459,7 @@ mod tests {
 
     fn control(root: &Path) -> GatewayControl {
         for directory in ["run", "storage", "config-state"] {
-            open_compute_storage::ensure_dir_secure(&root.join(directory)).unwrap();
+            open_compute_storage::fs::ensure_dir_secure(&root.join(directory)).unwrap();
         }
         crate::gateway_certificates::initialize_registry(root).unwrap();
         GatewayControl::new(
@@ -524,10 +527,10 @@ mod tests {
             temp.path().join("storage/certificates/issuer"),
             site.clone(),
         ] {
-            open_compute_storage::ensure_dir_secure(&dir).unwrap();
+            open_compute_storage::fs::ensure_dir_secure(&dir).unwrap();
         }
         for suffix in ["crt", "key", "json"] {
-            open_compute_storage::atomic_write(
+            open_compute_storage::fs::atomic_write(
                 &site.join(format!("wildcard_.compute.example.com.{suffix}")),
                 b"asset",
             )

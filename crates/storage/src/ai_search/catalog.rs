@@ -1,6 +1,8 @@
 //! AI Search parent/child product authority in `control.sqlite`.
 
-use crate::{ControlDb, ResourceRecord, ResourceRepository, resources::read_resource_conn};
+use crate::control_db::ControlDb;
+use crate::resources::read_resource_conn;
+use crate::resources::{ResourceRecord, ResourceRepository};
 use open_compute_core::{
     BindingKind, ErrorCode, InstanceId, PlatformError, ResourceId, ResourceState,
 };

@@ -94,9 +94,15 @@ async function identityContract() {
   assert.equal(memberships.result[0].account.id, accountID);
 
   const capabilities = await client.openCompute.capabilities.get();
-  assert.equal(capabilities.wrangler_version, "4.138.0");
-  assert.equal(capabilities.compatibility_date.minimum, "2026-09-08");
-  assert.equal(capabilities.compatibility_date.maximum, "2026-09-08");
+  assert.equal(capabilities.wrangler_version, "4.143.0");
+  assert.equal(capabilities.compatibility.validation, "workerd_code_version");
+  assert.match(
+    capabilities.compatibility.binary_maximum_date,
+    /^\d{4}-\d{2}-\d{2}$/,
+  );
+  assert.match(capabilities.compatibility.catalog_sha256, /^[a-f0-9]{64}$/);
+  assert.ok(capabilities.compatibility.features.length > 0);
+  assert.equal(capabilities.system_workers.compatibility_date, "2026-09-08");
   assert.ok(Object.keys(capabilities.endpoints).length > 0);
   const system = await client.openCompute.system.status();
   assert.match(system.state, /^[A-Z][A-Z_]*$/);
@@ -301,7 +307,6 @@ async function observabilityContract() {
   const now = Date.now();
   const tail = await client.workers.scripts.tail.create("sdk-worker", {
     account_id: accountID,
-    body: { filters: [] },
   });
   assert.match(tail.id, /^[0-9a-f]{32}$/);
   assert.match(tail.url, /^ws:\/\//);

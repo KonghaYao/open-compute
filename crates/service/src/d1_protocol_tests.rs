@@ -1,5 +1,5 @@
 use super::*;
-use open_compute_storage::{D1Meta, D1StatementResult};
+use open_compute_storage::d1::{D1Meta, D1StatementResult};
 
 #[test]
 fn query_frame_round_trips_binary_values_without_json_or_base64() {

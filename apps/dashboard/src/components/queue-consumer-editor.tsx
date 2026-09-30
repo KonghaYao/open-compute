@@ -14,6 +14,7 @@ import { useState } from "react";
 import type { Consumer } from "@open-compute/sdk";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 import { DefinitionList, ErrorState, LoadingRows } from "./dashboard-page";
 import { DataTable } from "./page-layout";
 import { openConfirmDeleteDialog } from "./resource-dialog";
@@ -51,13 +52,19 @@ function fromConsumer(consumer?: Consumer): Draft {
     ...(consumer?.consumer_id ? { id: consumer.consumer_id } : {}),
     scriptName:
       consumer && "script_name" in consumer ? (consumer.script_name ?? "") : "",
-    batchSize: String(settings?.batch_size ?? 10),
+    batchSize: String(
+      settings && "batch_size" in settings ? (settings.batch_size ?? 10) : 10,
+    ),
     waitSeconds:
       settings && "max_wait_time_ms" in settings
         ? String((settings.max_wait_time_ms ?? 5000) / 1000)
         : "5",
-    maxRetries: String(settings?.max_retries ?? 3),
-    retryDelay: String(settings?.retry_delay ?? 0),
+    maxRetries: String(
+      settings && "max_retries" in settings ? (settings.max_retries ?? 3) : 3,
+    ),
+    retryDelay: String(
+      settings && "retry_delay" in settings ? (settings.retry_delay ?? 0) : 0,
+    ),
     maxConcurrency:
       settings && "max_concurrency" in settings
         ? String(settings.max_concurrency ?? "")
@@ -73,13 +80,7 @@ export function QueueConsumerEditor({ queueId }: { queueId: string }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const enabled = client !== null && selectedInstanceId !== null;
   const consumers = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "queues",
-      selectedInstanceId,
-      queueId,
-      "consumers",
-    ],
+    queryKey: queryKeys.queues(selectedInstanceId, queueId, "consumers"),
     queryFn: ({ signal }) =>
       client!.queues.consumers.list(
         queueId,
@@ -89,7 +90,7 @@ export function QueueConsumerEditor({ queueId }: { queueId: string }) {
     enabled,
   });
   const workers = useQuery({
-    queryKey: ["cloudflare-v4", "workers", selectedInstanceId],
+    queryKey: queryKeys.workers(selectedInstanceId),
     queryFn: ({ signal }) =>
       client!.workers.scripts.list(
         { account_id: selectedInstanceId! },
@@ -100,15 +101,13 @@ export function QueueConsumerEditor({ queueId }: { queueId: string }) {
   const rows = consumers.data?.result ?? [];
   const runtimes = useQueries({
     queries: rows.map((consumer) => ({
-      queryKey: [
-        "open-compute",
-        "queues",
+      queryKey: queryKeys.queues(
         selectedInstanceId,
         queueId,
         "consumers",
         consumer.consumer_id,
         "runtime",
-      ],
+      ),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         client!.openCompute.queues.consumerRuntime(
           selectedInstanceId!,
@@ -121,7 +120,7 @@ export function QueueConsumerEditor({ queueId }: { queueId: string }) {
   });
   const refresh = () =>
     queryClient.invalidateQueries({
-      queryKey: ["cloudflare-v4", "queues", selectedInstanceId, queueId],
+      queryKey: queryKeys.queues(selectedInstanceId, queueId),
     });
   const save = useMutation({
     mutationFn: (input: Draft) =>
@@ -205,7 +204,10 @@ export function QueueConsumerEditor({ queueId }: { queueId: string }) {
             return {
               name: label,
               type: consumer.type === "worker" ? "Worker" : "HTTP pull",
-              batch: consumer.settings?.batch_size ?? "Default",
+              batch:
+                consumer.settings && "batch_size" in consumer.settings
+                  ? (consumer.settings.batch_size ?? "Default")
+                  : "N/A",
               actions: (
                 <RowActionsMenu
                   label={label}

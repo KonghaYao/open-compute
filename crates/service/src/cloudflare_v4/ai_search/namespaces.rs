@@ -4,9 +4,8 @@ use super::*;
 use crate::cloudflare_v4::storage::{iso_timestamp, json, now_ms, require_no_query};
 use axum::extract::{Path, State};
 use open_compute_core::{BindingKind, ResourceState};
-use open_compute_storage::{
-    AI_SEARCH_NAMESPACE_SCHEMA_VERSION, AiSearchCatalog, ResourceRepository,
-};
+use open_compute_storage::ai_search::{AI_SEARCH_NAMESPACE_SCHEMA_VERSION, AiSearchCatalog};
+use open_compute_storage::resources::ResourceRepository;
 use open_compute_workers::{
     AiSearchNamespaceResourceDriver, CreateResourceOutcome, CreateResourceRequest,
     ResourceController,
@@ -376,7 +375,7 @@ pub(super) fn find(
     api: &SearchApiState,
     account: InstanceId,
     name: &str,
-) -> Result<open_compute_storage::AiSearchNamespaceRecord, V4Error> {
+) -> Result<open_compute_storage::ai_search::AiSearchNamespaceRecord, V4Error> {
     if !valid_namespace(name) {
         return Err(V4Error::NotFound);
     }
@@ -391,7 +390,9 @@ pub(super) fn find(
         .map_err(|error| V4Error::from(&error))
 }
 
-fn value(record: &open_compute_storage::AiSearchNamespaceRecord) -> Result<Value, V4Error> {
+fn value(
+    record: &open_compute_storage::ai_search::AiSearchNamespaceRecord,
+) -> Result<Value, V4Error> {
     Ok(json!({
         "name": record.resource.name,
         "description": record.description,

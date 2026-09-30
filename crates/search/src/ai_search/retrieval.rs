@@ -65,8 +65,8 @@ pub fn cosine_similarity(left: &[f32], right: &[f32]) -> Result<f32, RetrievalEr
 
 #[derive(Default)]
 struct Branches {
-    vector: Option<(usize, f32)>,
-    keyword: Option<(usize, f32)>,
+    vector: Option<(usize, f32, f32)>,
+    keyword: Option<(usize, f32, f32)>,
 }
 
 /// Fuse two already ranked branches, rejecting invalid scores and duplicate
@@ -77,13 +77,9 @@ pub fn fuse_candidates(
     keyword: &[RankedCandidate],
     method: FusionMethod,
     max_results: usize,
-    score_threshold: f32,
 ) -> Result<Vec<ScoredCandidate>, RetrievalError> {
     if max_results == 0 || max_results > 50 {
         return Err(RetrievalError::InvalidLimit);
-    }
-    if !score_threshold.is_finite() || !(0.0..=1.0).contains(&score_threshold) {
-        return Err(RetrievalError::NonFiniteValue);
     }
     let mut joined = BTreeMap::<String, Branches>::new();
     insert_branch(&mut joined, vector, true)?;
@@ -95,34 +91,36 @@ pub fn fuse_candidates(
                 FusionMethod::ReciprocalRank => {
                     let raw = branches
                         .vector
-                        .map_or(0.0, |(rank, _)| 1.0 / (RRF_K + rank as f32))
+                        .map_or(0.0, |(rank, _, _)| 1.0 / (RRF_K + rank as f32))
                         + branches
                             .keyword
-                            .map_or(0.0, |(rank, _)| 1.0 / (RRF_K + rank as f32));
+                            .map_or(0.0, |(rank, _, _)| 1.0 / (RRF_K + rank as f32));
                     raw / (2.0 / (RRF_K + 1.0))
                 }
                 FusionMethod::Maximum => branches
                     .vector
-                    .map(|(_, score)| score)
+                    .map(|(_, score, _)| score)
                     .into_iter()
-                    .chain(branches.keyword.map(|(_, score)| score))
+                    .chain(branches.keyword.map(|(_, score, _)| score))
                     .fold(0.0_f32, f32::max),
             };
             ScoredCandidate {
                 chunk_id,
-                score,
+                retrieval_score: score,
+                boosting_score: None,
+                reranking_score: None,
+                public_score: score,
                 vector_rank: branches.vector.map(|value| value.0),
-                vector_score: branches.vector.map(|value| value.1),
+                vector_score: branches.vector.map(|value| value.2),
                 keyword_rank: branches.keyword.map(|value| value.0),
-                keyword_score: branches.keyword.map(|value| value.1),
+                keyword_score: branches.keyword.map(|value| value.2),
             }
         })
-        .filter(|candidate| candidate.score >= score_threshold)
         .collect::<Vec<_>>();
     result.sort_by(|left, right| {
         right
-            .score
-            .total_cmp(&left.score)
+            .retrieval_score
+            .total_cmp(&left.retrieval_score)
             .then_with(|| left.chunk_id.cmp(&right.chunk_id))
     });
     result.truncate(max_results);
@@ -144,7 +142,13 @@ fn insert_branch(
         } else {
             &mut branches.keyword
         };
-        if slot.replace((index + 1, candidate.score)).is_some() {
+        if !candidate.reported_score.is_finite() {
+            return Err(RetrievalError::NonFiniteValue);
+        }
+        if slot
+            .replace((index + 1, candidate.score, candidate.reported_score))
+            .is_some()
+        {
             return Err(RetrievalError::DuplicateCandidate);
         }
     }

@@ -11,9 +11,10 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use base64::Engine as _;
 use open_compute_core::{BindingId, ErrorCode, PlatformError, VersionId};
-use open_compute_storage::{
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::cloudflare_artifacts::{
     ArtifactRepositoryRecord, ArtifactRepositoryState, ArtifactTokenRecord, ArtifactTokenScope,
-    CloudflareArtifactsRepository, PlatformStorage,
+    CloudflareArtifactsRepository,
 };
 use serde_json::{Value, json};
 use std::sync::Arc;

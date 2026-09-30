@@ -1,5 +1,6 @@
 use super::*;
-use crate::{NewVersionProducts, NewVersionService, ServiceTarget, VersionContentKind};
+use crate::services::{NewVersionService, ServiceTarget};
+use crate::worker_repository::{NewVersionProducts, VersionContentKind};
 use open_compute_core::RequestId;
 
 #[test]
@@ -63,7 +64,7 @@ fn upgrade_preflight_rejects_legacy_extension_services_without_mutation() {
     drop(connection);
 
     assert_eq!(
-        crate::ControlDb::preflight_migrations(&path, 5_000, &SystemClock)
+        crate::control_db::ControlDb::preflight_migrations(&path, 5_000, &SystemClock)
             .unwrap_err()
             .code(),
         ErrorCode::MigrationFailed

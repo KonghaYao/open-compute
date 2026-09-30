@@ -37,7 +37,7 @@
 固定输入为上述 fork、formal lock SHA-256
 `de6a6f64a26f9e5640a8f2ceb2a6de5ab93968e1948ee8c36b35140b121e2de7`。
 
-- 四平台 workerd 构建与 formal lock / Git LFS OID 一致；原生 delegation、tails、limits、facets、
+- 四平台 workerd 构建与 formal lock / GitHub Release digest 一致；原生 delegation、tails、limits、facets、
   日期和 GC 回归通过。
 - build、generated、fmt、Clippy、no-default-features、Rust 1.98、metadata、dependency boundaries、
   239 项 JS、25 项 Gate tooling 和文档构建通过。

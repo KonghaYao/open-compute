@@ -23,7 +23,7 @@ import {
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { detailBreadcrumbAtom } from "../../../features/navigation/detail-breadcrumb-atom";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
-import { kvNamespaceQuery } from "../../../lib/query-options";
+import { kvNamespaceQuery, queryKeys } from "../../../lib/query-options";
 import { KvPairs } from "./-pairs";
 
 export const Route = createFileRoute("/_authenticated/kv/$namespaceId")({
@@ -115,13 +115,7 @@ function KvDetailPage() {
     return () => setDetailBreadcrumb(null);
   }, [namespace.data?.title, namespaceId, setDetailBreadcrumb]);
   const backups = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "kv",
-      selectedInstanceId,
-      namespaceId,
-      "backups",
-    ],
+    queryKey: queryKeys.kv(selectedInstanceId, namespaceId, "backups"),
     queryFn: ({ signal }) =>
       client!.openCompute.backups.kv.list(selectedInstanceId!, namespaceId, {
         signal,
@@ -148,13 +142,7 @@ function KvDetailPage() {
     onSuccess: async (result) => {
       setBulkResult(result);
       await queryClient.invalidateQueries({
-        queryKey: [
-          "cloudflare-v4",
-          "kv",
-          selectedInstanceId,
-          namespaceId,
-          "keys",
-        ],
+        queryKey: queryKeys.kv(selectedInstanceId, namespaceId, "keys"),
       });
       feedback.success("Bulk values saved.");
     },
@@ -170,13 +158,7 @@ function KvDetailPage() {
     onSuccess: async (result) => {
       setBulkResult(result);
       await queryClient.invalidateQueries({
-        queryKey: [
-          "cloudflare-v4",
-          "kv",
-          selectedInstanceId,
-          namespaceId,
-          "keys",
-        ],
+        queryKey: queryKeys.kv(selectedInstanceId, namespaceId, "keys"),
       });
       feedback.success("Bulk keys deleted.");
     },
@@ -224,7 +206,7 @@ function KvDetailPage() {
     onSuccess: async () => {
       setRenaming(false);
       await queryClient.invalidateQueries({
-        queryKey: ["cloudflare-v4", "kv", selectedInstanceId, namespaceId],
+        queryKey: queryKeys.kv(selectedInstanceId, namespaceId),
       });
       feedback.success("KV namespace renamed.");
     },
@@ -244,7 +226,7 @@ function KvDetailPage() {
           throw error;
         }
         await queryClient.invalidateQueries({
-          queryKey: ["cloudflare-v4", "kv", selectedInstanceId, "namespaces"],
+          queryKey: queryKeys.kv(selectedInstanceId, "namespaces"),
         });
         feedback.success("KV namespace deleted.");
         await navigate({ to: "/kv" });

@@ -43,7 +43,6 @@ pub async fn serve_runtime_source(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ResolveRequest {
-    startup_generation: String,
     key: String,
     expected_worker_code_sha256: String,
     scope: SourceScope,
@@ -58,6 +57,19 @@ enum SourceScope {
 }
 
 async fn resolve(State(state): State<SourceState>, request: Request) -> Response {
+    let token = request
+        .headers()
+        .get(TOKEN_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
+    let generation = request
+        .headers()
+        .get(GENERATION_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("");
+    if !state.auth.authorize(token, generation) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     if request
         .headers()
         .get(header::CONTENT_LENGTH)
@@ -67,12 +79,6 @@ async fn resolve(State(state): State<SourceState>, request: Request) -> Response
     {
         return source_error(ErrorCode::BundleTooLarge, StatusCode::PAYLOAD_TOO_LARGE);
     }
-    let token = request
-        .headers()
-        .get(TOKEN_HEADER)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("")
-        .to_owned();
     let Ok(bytes) = to_bytes(request.into_body(), MAX_SOURCE_REQUEST).await else {
         return source_error(ErrorCode::BundleTooLarge, StatusCode::PAYLOAD_TOO_LARGE);
     };
@@ -80,9 +86,6 @@ async fn resolve(State(state): State<SourceState>, request: Request) -> Response
         Ok(body) => body,
         Err(_) => return source_error(ErrorCode::BundleInvalid, StatusCode::BAD_REQUEST),
     };
-    if !state.auth.authorize(&token, &body.startup_generation) {
-        return StatusCode::NOT_FOUND.into_response();
-    }
     let scope = match body.scope {
         SourceScope::Runtime => RuntimeScope::Runtime,
         SourceScope::Validation => RuntimeScope::Validation,

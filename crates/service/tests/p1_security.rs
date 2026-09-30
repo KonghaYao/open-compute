@@ -6,10 +6,11 @@ use open_compute_core::{
     VersionId, valid_restore_path,
 };
 use open_compute_service::metrics::MetricsRegistry;
-use open_compute_storage::{
-    NewVersion, PlatformStorage, ReserveResourceCreate, ResourceCreateReservation,
-    ResourceRepository, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
 };
+use open_compute_storage::worker_repository::{NewVersion, WorkerRepository};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -115,7 +116,7 @@ fn ready_version(
                 id,
                 instance_id: account,
                 worker_id: worker,
-                content_kind: open_compute_storage::VersionContentKind::Worker,
+                content_kind: open_compute_storage::worker_repository::VersionContentKind::Worker,
                 artifact_sha256: Some([byte; 32]),
                 artifact_size: Some(1),
                 artifact_schema_version: Some(1),
@@ -123,13 +124,13 @@ fn ready_version(
                 worker_code_sha256: [byte; 32],
                 compatibility_date: "2026-09-08".into(),
                 compatibility_flags: Vec::new(),
-                resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+                resource_limits: open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
                 vars: BTreeMap::new(),
                 secrets: BTreeMap::new(),
                 request_id: RequestId::generate(),
                 now_ms,
             },
-            &open_compute_storage::NewVersionProducts::default(),
+            &open_compute_storage::worker_repository::NewVersionProducts::default(),
             1_000_000,
         )
         .expect("insert version");

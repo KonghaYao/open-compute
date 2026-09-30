@@ -10,9 +10,8 @@ use crate::observability_filter::{Combination, FilterNode};
 use base64::Engine as _;
 use hmac::Mac as _;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, RequestId, WorkerId};
-use open_compute_storage::{
-    NewObservabilityInvocation, ObservabilityAudit, WorkerRecord, WorkerRepository,
-};
+use open_compute_storage::observability::NewObservabilityInvocation;
+use open_compute_storage::worker_repository::{ObservabilityAudit, WorkerRecord, WorkerRepository};
 use rand::RngCore as _;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};

@@ -20,9 +20,9 @@ use open_compute_runtime::{
     GenerationAuthRegistry, RuntimeFailureEvidence, SupervisorState, TOKEN_HEADER,
     WorkerdSupervisor,
 };
-use open_compute_storage::{
-    AuthorizedDurableObjectDelete, ClaimedJob, QUEUE_MAX_MESSAGE_BYTES, QueueContentType,
-};
+use open_compute_storage::durable_objects::AuthorizedDurableObjectDelete;
+use open_compute_storage::queues::QUEUE_MAX_MESSAGE_BYTES;
+use open_compute_storage::scheduler::{ClaimedJob, QueueContentType};
 use open_compute_workers::{
     RuntimeScope, RuntimeSource, RuntimeValidator, ValidationCandidate, VersionPins, loader_key,
     validate_env_name,
@@ -48,6 +48,7 @@ mod worker_loaders;
 
 const SOURCE_PATH: &str = "/internal/runtime/v1/versions/resolve";
 const ERROR_HEADER: &str = "x-open-compute-error-code";
+const GENERATION_HEADER: &str = "x-open-compute-startup-generation";
 const SERVICE_WEBSOCKET_HANDOFF_HEADER: &str = "x-open-compute-service-websocket-handoffs";
 const MAX_SOURCE_REQUEST: usize = 4096;
 /// Fixed Standard ingress baseline in decimal bytes, independent of operator policy.
@@ -157,7 +158,7 @@ pub struct QueueDispatchMetadata {
 impl QueueDispatchMetadata {
     /// Copy scheduler metrics, converting the epoch sentinel to absence.
     #[must_use]
-    pub fn from_queue_metrics(metrics: open_compute_storage::QueueMetrics) -> Self {
+    pub fn from_queue_metrics(metrics: open_compute_storage::scheduler::QueueMetrics) -> Self {
         Self {
             metrics: QueueDispatchMetrics {
                 backlog_count: metrics.backlog_count,

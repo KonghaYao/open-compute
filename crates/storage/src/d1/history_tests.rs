@@ -1,8 +1,7 @@
 use super::*;
-use crate::{
-    D1DatabaseRepository, D1Paths, PlatformStorage, ReserveResourceCreate,
-    ResourceCreateReservation, ResourceRepository,
-};
+use crate::PlatformStorage;
+use crate::d1::{D1DatabaseRepository, D1Paths};
+use crate::resources::{ReserveResourceCreate, ResourceCreateReservation, ResourceRepository};
 use open_compute_core::config::DataConfig;
 use open_compute_core::{BindingKind, RequestId, SystemClock};
 

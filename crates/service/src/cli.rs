@@ -20,7 +20,7 @@ use clap::{Parser, Subcommand};
 use open_compute_core::{
     ErrorCode, GatewayDnsRecordKind, InstanceSelector, PlatformError, PublicGatewayConfig,
 };
-use open_compute_storage::DataDir;
+use open_compute_storage::data_dir::DataDir;
 use std::ffi::OsString;
 use std::future::Future;
 use std::io::{IsTerminal, Write};

@@ -7,9 +7,10 @@ use crate::http::HttpState;
 use axum::extract::{FromRequest, Multipart, Path, Request, State};
 use axum::response::Response;
 use open_compute_core::{ErrorCode, PlatformError, SecretString};
-use open_compute_storage::{
-    CronRepository, EffectiveResourceLimits, UpdateWorkerObservabilitySettings, VersionSnapshot,
-    WorkerRecord, WorkerRepository,
+use open_compute_storage::cron::CronRepository;
+use open_compute_storage::worker_repository::{
+    EffectiveResourceLimits, UpdateWorkerObservabilitySettings, VersionSnapshot, WorkerRecord,
+    WorkerRepository,
 };
 use open_compute_workers::{CreateVersionOutcome, RuntimeValidator};
 use serde::{Deserialize, Serialize};
@@ -30,7 +31,9 @@ struct ScriptSettings {
 }
 
 impl ScriptSettings {
-    fn from_persisted(value: &open_compute_storage::WorkerObservabilitySettings) -> Self {
+    fn from_persisted(
+        value: &open_compute_storage::worker_repository::WorkerObservabilitySettings,
+    ) -> Self {
         Self {
             logpush: false,
             observability: ObservabilitySettings {
@@ -240,7 +243,7 @@ pub(super) async fn patch_script_settings(
 }
 
 fn merge_observability(
-    current: &open_compute_storage::WorkerObservabilitySettings,
+    current: &open_compute_storage::worker_repository::WorkerObservabilitySettings,
     patch: Option<ObservabilityPatch>,
 ) -> Result<UpdateWorkerObservabilitySettings, V4Error> {
     let Some(patch) = patch else {
@@ -707,7 +710,9 @@ fn settings_snapshot(
         .list_versions(account, worker.id)
         .map_err(|error| V4Error::from(&error))?
         .into_iter()
-        .find(|version| version.state == open_compute_storage::VersionState::Ready)
+        .find(|version| {
+            version.state == open_compute_storage::worker_repository::VersionState::Ready
+        })
         .ok_or(V4Error::Conflict)?;
     let snapshot = repo
         .version_snapshot(account, worker.id, version.id, false)
@@ -747,7 +752,9 @@ async fn mutate(
         &worker,
         domain::CloneVersionOptions {
             source_version: snapshot.version.id,
-            deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+            deployment_source: Some(
+                open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+            ),
             secret_updates,
             crons,
             resource_limits: None,

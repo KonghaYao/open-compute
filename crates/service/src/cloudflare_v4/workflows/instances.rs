@@ -15,7 +15,7 @@ use axum::response::Response;
 use open_compute_core::WorkflowOperationId;
 use open_compute_core::workflow::{WORKFLOW_MAX_DURATION_MS, WorkflowRetention, duration_ms};
 use open_compute_storage::scheduler::WorkflowInstanceInspection;
-use open_compute_storage::{WorkflowRepository, WorkflowReservation};
+use open_compute_storage::workflows::{WorkflowRepository, WorkflowReservation};
 use open_compute_workers::{WorkflowController, WorkflowCreateInput, WorkflowEventInput};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as json_value};
@@ -491,7 +491,9 @@ fn reservation(
         .map_err(|error| V4Error::from(&error))
 }
 
-fn creation_result(identity: &open_compute_storage::WorkflowInstanceIdentity) -> CreationResult {
+fn creation_result(
+    identity: &open_compute_storage::workflows::WorkflowInstanceIdentity,
+) -> CreationResult {
     CreationResult {
         id: identity.external_instance_id.clone(),
         workflow_id: identity.target.definition_id.to_string(),

@@ -3,13 +3,20 @@ use open_compute_core::{
     BindingId, BindingKind, CanonicalBindingConfig, CanonicalPermissions, InstanceId, QueueId,
     ResourceId, SecretBytes, VersionId,
 };
-use open_compute_storage::{
+use open_compute_storage::ai_search::{
     AI_SEARCH_NAMESPACE_SCHEMA_VERSION, AI_SEARCH_SCHEMA_VERSION, AiSearchCatalog,
-    BuiltinBindingKind, DurableObjectMigrationPlan, DurableObjectRepository,
-    NewQueueProducerBinding, NewVersion, NewVersionBinding, NewVersionProducts, NewVersionService,
-    QueueConfig, R2_SCHEMA_VERSION, R2BucketRepository, ReserveResourceCreate,
-    ResourceCreateReservation, ResourceRecord, ResourceRepository, ServiceTarget,
-    StoredVersionSecret, VersionBuiltinBindingRecord, VersionContentKind,
+};
+use open_compute_storage::bindings::NewVersionBinding;
+use open_compute_storage::durable_objects::{DurableObjectMigrationPlan, DurableObjectRepository};
+use open_compute_storage::queues::{NewQueueProducerBinding, QueueConfig};
+use open_compute_storage::r2::{R2_SCHEMA_VERSION, R2BucketRepository};
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRecord, ResourceRepository,
+};
+use open_compute_storage::runtime_features::{BuiltinBindingKind, VersionBuiltinBindingRecord};
+use open_compute_storage::services::{NewVersionService, ServiceTarget};
+use open_compute_storage::worker_repository::{
+    NewVersion, NewVersionProducts, StoredVersionSecret, VersionContentKind,
 };
 use open_compute_workers::{BuiltinBindingDescriptorKindV1, BuiltinBindingDescriptorV1};
 
@@ -826,7 +833,8 @@ async fn strict_inheritance_restores_each_persisted_binding_family() {
         worker_code_sha256: [5; 32],
         compatibility_date: "2026-09-08".to_owned(),
         compatibility_flags: Vec::new(),
-        resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+        resource_limits:
+            open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
         vars: BTreeMap::from([
             ("PLAIN".to_owned(), br#""value""#.to_vec()),
             ("JSON".to_owned(), br#"{"ok":true}"#.to_vec()),

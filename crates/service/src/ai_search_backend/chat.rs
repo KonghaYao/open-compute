@@ -100,6 +100,8 @@ impl AiSearchBindingService {
             "model": alias,
             "choices": [{"index": 0, "message": {"role": "assistant", "content": completion.content}}],
             "chunks": chunks,
+            "query_kind": "text",
+            "search_query": search.get("search_query").cloned().ok_or_else(corrupt)?,
         });
         if multi {
             result

@@ -162,6 +162,24 @@ function metadataFilter(value: unknown): Record<string, unknown> {
   }
   return value;
 }
+function boostBy(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value) || value.length > 3)
+    fail("AI_SEARCH_LIMIT_EXCEEDED");
+  const fields = new Set<string>();
+  return value.map((item) => {
+    const boost = exact(item, ["field", "direction"]);
+    const field = text(boost.field, 64);
+    const normalized = field.toLowerCase();
+    if (fields.has(normalized)) fail();
+    fields.add(normalized);
+    if (
+      boost.direction !== undefined &&
+      !["asc", "desc", "exists", "not_exists"].includes(String(boost.direction))
+    )
+      fail();
+    return boost;
+  });
+}
 export function uploadMetadata(value: unknown): Record<string, string> {
   if (!record(value)) fail();
   const entries = Object.entries(value);
@@ -235,7 +253,7 @@ function searchOptions(
     for (const key of ["metadata_only", "return_on_failure"])
       if (raw[key] !== undefined && typeof raw[key] !== "boolean") fail();
     if (raw.filters !== undefined) metadataFilter(raw.filters);
-    if (raw.boost_by !== undefined) fail("AI_SEARCH_OPTION_UNSUPPORTED");
+    if (raw.boost_by !== undefined) raw.boost_by = boostBy(raw.boost_by);
     output.retrieval = raw;
   }
   if (options.query_rewrite !== undefined) {
@@ -428,7 +446,8 @@ export function config(
       !["and", "or"].includes(String(retrieval.keyword_match_mode))
     )
       fail();
-    if (retrieval.boost_by !== undefined) fail("AI_SEARCH_OPTION_UNSUPPORTED");
+    if (retrieval.boost_by !== undefined)
+      retrieval.boost_by = boostBy(retrieval.boost_by);
   }
   if (raw.chunk_size !== undefined) integer(raw.chunk_size, 1, 100_000);
   if (raw.chunk_overlap !== undefined) integer(raw.chunk_overlap, 0, 30);

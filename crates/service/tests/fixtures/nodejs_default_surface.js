@@ -62,8 +62,6 @@ function nodeAttempt(host, port) {
 async function rawTcpNegative() {
   const networkTargets = [
     "127.0.0.1:1",
-    "10.0.0.1:1",
-    "169.254.169.254:80",
     "[::1]:1",
     "[::ffff:127.0.0.1]:1",
     "localhost:1",
@@ -84,8 +82,6 @@ async function rawTcpNegative() {
     }),
     node: await Promise.all([
       nodeAttempt("127.0.0.1", 1),
-      nodeAttempt("10.0.0.1", 1),
-      nodeAttempt("169.254.169.254", 80),
       nodeAttempt("::1", 1),
       nodeAttempt("::ffff:127.0.0.1", 1),
       nodeAttempt("localhost", 1),

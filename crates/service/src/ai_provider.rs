@@ -1,7 +1,9 @@
 //! Bounded OpenAI-compatible model provider client.
 
+mod rerank;
 mod vision;
 
+pub use rerank::{RerankClient, RerankResult};
 pub use vision::OpenAiVisionClient;
 
 use crate::auth::resolve_admin_auth;
@@ -180,9 +182,9 @@ impl OpenAiProviderClient {
             request_dimensions: contract.send_dimensions.then_some(contract.dimensions),
             headers,
             max_inputs: usize::from(config.max_embedding_inputs_per_batch),
-            max_request_bytes: usize::try_from(config.max_embedding_request_bytes)
+            max_request_bytes: usize::try_from(config.max_provider_request_bytes)
                 .map_err(|_| AiProviderError::ContractMismatch)?,
-            max_response_bytes: usize::try_from(config.max_embedding_response_bytes)
+            max_response_bytes: usize::try_from(config.max_provider_response_bytes)
                 .map_err(|_| AiProviderError::ContractMismatch)?,
             timeout: Duration::from_millis(config.provider_timeout_ms),
         })
@@ -368,9 +370,9 @@ impl OpenAiChatClient {
             remote_model: model.remote_model.clone(),
             provider_revision: model.provider_revision.clone(),
             headers,
-            max_request_bytes: usize::try_from(config.max_embedding_request_bytes)
+            max_request_bytes: usize::try_from(config.max_provider_request_bytes)
                 .map_err(|_| AiProviderError::ContractMismatch)?,
-            max_response_bytes: usize::try_from(config.max_embedding_response_bytes)
+            max_response_bytes: usize::try_from(config.max_provider_response_bytes)
                 .map_err(|_| AiProviderError::ContractMismatch)?,
             timeout: Duration::from_millis(config.provider_timeout_ms),
         })
@@ -449,42 +451,6 @@ impl OpenAiChatClient {
             return Err(AiProviderError::MalformedResponse);
         }
         Ok(rewritten.to_owned())
-    }
-
-    /// Rerank a bounded candidate list through a declared rerank-capable chat model.
-    /// The response must be one JSON permutation of zero-based candidate indices.
-    pub async fn rerank(
-        &self,
-        query: &str,
-        candidates: &[String],
-    ) -> Result<Vec<usize>, AiProviderError> {
-        if candidates.is_empty() || candidates.len() > 100 {
-            return Err(AiProviderError::InvalidRequest);
-        }
-        let input = serde_json::to_string(&serde_json::json!({
-            "query": query,
-            "candidates": candidates,
-        }))
-        .map_err(|_| AiProviderError::InvalidRequest)?;
-        let completion = self
-            .chat(
-                &[
-                    ChatMessage::system(
-                        "Rank candidates by relevance. Return only a JSON array of every candidate index.",
-                    ),
-                    ChatMessage::user(input),
-                ],
-                512,
-            )
-            .await?;
-        let order: Vec<usize> = serde_json::from_str(&completion.content)
-            .map_err(|_| AiProviderError::MalformedResponse)?;
-        let mut sorted = order.clone();
-        sorted.sort_unstable();
-        if sorted != (0..candidates.len()).collect::<Vec<_>>() {
-            return Err(AiProviderError::MalformedResponse);
-        }
-        Ok(order)
     }
 
     async fn send(

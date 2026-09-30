@@ -5,9 +5,9 @@ use open_compute_core::{
     BindingId, BindingKind, CanonicalBindingConfig, CanonicalPermissions, DeterministicClock,
     RequestId, ResourceState, SystemClock, VersionId,
 };
-use open_compute_storage::{
-    AuthorizedBinding, KvNamespaceRepository, PlatformStorage, VersionBindingRecord,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::bindings::{AuthorizedBinding, VersionBindingRecord};
+use open_compute_storage::kv::KvNamespaceRepository;
 use open_compute_workers::{
     CreateResourceOutcome, CreateResourceRequest, KvResourceDriver, ResourceController,
     ResourcePins,
@@ -585,7 +585,7 @@ fn absolute_expiration_cursor_and_binary_values_are_stable() {
                 &binding,
                 KvCommand::Put {
                     key: "too-large".to_owned(),
-                    value: vec![0; open_compute_storage::KV_MAX_VALUE_BYTES + 1],
+                    value: vec![0; open_compute_storage::kv::KV_MAX_VALUE_BYTES + 1],
                     expiration: None,
                     expiration_ttl: None,
                     metadata: None,

@@ -19,7 +19,7 @@ mod setup;
 use axum::body::{Body, to_bytes};
 use axum::http::Request;
 use open_compute_core::{ErrorCode, WorkflowFence, WorkflowToken, WorkflowsConfig};
-use open_compute_storage::SchedulerStore;
+use open_compute_storage::scheduler::SchedulerStore;
 use open_compute_storage::scheduler::{WorkflowStepAttempt, WorkflowStepOutcome};
 use platform_process::{Client, Process, address, config, ready, spawn};
 use rusqlite::{Connection, OpenFlags, OptionalExtension as _};

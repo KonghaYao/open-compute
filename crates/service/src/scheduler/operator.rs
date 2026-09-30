@@ -8,10 +8,12 @@ use super::{
 use open_compute_core::{
     CronSchedule, PlatformError, QueueConsumerId, RequestId, SchedulerKind, SchedulerPoolState,
 };
-use open_compute_storage::{
-    CronActivationState, CronRepository, CronScheduleProjection, QueueConsumerProjection,
-    QueueConsumerRepository, QueueConsumerState, SchedulerSummary, WorkerRepository,
+use open_compute_storage::cron::{CronActivationState, CronRepository};
+use open_compute_storage::queue_consumers::{QueueConsumerRepository, QueueConsumerState};
+use open_compute_storage::scheduler::{
+    CronScheduleProjection, QueueConsumerProjection, SchedulerSummary,
 };
+use open_compute_storage::worker_repository::WorkerRepository;
 use std::sync::atomic::Ordering;
 
 impl SchedulerService {

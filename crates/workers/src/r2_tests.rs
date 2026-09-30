@@ -4,7 +4,9 @@ use open_compute_artifacts::{
 };
 use open_compute_core::config::DataConfig;
 use open_compute_core::{RequestId, SystemClock};
-use open_compute_storage::{ReserveResourceCreate, ResourceCreateReservation, ResourceRepository};
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
+};
 use std::os::unix::fs::PermissionsExt as _;
 
 fn storage_fixture() -> (tempfile::TempDir, PlatformStorage, ResourceRecord) {
@@ -32,7 +34,7 @@ fn storage_fixture() -> (tempfile::TempDir, PlatformStorage, ResourceRecord) {
                 idempotency_key: "r2-driver",
                 fingerprint_key_id: storage.crypto().fingerprint_key_id(),
                 request_fingerprint: &fingerprint,
-                resource_id: open_compute_core::ResourceId::generate(),
+                resource_id: ResourceId::generate(),
                 driver_schema_version: R2_SCHEMA_VERSION,
                 request_id: RequestId::generate(),
                 now_ms: 10,
@@ -45,6 +47,24 @@ fn storage_fixture() -> (tempfile::TempDir, PlatformStorage, ResourceRecord) {
         unreachable!()
     };
     (temp, storage, resource)
+}
+
+fn empty_storage_fixture() -> (tempfile::TempDir, PlatformStorage) {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("data");
+    let storage = PlatformStorage::bootstrap(
+        &DataConfig {
+            path: root.clone(),
+            master_key_file: root.join("keys/master.key"),
+            master_key_env: None,
+            sqlite_busy_timeout_ms: 5_000,
+            free_space_soft_bytes: 1_073_741_824,
+            free_space_hard_bytes: 268_435_456,
+        },
+        &SystemClock,
+    )
+    .unwrap();
+    (temp, storage)
 }
 
 fn object_store(mock: &open_compute_artifacts::MockS3) -> R2ObjectStore {
@@ -66,6 +86,90 @@ fn object_store_with_prefix(
         .with("S3_SECRET_ACCESS_KEY", "test-secret");
     let credentials = open_compute_artifacts::resolve_s3_credentials_with(&config, &env).unwrap();
     R2ObjectStore::new(ObjectBackend::connect_s3(&config, &credentials, 1024 * 1024).unwrap())
+}
+
+#[tokio::test]
+async fn controller_owns_create_replay_lost_response_reconcile_and_delete() {
+    let mock = open_compute_artifacts::MockS3::spawn("bucket").await;
+    let (_temp, storage) = empty_storage_fixture();
+    let pins = ResourcePins::new();
+    let controller = R2Controller::new(
+        &storage,
+        object_store(&mock),
+        pins.clone(),
+        R2Config::default(),
+    );
+    let mut request = CreateR2BucketRequest {
+        instance_id: storage.identity().instance_id,
+        name: "images".to_owned(),
+        idempotency_key: "create-images".to_owned(),
+        request_id: RequestId::generate(),
+        now_ms: 10,
+        reconcile_by_name: false,
+    };
+    let created = controller.create(&request).await.unwrap();
+    assert_eq!(created.resource.state, ResourceState::Ready);
+    assert_eq!(controller.create(&request).await.unwrap(), created);
+
+    request.idempotency_key = "lost-response".to_owned();
+    request.request_id = RequestId::generate();
+    request.reconcile_by_name = true;
+    assert_eq!(controller.create(&request).await.unwrap(), created);
+
+    let cleanup_error = invariant();
+    assert_eq!(
+        controller
+            .delete(
+                &created,
+                RequestId::generate(),
+                20,
+                Duration::from_secs(1),
+                async { Err(cleanup_error) },
+            )
+            .await
+            .unwrap_err()
+            .code(),
+        ErrorCode::ResourceInvariantViolation
+    );
+    assert!(pins.try_pin(created.resource.id).is_ok());
+    controller
+        .finish_delete(&created, RequestId::generate(), 21, false)
+        .await
+        .unwrap();
+    let tombstone = ResourceRepository::new(storage.db())
+        .get(storage.identity().instance_id, created.resource.id)
+        .unwrap();
+    assert_eq!(tombstone.state, ResourceState::Tombstoned);
+}
+
+#[tokio::test]
+async fn controller_rejects_idempotency_expiry_overflow_before_reserving() {
+    let mock = open_compute_artifacts::MockS3::spawn("bucket").await;
+    let (_temp, storage) = empty_storage_fixture();
+    let controller = R2Controller::new(
+        &storage,
+        object_store(&mock),
+        ResourcePins::new(),
+        R2Config::default(),
+    );
+    let error = controller
+        .create(&CreateR2BucketRequest {
+            instance_id: storage.identity().instance_id,
+            name: "overflow".to_owned(),
+            idempotency_key: "overflow".to_owned(),
+            request_id: RequestId::generate(),
+            now_ms: i64::MAX,
+            reconcile_by_name: false,
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), ErrorCode::ResourceInvariantViolation);
+    assert!(
+        ResourceRepository::new(storage.db())
+            .list(storage.identity().instance_id, Some(BindingKind::R2Bucket))
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[tokio::test]

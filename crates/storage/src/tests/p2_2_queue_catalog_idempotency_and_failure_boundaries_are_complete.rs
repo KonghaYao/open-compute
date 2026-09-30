@@ -5,69 +5,80 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
     let (_tmp, root) = unique_root();
     let storage = PlatformStorage::bootstrap(&storage_config(&root), &SystemClock).unwrap();
     let account = storage.identity().instance_id;
-    let repository = crate::QueueRepository::new(storage.db());
+    let repository = crate::queues::QueueRepository::new(storage.db());
     let workers = WorkerRepository::new(storage.db());
     let fingerprint = [7_u8; 32];
     let other_fingerprint = [8_u8; 32];
 
-    assert_eq!(crate::QueueState::Creating.as_str(), "creating");
-    assert_eq!(crate::QueueState::Ready.as_str(), "ready");
-    assert_eq!(crate::QueueState::Deleting.as_str(), "deleting");
-    assert_eq!(crate::QueueState::Tombstoned.as_str(), "tombstoned");
+    assert_eq!(crate::queues::QueueState::Creating.as_str(), "creating");
+    assert_eq!(crate::queues::QueueState::Ready.as_str(), "ready");
+    assert_eq!(crate::queues::QueueState::Deleting.as_str(), "deleting");
+    assert_eq!(crate::queues::QueueState::Tombstoned.as_str(), "tombstoned");
     assert_eq!(
-        "creating".parse::<crate::QueueState>().unwrap(),
-        crate::QueueState::Creating
+        "creating".parse::<crate::queues::QueueState>().unwrap(),
+        crate::queues::QueueState::Creating
     );
     assert_eq!(
-        "tombstoned".parse::<crate::QueueState>().unwrap(),
-        crate::QueueState::Tombstoned
-    );
-    assert_eq!(
-        "invalid".parse::<crate::QueueState>().unwrap_err().code(),
-        ErrorCode::QueueInvariantViolation
-    );
-    assert_eq!(crate::QueueAvailability::Healthy.as_str(), "healthy");
-    assert_eq!(crate::QueueAvailability::Degraded.as_str(), "degraded");
-    assert_eq!(
-        crate::QueueAvailability::Unavailable.as_str(),
-        "unavailable"
-    );
-    assert_eq!(
-        "degraded".parse::<crate::QueueAvailability>().unwrap(),
-        crate::QueueAvailability::Degraded
+        "tombstoned".parse::<crate::queues::QueueState>().unwrap(),
+        crate::queues::QueueState::Tombstoned
     );
     assert_eq!(
         "invalid"
-            .parse::<crate::QueueAvailability>()
+            .parse::<crate::queues::QueueState>()
+            .unwrap_err()
+            .code(),
+        ErrorCode::QueueInvariantViolation
+    );
+    assert_eq!(
+        crate::queues::QueueAvailability::Healthy.as_str(),
+        "healthy"
+    );
+    assert_eq!(
+        crate::queues::QueueAvailability::Degraded.as_str(),
+        "degraded"
+    );
+    assert_eq!(
+        crate::queues::QueueAvailability::Unavailable.as_str(),
+        "unavailable"
+    );
+    assert_eq!(
+        "degraded"
+            .parse::<crate::queues::QueueAvailability>()
+            .unwrap(),
+        crate::queues::QueueAvailability::Degraded
+    );
+    assert_eq!(
+        "invalid"
+            .parse::<crate::queues::QueueAvailability>()
             .unwrap_err()
             .code(),
         ErrorCode::QueueInvariantViolation
     );
 
     for invalid in [
-        crate::QueueConfig {
-            delivery_delay_seconds: crate::QUEUE_MAX_DELAY_SECONDS + 1,
-            ..crate::QueueConfig::default()
+        crate::queues::QueueConfig {
+            delivery_delay_seconds: crate::queues::QUEUE_MAX_DELAY_SECONDS + 1,
+            ..crate::queues::QueueConfig::default()
         },
-        crate::QueueConfig {
-            retention_seconds: crate::QUEUE_MIN_RETENTION_SECONDS - 1,
-            ..crate::QueueConfig::default()
+        crate::queues::QueueConfig {
+            retention_seconds: crate::queues::QUEUE_MIN_RETENTION_SECONDS - 1,
+            ..crate::queues::QueueConfig::default()
         },
-        crate::QueueConfig {
+        crate::queues::QueueConfig {
             max_message_bytes: 0,
-            ..crate::QueueConfig::default()
+            ..crate::queues::QueueConfig::default()
         },
-        crate::QueueConfig {
+        crate::queues::QueueConfig {
             max_batch_messages: 0,
-            ..crate::QueueConfig::default()
+            ..crate::queues::QueueConfig::default()
         },
-        crate::QueueConfig {
+        crate::queues::QueueConfig {
             max_batch_bytes: 0,
-            ..crate::QueueConfig::default()
+            ..crate::queues::QueueConfig::default()
         },
-        crate::QueueConfig {
+        crate::queues::QueueConfig {
             max_backlog_bytes: 0,
-            ..crate::QueueConfig::default()
+            ..crate::queues::QueueConfig::default()
         },
     ] {
         assert_eq!(
@@ -82,7 +93,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                     account,
                     open_compute_core::QueueId::generate(),
                     name,
-                    crate::QueueConfig::default(),
+                    crate::queues::QueueConfig::default(),
                     1,
                 )
                 .unwrap_err()
@@ -119,7 +130,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 InstanceId::generate(),
                 open_compute_core::QueueId::generate(),
                 "orphan",
-                crate::QueueConfig::default(),
+                crate::queues::QueueConfig::default(),
                 1,
             )
             .unwrap_err()
@@ -133,7 +144,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
             account,
             running_id,
             "running",
-            crate::QueueConfig::default(),
+            crate::queues::QueueConfig::default(),
             "create-running",
             "key",
             &fingerprint,
@@ -148,7 +159,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 InstanceId::generate(),
                 open_compute_core::QueueId::generate(),
                 "other-instance",
-                crate::QueueConfig::default(),
+                crate::queues::QueueConfig::default(),
                 "create-running",
                 "key",
                 &fingerprint,
@@ -162,7 +173,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
     );
     assert!(matches!(
         running,
-        crate::QueueCreateReservation::Reserved(_)
+        crate::queues::QueueCreateReservation::Reserved(_)
     ));
     assert_eq!(
         repository
@@ -170,7 +181,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 account,
                 running_id,
                 "running",
-                crate::QueueConfig::default(),
+                crate::queues::QueueConfig::default(),
                 "create-running",
                 "key",
                 &fingerprint,
@@ -179,7 +190,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 10,
             )
             .unwrap(),
-        crate::QueueCreateReservation::Running
+        crate::queues::QueueCreateReservation::Running
     );
     assert_eq!(
         repository
@@ -187,7 +198,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 account,
                 running_id,
                 "running",
-                crate::QueueConfig::default(),
+                crate::queues::QueueConfig::default(),
                 "create-running",
                 "key",
                 &other_fingerprint,
@@ -206,7 +217,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
             account,
             complete_id,
             "complete",
-            crate::QueueConfig::default(),
+            crate::queues::QueueConfig::default(),
             "create-complete",
             "key",
             &fingerprint,
@@ -216,7 +227,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
         )
         .unwrap()
     {
-        crate::QueueCreateReservation::Reserved(queue) => queue,
+        crate::queues::QueueCreateReservation::Reserved(queue) => queue,
         other => panic!("unexpected reservation: {other:?}"),
     };
     repository
@@ -228,7 +239,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 account,
                 complete_id,
                 "complete",
-                crate::QueueConfig::default(),
+                crate::queues::QueueConfig::default(),
                 "create-complete",
                 "key",
                 &fingerprint,
@@ -237,7 +248,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 10,
             )
             .unwrap(),
-        crate::QueueCreateReservation::Complete(b"{\"complete\":true}".to_vec())
+        crate::queues::QueueCreateReservation::Complete(b"{\"complete\":true}".to_vec())
     );
 
     let failed_id = open_compute_core::QueueId::generate();
@@ -247,7 +258,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 account,
                 failed_id,
                 "failed",
-                crate::QueueConfig::default(),
+                crate::queues::QueueConfig::default(),
                 "create-failed",
                 "key",
                 &fingerprint,
@@ -256,7 +267,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 10,
             )
             .unwrap(),
-        crate::QueueCreateReservation::Reserved(_)
+        crate::queues::QueueCreateReservation::Reserved(_)
     ));
     workers
         .fail_idempotency(
@@ -273,7 +284,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 account,
                 failed_id,
                 "failed",
-                crate::QueueConfig::default(),
+                crate::queues::QueueConfig::default(),
                 "create-failed",
                 "key",
                 &fingerprint,
@@ -282,7 +293,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 10,
             )
             .unwrap(),
-        crate::QueueCreateReservation::Failed(b"{\"failed\":true}".to_vec())
+        crate::queues::QueueCreateReservation::Failed(b"{\"failed\":true}".to_vec())
     );
     assert_eq!(
         repository
@@ -290,7 +301,7 @@ fn p2_2_queue_catalog_and_create_idempotency_boundaries_are_complete() {
                 account,
                 open_compute_core::QueueId::generate(),
                 "quota",
-                crate::QueueConfig::default(),
+                crate::queues::QueueConfig::default(),
                 "create-quota",
                 "key",
                 &fingerprint,
@@ -309,7 +320,7 @@ fn p2_2_queue_lifecycle_and_mutation_boundaries_are_complete() {
     let (_tmp, root) = unique_root();
     let storage = PlatformStorage::bootstrap(&storage_config(&root), &SystemClock).unwrap();
     let account = storage.identity().instance_id;
-    let repository = crate::QueueRepository::new(storage.db());
+    let repository = crate::queues::QueueRepository::new(storage.db());
     let workers = WorkerRepository::new(storage.db());
     let fingerprint = [7_u8; 32];
     let other_fingerprint = [8_u8; 32];
@@ -319,7 +330,7 @@ fn p2_2_queue_lifecycle_and_mutation_boundaries_are_complete() {
             account,
             lifecycle_id,
             "lifecycle",
-            crate::QueueConfig::default(),
+            crate::queues::QueueConfig::default(),
             20,
         )
         .unwrap();
@@ -344,7 +355,7 @@ fn p2_2_queue_lifecycle_and_mutation_boundaries_are_complete() {
         ErrorCode::QueueNotReady
     );
     let ready = repository.mark_ready(account, lifecycle_id, 22).unwrap();
-    assert_eq!(ready.state, crate::QueueState::Ready);
+    assert_eq!(ready.state, crate::queues::QueueState::Ready);
     assert_eq!(
         repository
             .mark_ready(account, lifecycle_id, 23)
@@ -411,7 +422,7 @@ fn p2_2_queue_lifecycle_and_mutation_boundaries_are_complete() {
     );
 
     let mutation_id = lifecycle.id;
-    let mutation = crate::RunningQueueMutation {
+    let mutation = crate::queues::RunningQueueMutation {
         instance_id: account,
         scope: format!("queue.patch:{mutation_id}"),
         idempotency_key: "mutation".to_owned(),

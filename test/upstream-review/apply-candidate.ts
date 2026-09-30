@@ -140,17 +140,21 @@ const extractedWrangler = await extractPackage(
 const lock = JSON.parse(readFileSync(LOCK_PATH, "utf8"));
 let repositoryTagRevision = lock.cloudflareSdk.repositoryTagRevision;
 if (lock.cloudflareSdk.version !== sdk.version) {
-  const tagResponse = await fetch(
-    `https://api.github.com/repos/cloudflare/ts-sdk/git/refs/tags/v${sdk.version}`,
+  const tag = spawnSync(
+    "git",
+    [
+      "ls-remote",
+      "--tags",
+      "https://github.com/cloudflare/cloudflare-typescript.git",
+      `refs/tags/v${sdk.version}`,
+    ],
+    { encoding: "utf8" },
   );
-  if (!tagResponse.ok)
+  repositoryTagRevision = tag.stdout.trim().split(/\s+/)[0] ?? "";
+  if (tag.status !== 0 || repositoryTagRevision.length !== 40)
     throw new Error(
       `cannot resolve the official SDK tag revision for v${sdk.version}; record it manually`,
     );
-  const tagMetadata = (await tagResponse.json()) as {
-    object: { sha: string };
-  };
-  repositoryTagRevision = tagMetadata.object.sha;
 }
 
 // 4. Update the dependency catalog and lock identities.
@@ -203,6 +207,7 @@ run("bun", [
   "--wrangler-root",
   extractedWrangler.root,
 ]);
+run("bun", ["install"]);
 for (const [field, path] of [
   ["subsetSha256", "openapi/cloudflare-v4-subset.json"],
   ["subsetManifestSha256", "openapi/cloudflare-subset-manifest.json"],
@@ -216,7 +221,6 @@ for (const [field, path] of [
 writeFileSync(LOCK_PATH, `${JSON.stringify(lock, null, 2)}\n`);
 run("bun", ["packages/sdk/scripts/generate.ts"]);
 run("bun", ["test/conformance/inventory.ts", "generate"]);
-run("bun", ["install"]);
 
 console.log(
   `applied candidate: openapi ${schemaRevision.slice(0, 12)}, cloudflare ${sdk.version}, wrangler ${wrangler.version}`,

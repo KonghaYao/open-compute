@@ -27,9 +27,13 @@ fn private_lock_helpers_cover_unavailable_target_and_visitor_contracts() {
             ]),
         },
         expected_version_output: "workerd 2026-08-30".to_owned(),
-        effective_compatibility_date: "2026-09-08".to_owned(),
-        required_compatibility_flags: Vec::new(),
+        system_compatibility_date: "2026-09-08".to_owned(),
         system_compatibility_flags: vec!["experimental".to_owned()],
+        binary_maximum_compatibility_date: "2026-09-25".to_owned(),
+        compatibility_catalog: CompatibilityCatalogPin {
+            schema_version: 1,
+            sha256: "ee".repeat(32),
+        },
         process_flags: vec!["--experimental".to_owned()],
         pyodide_bundle: PyodideBundlePin {
             version: "314.0.6_2026-08-17_2".to_owned(),
@@ -46,7 +50,7 @@ fn private_lock_helpers_cover_unavailable_target_and_visitor_contracts() {
         },
         workers_sdk: WorkersSdkPin {
             revision: "f8085545bcaa2c639f171c25e4424685036a0e10".to_owned(),
-            wrangler_version: "4.138.0".to_owned(),
+            wrangler_version: "4.143.0".to_owned(),
             vite_plugin_version: "1.54.2".to_owned(),
         },
         targets: BTreeMap::new(),
@@ -58,8 +62,8 @@ fn private_lock_helpers_cover_unavailable_target_and_visitor_contracts() {
 
     let target = RuntimeTarget {
         archive_name: "workerd-unknown.gz".to_owned(),
-        archive_url: Some("https://github.com/elliothux/workerd/releases/download/v1.20260830.1/workerd-unknown.gz"
-                .to_owned()),
+        archive_url: "https://github.com/elliothux/workerd/releases/download/v1.20260830.1/workerd-unknown.gz"
+            .to_owned(),
         archive_sha256: "aa".repeat(32),
         binary_sha256: "bb".repeat(32),
     };

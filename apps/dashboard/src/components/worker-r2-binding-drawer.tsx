@@ -3,6 +3,7 @@ import { Select } from "@cloudflare/kumo/components/select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 import { WorkerBindingDrawerLayout } from "./worker-binding-layout";
 import {
   invalidateWorkerBindingQueries,
@@ -33,7 +34,7 @@ export function WorkerR2BindingDrawer({
   const queryClient = useQueryClient();
   const feedback = useMutationFeedback();
   const buckets = useQuery({
-    queryKey: ["cloudflare-v4", "r2", selectedInstanceId, "binding-buckets"],
+    queryKey: queryKeys.r2(selectedInstanceId, "binding-buckets"),
     queryFn: async ({ signal }) => {
       const names: string[] = [];
       let startAfter: string | undefined;

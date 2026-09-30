@@ -19,6 +19,7 @@ import { RowActionsMenu } from "../../../components/row-actions-menu";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
 import { formatDate } from "../../../lib/format";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/queues/")({
   validateSearch: (search: Record<string, unknown>): { q?: string } =>
@@ -35,14 +36,14 @@ function QueuesPage() {
   const enabled = client !== null && selectedInstanceId !== null;
 
   const queues = useQuery({
-    queryKey: ["cloudflare-v4", "queues", selectedInstanceId],
+    queryKey: queryKeys.queues(selectedInstanceId),
     queryFn: ({ signal }) =>
       client!.queues.list({ account_id: selectedInstanceId! }, { signal }),
     enabled,
   });
   const refresh = () =>
     queryClient.invalidateQueries({
-      queryKey: ["cloudflare-v4", "queues", selectedInstanceId],
+      queryKey: queryKeys.queues(selectedInstanceId),
     });
   function confirmDeleteQueue(id: string, name: string) {
     openConfirmDeleteDialog({

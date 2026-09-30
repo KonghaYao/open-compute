@@ -5,7 +5,7 @@
 use open_compute_core::{
     DurableObjectId, ResourceId, SchedulerFaultPoint, SchedulerKind, VersionId,
 };
-use open_compute_storage::{AlarmProjection, ClaimResult, ClaimedJob, SchedulerStore};
+use open_compute_storage::scheduler::{AlarmProjection, ClaimResult, ClaimedJob, SchedulerStore};
 use rusqlite::Connection;
 use std::fs;
 use std::io::Write as _;

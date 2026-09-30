@@ -1,13 +1,27 @@
-"""Audited repetition ownership; every product-Gate case must occur exactly once.
+"""Audited case ownership; every product-Gate case must occur exactly once.
 
 ONCE covers fixed input/state/fault matrices, including their existing real-runtime
 and restart steps. TIMING samples OS scheduling, in-flight cancellation, cleanup,
 and recovery. A mixed monolithic case stays TIMING until it can be separated without
 losing assertions. Discovery rejects missing, extra, and overlapping registrations.
+SERVICE_PROCESS_CASES is the disjoint exclusive partition of the workspace-only
+service-library inventory; it is not Cloudflare contract evidence.
 """
 
 import json
 import sys
+
+SERVICE_PROCESS_TARGET = 'service-process-lifecycle'
+SERVICE_PROCESS_CASES = (
+    'doctor::tests::doctor_report_full_with_available_lock_runs_extras',
+    'doctor::tests::full_runtime_checks_require_exclusive_authority_and_skip_missing_remotes',
+    'tests::fail_after_stages_release_lock_and_ports::fail_after_stages_release_lock_and_ports',
+    'tests::full_doctor_reports_object_storage_canary_failure_without_leaking_objects::full_doctor_reports_object_storage_canary_failure_without_leaking_objects',
+    'tests::full_doctor_uses_embedded_workerd::full_doctor_uses_embedded_workerd',
+    'tests::run_real_workerd_on_merged_listener_serves_status_and_shuts_down::run_real_workerd_on_merged_listener_serves_status_and_shuts_down',
+    'tests::run_real_workerd_with_separate_admin_listener_and_maintenance_tick::run_real_workerd_with_separate_admin_listener_and_maintenance_tick',
+    'tests::run_startup_failure_matrix_releases_owned_resources::run_startup_failure_matrix_releases_owned_resources',
+)
 
 ONCE = {
     'p3-contract': (
@@ -86,6 +100,12 @@ ONCE = {
     ),
     'p6-cloudflare-sdk': ('official_cloudflare_sdk_matches_live_ocd_contract',),
     'p12-wrangler': ('target_commands_and_wrangler_wrapper_preserve_the_day1_boundary',),
+    'p5-ai-provider-qualification': (
+        'bailian-embedding-deepseek-chat',
+        'bailian-embedding-cohere-rerank-deepseek-chat',
+        'bailian-embedding-bailian-rerank-deepseek-chat',
+    ),
+    's3-provider-qualification': ('production-preflight',),
 }
 
 TIMING = {
@@ -176,6 +196,11 @@ TIMING = {
 
 def validate_registry(target_names):
     """Fail closed on unaudited targets or ambiguous case ownership before building."""
+    if (not SERVICE_PROCESS_CASES
+            or len(SERVICE_PROCESS_CASES) != len(set(SERVICE_PROCESS_CASES))):
+        raise ValueError('duplicate or empty workspace case partition')
+    if SERVICE_PROCESS_TARGET in target_names:
+        raise ValueError('workspace case partition collides with a product Gate target')
     if ONCE.keys() | TIMING.keys() != set(target_names):
         raise ValueError('Gate targets and case repetition registry differ')
     for name in target_names:

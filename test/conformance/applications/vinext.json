@@ -22,7 +22,7 @@
     "@cloudflare/vite-plugin": "1.54.2",
     "@vitejs/plugin-react": "6.1.1",
     "@vitejs/plugin-rsc": "0.5.34",
-    "wrangler": "4.138.0",
+    "wrangler": "4.143.0",
     "@playwright/test": "1.62.1",
     "typescript": "7.0.2"
   },
@@ -31,14 +31,14 @@
     "compatibilityDate": "2026-09-08",
     "compatibilityFlags": ["nodejs_compat"]
   },
-  "rootLockSha256": "3bcf771ea4f56a5659082747b27827aed83da0d153297fdb355476ca1c35a493",
-  "fixtureTreeSha256": "3726a9aff2a3e975af812516aeb5d3333c660fbe5c061260be9041fdaece0ec7",
+  "rootLockSha256": "685f6c5c5f8f5d0327a675e606c137d773bdbbfefd29a11c4533d33823ab332b",
+  "fixtureTreeSha256": "44dc779679326454c394bc18991f4917c6d07516ac513ae6498364d21995597d",
   "casesSha256": "7f31ba60393c371a57d63a1ecef9a9fbae68f1a47b953cf99ac4dfa443dc3c9d",
   "browser": {
     "name": "chromium",
     "playwrightVersion": "1.62.1",
-    "playwrightRevision": "1234",
-    "browserVersion": "151.0.7922.34"
+    "playwrightRevision": "1243",
+    "browserVersion": "153.0.8010.12"
   },
   "platformBaseline": {
     "reportSha256": "f5838726aa3d662c2b566b909c551327465d78fc32af28921628079c7d0e89e6",

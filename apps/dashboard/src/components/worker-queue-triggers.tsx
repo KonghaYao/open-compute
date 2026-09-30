@@ -14,6 +14,7 @@ import { useState } from "react";
 import type { QueueConsumer } from "@open-compute/sdk";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 import { ErrorState } from "./dashboard-page";
 
 type Draft = {
@@ -93,7 +94,7 @@ export function WorkerQueueTriggers({
   const [editing, setEditing] = useState<Draft | null>(null);
   const [sendToDlq, setSendToDlq] = useState(false);
   const queues = useQuery({
-    queryKey: ["cloudflare-v4", "queues", selectedInstanceId],
+    queryKey: queryKeys.queues(selectedInstanceId),
     queryFn: ({ signal }) =>
       client!.queues.list({ account_id: selectedInstanceId! }, { signal }),
     enabled: client !== null && selectedInstanceId !== null,
@@ -163,16 +164,14 @@ export function WorkerQueueTriggers({
       setDrafts(null);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: [
-            "cloudflare-v4",
-            "workers",
+          queryKey: queryKeys.workers(
             selectedInstanceId,
             workerId,
             "queue-consumers",
-          ],
+          ),
         }),
         queryClient.invalidateQueries({
-          queryKey: ["cloudflare-v4", "queues", selectedInstanceId],
+          queryKey: queryKeys.queues(selectedInstanceId),
         }),
       ]);
       feedback.success("Queue triggers saved.");
@@ -181,13 +180,11 @@ export function WorkerQueueTriggers({
       // A multi-row save can partially succeed: reload authority before another attempt.
       setDrafts(null);
       await queryClient.invalidateQueries({
-        queryKey: [
-          "cloudflare-v4",
-          "workers",
+        queryKey: queryKeys.workers(
           selectedInstanceId,
           workerId,
           "queue-consumers",
-        ],
+        ),
       });
       feedback.failure(error, "Unable to save Queue triggers.");
     },

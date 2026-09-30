@@ -4,6 +4,7 @@ import { Select } from "@cloudflare/kumo/components/select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 import { CodeBlock } from "./code-block";
 import { WorkerBindingDialogLayout } from "./worker-binding-layout";
 import {
@@ -50,7 +51,7 @@ export function WorkerTwoColumnBindingDialog({
   const queryClient = useQueryClient();
   const feedback = useMutationFeedback();
   const resources = useQuery({
-    queryKey: ["cloudflare-v4", kind, "binding-resources", selectedInstanceId],
+    queryKey: queryKeys.product(kind, selectedInstanceId, "binding-resources"),
     queryFn: async ({ signal }): Promise<BindingResource[]> => {
       if (kind === "d1") {
         const response = await client!.d1.database.list(

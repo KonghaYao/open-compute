@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { OpenComputeJsonValue } from "@open-compute/sdk";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 import { WorkerBindingDrawerLayout } from "./worker-binding-layout";
 import {
   invalidateWorkerBindingQueries,
@@ -50,12 +51,7 @@ export function WorkerServiceBindingDrawer({
   const feedback = useMutationFeedback();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const resources = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "service",
-      "binding-resources",
-      selectedInstanceId,
-    ],
+    queryKey: queryKeys.service(selectedInstanceId, "binding-resources"),
     queryFn: async ({ signal }) => {
       const response = await client!.workers.scripts.list(
         { account_id: selectedInstanceId! },

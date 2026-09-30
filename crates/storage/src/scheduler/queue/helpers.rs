@@ -2,7 +2,7 @@
 
 use super::super::{corrupt, map_sql_error};
 use super::{QueueCounterMismatch, QueueEnqueueRequest, QueueMetrics};
-use crate::{
+use crate::queues::{
     QUEUE_MAX_BATCH_BYTES, QUEUE_MAX_BATCH_MESSAGES, QUEUE_MAX_DELAY_SECONDS,
     QUEUE_MAX_MESSAGE_BYTES, QueueConfig,
 };

@@ -18,7 +18,7 @@ fn now() -> i64 {
 
 fn start_backend(
     harness: &mut Harness,
-    store: &std::sync::Arc<open_compute_storage::SchedulerStore>,
+    store: &std::sync::Arc<open_compute_storage::scheduler::SchedulerStore>,
     limits: &open_compute_core::WorkflowsConfig,
     metrics: &std::sync::Arc<open_compute_service::metrics::MetricsRegistry>,
 ) -> tokio::task::JoinHandle<Result<(), open_compute_core::PlatformError>> {

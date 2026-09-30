@@ -5,7 +5,7 @@ use open_compute_core::{
     AiEmbeddingMetric, AiTokenizer, ResolvedEmbeddingModelContract, ResolvedTokenizerContract,
 };
 use open_compute_document_parser::{DocumentFormat, DocumentMetadata, ParsedContentKind};
-use open_compute_storage::{
+use open_compute_storage::ai_search::{
     AiSearchInstanceStorageContract, AiSearchSourceReference, NewAiSearchItemGeneration,
     NewAiSearchManualGeneration,
 };
@@ -619,7 +619,7 @@ async fn durable_parse_cache_reuses_retry_and_reindex_and_contract_change_misses
     assert_eq!(reads.load(AtomicOrdering::Relaxed), 1);
     assert_eq!(parses.load(AtomicOrdering::Relaxed), 1);
 
-    let key = open_compute_storage::AiSearchParseCacheKey::new(
+    let key = open_compute_storage::ai_search::AiSearchParseCacheKey::new(
         [7; 32],
         14,
         "fixture.txt",

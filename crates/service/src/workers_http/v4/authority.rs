@@ -3,7 +3,7 @@
 use crate::http::HttpState;
 use crate::workers_http::WorkerApiState;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, RequestId};
-use open_compute_storage::{WorkerRecord, WorkerRepository};
+use open_compute_storage::worker_repository::{WorkerRecord, WorkerRepository};
 
 const MAX_WORKERS: u32 = 10_000;
 

@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
-description = "Dependency-free workspace foundation: config, errors, IDs, secrets, and clock"
+description = "Workspace foundation for config, errors, IDs, secrets, health, and clocks"
 publish.workspace = true
 
 [features]

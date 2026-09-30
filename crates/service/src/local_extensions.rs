@@ -118,18 +118,20 @@ impl LocalExtensionRegistry {
         worker_id: WorkerId,
         version_id: Option<VersionId>,
         entrypoint: Option<&str>,
-    ) -> Option<open_compute_storage::ServiceTarget> {
+    ) -> Option<open_compute_storage::services::ServiceTarget> {
         if let Some(extension) = self.entries.get(name) {
-            return Some(open_compute_storage::ServiceTarget::Extension {
+            return Some(open_compute_storage::services::ServiceTarget::Extension {
                 name: name.to_owned(),
                 policy_revision: extension.policy_revision.clone(),
             });
         }
         self.private_http(name, account_id, worker_id, version_id, entrypoint)
-            .map(|target| open_compute_storage::ServiceTarget::Extension {
-                name: name.to_owned(),
-                policy_revision: target.policy_revision.clone(),
-            })
+            .map(
+                |target| open_compute_storage::services::ServiceTarget::Extension {
+                    name: name.to_owned(),
+                    policy_revision: target.policy_revision.clone(),
+                },
+            )
     }
 
     pub(crate) fn names(&self) -> impl Iterator<Item = &str> {
@@ -464,7 +466,7 @@ mod tests {
             registry
                 .service_target("inventory", account, worker, Some(version), None)
                 .unwrap(),
-            open_compute_storage::ServiceTarget::Extension {
+            open_compute_storage::services::ServiceTarget::Extension {
                 name: "inventory".to_owned(),
                 policy_revision: target.policy_revision.clone(),
             }

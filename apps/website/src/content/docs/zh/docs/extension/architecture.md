@@ -47,7 +47,7 @@ workerd  <--------- session Cap'n Proto ----------->  Provider
 | `OCH1` | workerd generation broker（fd 4） | workerd → `ocd`  | 证明已校验的 session identity 并接收数据 FD                |
 | `OCP2` | Provider control（stdin，fd 0）   | `ocd` → Provider | 附加一个 session FD 和 nonce；Provider 在 ACK 中回显 nonce |
 
-两次传递都使用恰好一个 FD 的 `SCM_RIGHTS`。额外 FD、错误 magic、截断的 identity 或缺失 ACK 都会 fail closed。正式 FD passing 使用 workerd `--//:io_backend=cxx`。
+两次传递都使用恰好一个 FD 的 `SCM_RIGHTS`。额外 FD、错误 magic、截断的 identity 或缺失 ACK 都会 fail closed。
 
 ## Session authority
 

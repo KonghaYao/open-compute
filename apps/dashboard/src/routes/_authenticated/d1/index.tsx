@@ -16,6 +16,7 @@ import {
 import { openConfirmDeleteDialog } from "../../../components/resource-dialog";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/d1/")({
   validateSearch: (search: Record<string, unknown>): { q?: string } =>
@@ -32,7 +33,7 @@ function D1Page() {
   const feedback = useMutationFeedback();
   const enabled = client !== null && selectedInstanceId !== null;
   const databases = useQuery({
-    queryKey: ["cloudflare-v4", "d1", selectedInstanceId, "databases"],
+    queryKey: queryKeys.d1(selectedInstanceId, "databases"),
     queryFn: ({ signal }) =>
       client!.d1.database.list({ account_id: selectedInstanceId! }, { signal }),
     enabled,

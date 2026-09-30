@@ -7,7 +7,8 @@ use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use open_compute_core::{BindingKind, InstanceId, RequestId, ResourceId, VersionId, WorkerId};
 use open_compute_service::runtime_bridge::DispatchTarget;
-use open_compute_storage::{DO_NAMESPACE_SCHEMA_VERSION, VersionRecord, WorkerRepository};
+use open_compute_storage::durable_objects::DO_NAMESPACE_SCHEMA_VERSION;
+use open_compute_storage::worker_repository::{VersionRecord, WorkerRepository};
 use open_compute_workers::{
     CreateResourceOutcome, CreateResourceRequest, DurableObjectResourceDriver, ResourceController,
     ResourcePins,

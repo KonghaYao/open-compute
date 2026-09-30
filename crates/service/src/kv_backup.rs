@@ -10,7 +10,7 @@ pub(crate) async fn create_backup(
     resource_id: ResourceId,
     key: String,
     now_ms: i64,
-) -> Result<open_compute_storage::KvBackupRecord, PlatformError> {
+) -> Result<open_compute_storage::kv::KvBackupRecord, PlatformError> {
     let _admission = api
         .storage
         .reserve_mutation(api.config.namespace_quota_bytes)?;
@@ -310,7 +310,7 @@ fn restore_downloaded_namespace(
             fingerprint_key_id: storage.crypto().fingerprint_key_id(),
             request_fingerprint: &fingerprint,
             resource_id: ResourceId::generate(),
-            driver_schema_version: open_compute_storage::KV_SCHEMA_VERSION,
+            driver_schema_version: open_compute_storage::kv::KV_SCHEMA_VERSION,
             request_id: operation.request_id,
             now_ms: operation_now,
             expires_at_ms: operation_now.saturating_add(24 * 60 * 60 * 1000),
@@ -336,7 +336,7 @@ fn restore_downloaded_namespace(
         catalog.ensure_restoring_namespace(
             &resource,
             &storage_key,
-            open_compute_storage::KV_SCHEMA_VERSION,
+            open_compute_storage::kv::KV_SCHEMA_VERSION,
             operation.quota_bytes,
             &operation.backup_id,
         )?
@@ -408,7 +408,7 @@ fn restore_downloaded_namespace(
 fn create_restored_staging(
     source: &std::path::Path,
     operation: &RestoreOperation,
-    resource: &open_compute_storage::ResourceRecord,
+    resource: &open_compute_storage::resources::ResourceRecord,
     paths: &KvPaths,
 ) -> Result<std::path::PathBuf, PlatformError> {
     let staging = paths.create_namespace_staging(resource.id)?;
@@ -444,7 +444,7 @@ async fn fail_backup(
     .await;
 }
 
-fn replayed_backup_failure(backup: &open_compute_storage::KvBackupRecord) -> PlatformError {
+fn replayed_backup_failure(backup: &open_compute_storage::kv::KvBackupRecord) -> PlatformError {
     let code = backup
         .error_code
         .as_deref()

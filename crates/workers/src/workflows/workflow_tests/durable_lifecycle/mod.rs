@@ -10,7 +10,7 @@ use open_compute_storage::scheduler::{
     WorkflowInstanceAction, WorkflowStepAttempt, WorkflowStepGrant, WorkflowStepOutcome,
     WorkflowStepResult,
 };
-use open_compute_storage::{WorkflowOperationKind, WorkflowOperationResult};
+use open_compute_storage::workflows::{WorkflowOperationKind, WorkflowOperationResult};
 
 const NULL_VALUE: &str = "T0NEVgECAA==";
 const TRUE_VALUE: &str = "T0NEVgECAw==";

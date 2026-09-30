@@ -31,7 +31,11 @@ import { BaseVersions } from "cloudflare/resources/workers/beta/workers/versions
 import { BaseWorkers } from "cloudflare/resources/workers/beta/workers/workers";
 import { BaseTelemetry } from "cloudflare/resources/workers/observability/telemetry";
 import { BaseUpload as BaseUpload2 } from "cloudflare/resources/workers/scripts/assets/upload";
-import { BaseDeployments } from "cloudflare/resources/workers/scripts/deployments";
+import {
+  BaseDeployments,
+  type DeploymentListParams,
+  type DeploymentListResponse,
+} from "cloudflare/resources/workers/scripts/deployments";
 import { BaseSchedules } from "cloudflare/resources/workers/scripts/schedules";
 import {
   BaseScriptAndVersionSettings,
@@ -243,6 +247,27 @@ function segment(value: string): string {
   return encodeURIComponent(value);
 }
 
+function listWorkerDeployments(
+  transport: BaseCloudflare,
+  scriptName: string,
+  params: DeploymentListParams,
+  options?: OpenComputeRequestOptions,
+): APIPromise<DeploymentListResponse> {
+  const { account_id, ...query } = params;
+  const path =
+    "/accounts/" +
+    segment(account_id) +
+    "/workers/scripts/" +
+    segment(scriptName) +
+    "/deployments";
+  return transport
+    .get<V4Envelope<DeploymentListResponse>>(path, {
+      ...options,
+      query,
+    })
+    ._thenUnwrap((envelope) => envelope.result);
+}
+
 export type Backup = {
   readonly id: string;
   readonly created_on: string;
@@ -257,12 +282,31 @@ export type CacheStatus = {
 
 export type Capabilities = {
   readonly release: string;
-  readonly wrangler_version: "4.138.0";
-  readonly compatibility_date: {
-    readonly minimum: string;
-    readonly maximum: string;
+  readonly wrangler_version: "4.143.0";
+  readonly compatibility: {
+    readonly validation: "workerd_code_version";
+    readonly binary_maximum_date: string;
+    readonly future_dates_allowed: false;
+    readonly experimental_enabled: boolean;
+    readonly features: readonly {
+      readonly field: string;
+      readonly enable_flag?: string;
+      readonly disable_flag?: string;
+      readonly default_on_date?: string;
+      readonly enabled_for_all_dates: boolean;
+      readonly experimental: boolean;
+      readonly python_snapshot_release: boolean;
+      readonly implied_by?: readonly {
+        readonly flags: readonly string[];
+        readonly after_date: string;
+      }[];
+    }[];
+    readonly catalog_sha256: string;
   };
-  readonly compatibility_flags: readonly string[];
+  readonly system_workers: {
+    readonly compatibility_date: string;
+    readonly compatibility_flags: readonly string[];
+  };
   readonly endpoints: Record<
     string,
     "supported" | "supported_with_deviation" | "unsupported"
@@ -1320,7 +1364,11 @@ export interface OpenComputeWorkersScriptsDeploymentsNode {
   readonly create: BaseDeployments["create"];
   readonly delete: BaseDeployments["delete"];
   readonly get: BaseDeployments["get"];
-  readonly list: BaseDeployments["list"];
+  readonly list: (
+    scriptName: string,
+    params: DeploymentListParams,
+    options?: OpenComputeRequestOptions,
+  ) => APIPromise<DeploymentListResponse>;
 }
 
 export interface OpenComputeWorkersScriptsSchedulesNode {
@@ -2040,7 +2088,8 @@ export function buildFacade(transport: BaseCloudflare): OpenComputeSurface {
             workersscriptsdeployments,
           ),
           get: workersscriptsdeployments.get.bind(workersscriptsdeployments),
-          list: workersscriptsdeployments.list.bind(workersscriptsdeployments),
+          list: (scriptName, params, options) =>
+            listWorkerDeployments(transport, scriptName, params, options),
         },
         schedules: {
           get: workersscriptsschedules.get.bind(workersscriptsschedules),
@@ -2385,6 +2434,7 @@ export type {
   DeploymentGetParams,
   DeploymentListParams,
   DeploymentListResponse,
+  DeploymentListResponsesV4PagePagination,
 } from "cloudflare/resources/workers/scripts/deployments";
 export type {
   ScheduleGetParams,

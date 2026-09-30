@@ -95,7 +95,11 @@ function classify(
       { code: 1101, outcome: "exception" },
     ];
   }
-  if (/syntax|parse|unexpected|module|wasm|initializ|startup/i.test(message)) {
+  if (
+    /compatibility (?:date|flag|flags)|syntax|parse|unexpected|module|wasm|initializ|startup/i.test(
+      message,
+    )
+  ) {
     return ["BUNDLE_RUNTIME_INVALID", 422];
   }
   return ["RUNTIME_INTERNAL", 500];

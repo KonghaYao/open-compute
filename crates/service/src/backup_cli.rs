@@ -17,13 +17,19 @@ use open_compute_core::{
     ResourceState, SnapshotImmutableReferenceV1, StartupId,
 };
 use open_compute_runtime::{assert_no_live_orphan, embedded_runtime_lock};
-use open_compute_storage::{
-    ControlDb, DataDir, PreparePlatformSnapshotRequest, R2BucketRepository, RestoreStagingCleanup,
-    StableIdentity, cleanup_restore_staging, cleanup_stale_snapshot_staging,
-    estimate_platform_snapshot_bytes, inspect_control_db, inspect_master_key,
-    inspect_snapshot_immutable_references, prepare_platform_snapshot, sign_snapshot_manifest,
-    verify_snapshot_manifest_mac,
+use open_compute_storage::control_db::ControlDb;
+use open_compute_storage::data_dir::DataDir;
+use open_compute_storage::identity::StableIdentity;
+use open_compute_storage::inspect::{
+    inspect_control_db, inspect_master_key, inspect_snapshot_immutable_references,
 };
+use open_compute_storage::platform_snapshot::{
+    PreparePlatformSnapshotRequest, estimate_platform_snapshot_bytes, prepare_platform_snapshot,
+    sign_snapshot_manifest, verify_snapshot_manifest_mac,
+};
+use open_compute_storage::r2::R2BucketRepository;
+use open_compute_storage::restore_cleanup::{RestoreStagingCleanup, cleanup_restore_staging};
+use open_compute_storage::snapshot_staging::cleanup_stale_snapshot_staging;
 pub use restore::backup_restore;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -530,7 +536,7 @@ pub(crate) async fn load_manifest(
     loaded: &LoadedConfig,
     objects: &SnapshotObjectStore,
     snapshot_id: &str,
-    key: &open_compute_storage::MasterKey,
+    key: &open_compute_storage::master_key::MasterKey,
 ) -> Result<PlatformSnapshotManifestV1, PlatformError> {
     let bytes = objects
         .get_manifest(

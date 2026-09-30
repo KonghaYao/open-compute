@@ -75,7 +75,7 @@ fn frame_protocol_round_trips_every_shape_and_rejects_ambiguous_inputs() {
         );
     }
     let too_many = serde_json::to_vec(&serde_json::json!({
-        "keys": vec!["x"; open_compute_storage::KV_MAX_MULTI_GET_KEYS + 1]
+        "keys": vec!["x"; open_compute_storage::kv::KV_MAX_MULTI_GET_KEYS + 1]
     }))
     .unwrap();
     assert_eq!(
@@ -131,7 +131,7 @@ fn frame_protocol_round_trips_every_shape_and_rejects_ambiguous_inputs() {
         .to_vec();
     oversized_value.extend_from_slice(&oversized_header);
     oversized_value.resize(
-        oversized_value.len() + open_compute_storage::KV_MAX_VALUE_BYTES + 1,
+        oversized_value.len() + open_compute_storage::kv::KV_MAX_VALUE_BYTES + 1,
         0,
     );
     assert_eq!(
@@ -171,7 +171,7 @@ fn frame_protocol_round_trips_every_shape_and_rejects_ambiguous_inputs() {
         KvCommand::List { prefix, limit: 5, cursor: None } if prefix.is_empty()
     ));
 
-    let entry = open_compute_storage::KvEntry {
+    let entry = open_compute_storage::kv::KvEntry {
         value: b"bytes".to_vec(),
         metadata_json: Some(br#"{"a":1}"#.to_vec()),
         expires_at_ms: Some(4_000),
@@ -191,7 +191,7 @@ fn frame_protocol_round_trips_every_shape_and_rejects_ambiguous_inputs() {
     assert!(missing.starts_with(b"KVS1\x00"));
     let (_, without_metadata) = encode_frame_result(
         Operation::Get,
-        KvCommandResult::Entries(vec![Some(open_compute_storage::KvEntry {
+        KvCommandResult::Entries(vec![Some(open_compute_storage::kv::KvEntry {
             value: b"plain".to_vec(),
             metadata_json: None,
             expires_at_ms: None,
@@ -216,7 +216,7 @@ fn frame_protocol_round_trips_every_shape_and_rejects_ambiguous_inputs() {
     let (_, listed) = encode_frame_result(
         Operation::List,
         KvCommandResult::List {
-            rows: vec![open_compute_storage::KvListRow {
+            rows: vec![open_compute_storage::kv::KvListRow {
                 key: b"listed".to_vec(),
                 metadata_json: Some(br#"{"x":true}"#.to_vec()),
                 expires_at_ms: Some(9_000),
@@ -231,12 +231,12 @@ fn frame_protocol_round_trips_every_shape_and_rejects_ambiguous_inputs() {
     assert_eq!(listed["keys"][0]["expiration"], 9);
     assert_eq!(listed["cursor"], "cursor");
     for row in [
-        open_compute_storage::KvListRow {
+        open_compute_storage::kv::KvListRow {
             key: vec![0xff],
             metadata_json: None,
             expires_at_ms: None,
         },
-        open_compute_storage::KvListRow {
+        open_compute_storage::kv::KvListRow {
             key: b"valid".to_vec(),
             metadata_json: Some(b"not-json".to_vec()),
             expires_at_ms: None,
@@ -264,7 +264,7 @@ fn frame_protocol_round_trips_every_shape_and_rejects_ambiguous_inputs() {
     );
 
     assert_eq!(encode_stream_header(None).unwrap().len(), 21);
-    let stream_header = encode_stream_header(Some(open_compute_storage::KvEntryInfo {
+    let stream_header = encode_stream_header(Some(open_compute_storage::kv::KvEntryInfo {
         value_length: 5,
         metadata_json: Some(b"null".to_vec()),
         expires_at_ms: None,
@@ -274,18 +274,21 @@ fn frame_protocol_round_trips_every_shape_and_rejects_ambiguous_inputs() {
     assert!(stream_header.ends_with(&5_u32.to_be_bytes()));
     for (value_length, metadata_json, code) in [
         (
-            open_compute_storage::KV_MAX_VALUE_BYTES + 1,
+            open_compute_storage::kv::KV_MAX_VALUE_BYTES + 1,
             None,
             ErrorCode::KvValueTooLarge,
         ),
         (
             1,
-            Some(vec![b'x'; open_compute_storage::KV_MAX_METADATA_BYTES + 1]),
+            Some(vec![
+                b'x';
+                open_compute_storage::kv::KV_MAX_METADATA_BYTES + 1
+            ]),
             ErrorCode::KvMetadataTooLarge,
         ),
     ] {
         assert_eq!(
-            encode_stream_header(Some(open_compute_storage::KvEntryInfo {
+            encode_stream_header(Some(open_compute_storage::kv::KvEntryInfo {
                 value_length,
                 metadata_json,
                 expires_at_ms: None,

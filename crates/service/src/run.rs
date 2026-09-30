@@ -58,9 +58,11 @@ use open_compute_runtime::{
     HostExtensionBrokerRegistry, OsJitter, PlatformReleaseMeta, StaticConfigCompiler,
     SupervisorState, WorkerdSupervisor, WorkerdSupervisorOptions,
 };
-use open_compute_storage::{
-    CacheManager, DurableObjectRepository, ObservabilityStore, PlatformStorage, WorkerRepository,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::cache::CacheManager;
+use open_compute_storage::durable_objects::DurableObjectRepository;
+use open_compute_storage::observability::ObservabilityStore;
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{BundleLimits, ResourcePins, RuntimeSource, VersionPins};
 use p1::{
     load_offline_metrics_receipts, refresh_metrics as refresh_p1_metrics, update_operations_health,
@@ -198,7 +200,7 @@ pub async fn run_platform(
         .collect::<Result<Vec<_>, _>>()?;
     let root = registry.root_for(scope).to_path_buf();
     let cache_dir = root.join("cache");
-    open_compute_storage::ensure_dir_secure(&cache_dir)?;
+    open_compute_storage::fs::ensure_dir_secure(&cache_dir)?;
     let shared_package = tokio::task::spawn_blocking(move || {
         open_compute_runtime::materialize_embedded_runtime(&cache_dir)
     })

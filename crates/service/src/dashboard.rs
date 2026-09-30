@@ -6,19 +6,21 @@ use bytes::Bytes;
 use futures::stream;
 use open_compute_artifacts::{ARTIFACT_KEY_VERSION, ArtifactRef, ArtifactStore};
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, RequestId, VersionId};
-use open_compute_storage::{
-    PlatformStorage, SystemOwnedVersionKind, SystemOwnedVersionRecord, VersionAssetsRepository,
-    VersionState, WorkerOwnership, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::assets::VersionAssetsRepository;
+use open_compute_storage::worker_repository::{
+    SystemOwnedVersionKind, SystemOwnedVersionRecord, VersionState, WorkerOwnership,
+    WorkerRepository,
 };
 use open_compute_workers::{
     AssetEntryV1, AssetManifestV1, AssetRoutingConfigV1, BundleLimits, CreateVersionOutcome,
     CreateVersionRequest, HtmlHandling, NotFoundHandling, RunWorkerFirst, RuntimeValidator,
-    VersionAssets, VersionContent, VersionController,
+    VersionAssets, VersionContent, VersionController, VersionRuntimeFeatures,
 };
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
-pub use open_compute_storage::SYSTEM_DASHBOARD_WORKER_NAME;
+pub use open_compute_storage::worker_repository::SYSTEM_DASHBOARD_WORKER_NAME;
 
 /// Frozen dashboard version target installed at startup.
 #[derive(Clone, Debug)]
@@ -123,8 +125,9 @@ async fn create_dashboard_version(
     instance_id: InstanceId,
     worker_id: open_compute_core::WorkerId,
     bundle_limits: BundleLimits,
-) -> Result<open_compute_storage::VersionRecord, PlatformError> {
+) -> Result<open_compute_storage::worker_repository::VersionRecord, PlatformError> {
     let assets = upload_embedded_assets(artifacts).await?;
+    let system_workers = open_compute_runtime::embedded_runtime_compatibility()?.1;
     let idempotency_key = format!("system-dashboard:{}", embedded_dashboard_assets_sha256());
     let validator: Arc<dyn RuntimeValidator> = Arc::new(transport.clone());
     let controller = VersionController::new(storage, artifacts.clone(), validator, bundle_limits);
@@ -138,10 +141,16 @@ async fn create_dashboard_version(
             secrets: Default::default(),
             bindings: Default::default(),
             services: Default::default(),
-            runtime_features: Default::default(),
+            runtime_features: VersionRuntimeFeatures {
+                compatibility_date: system_workers.compatibility_date,
+                compatibility_flags: system_workers.compatibility_flags,
+                ..VersionRuntimeFeatures::default()
+            },
             queue_consumers: Vec::new(),
             crons: Default::default(),
-            deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+            deployment_source: Some(
+                open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+            ),
             observability: None,
             request_id: RequestId::generate(),
             now_ms: open_compute_core::wall_time_ms(),

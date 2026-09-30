@@ -133,11 +133,38 @@ pub enum AiSearchKeywordTokenizer {
 }
 
 /// Default query behavior persisted with an instance.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AiSearchRetrievalOptions {
     /// Keyword token conjunction mode.
     pub keyword_match_mode: Option<AiSearchKeywordMatchMode>,
+    /// Metadata fields used to bias candidate ordering.
+    #[serde(default)]
+    pub boost_by: Vec<AiSearchBoost>,
+}
+
+/// One metadata relevance boost.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AiSearchBoost {
+    /// Built-in `timestamp` or a declared custom metadata field.
+    pub field: String,
+    /// Optional direction; omitted values are resolved from the field type.
+    pub direction: Option<AiSearchBoostDirection>,
+}
+
+/// Supported metadata boost directions.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum AiSearchBoostDirection {
+    /// Lower numeric or datetime values rank higher.
+    Asc,
+    /// Higher numeric or datetime values rank higher.
+    Desc,
+    /// Present values rank higher.
+    Exists,
+    /// Missing values rank higher.
+    NotExists,
 }
 
 /// Keyword match mode.
@@ -300,7 +327,12 @@ impl AiSearchCreateInput {
         if !index.vector && !index.keyword {
             return Err(input_invalid());
         }
-        if (!index.keyword && (self.indexing_options.is_some() || self.retrieval_options.is_some()))
+        if (!index.keyword
+            && (self.indexing_options.is_some()
+                || self
+                    .retrieval_options
+                    .as_ref()
+                    .is_some_and(|options| options.keyword_match_mode.is_some())))
             || (!(index.vector && index.keyword) && self.fusion_method.is_some())
         {
             return Err(option_unsupported());
@@ -330,12 +362,12 @@ impl AiSearchCreateInput {
             AiGenerationCapability::Rewrite,
             self.rewrite_query,
         )?;
-        validate_generation_model(
-            catalog,
-            self.reranking_model.as_deref(),
-            AiGenerationCapability::Rerank,
-            self.reranking,
-        )?;
+        let reranking_model = self.reranking_model.or_else(|| {
+            self.reranking
+                .then(|| catalog.default_reranking_model.clone())
+                .flatten()
+        });
+        validate_reranking_model(catalog, reranking_model.as_deref(), self.reranking)?;
         let chunk_enabled = self.chunk.unwrap_or(true);
         if !chunk_enabled && (self.chunk_size.is_some() || self.chunk_overlap.is_some()) {
             return Err(option_unsupported());
@@ -366,6 +398,11 @@ impl AiSearchCreateInput {
         }
         let custom_metadata = self.custom_metadata.unwrap_or_default();
         validate_custom_metadata(&custom_metadata)?;
+        let retrieval_options = self.retrieval_options.unwrap_or(AiSearchRetrievalOptions {
+            keyword_match_mode: Some(AiSearchKeywordMatchMode::And),
+            boost_by: Vec::new(),
+        });
+        validate_boosts(&retrieval_options.boost_by, &custom_metadata)?;
         let metadata = self.metadata.unwrap_or_default();
         validate_json(&Value::Object(metadata.clone().into_iter().collect()), 0, 0)?;
         let resolved = ResolvedAiSearchConfig {
@@ -388,15 +425,13 @@ impl AiSearchCreateInput {
             ),
             ai_search_model,
             rewrite_model: self.rewrite_model,
-            reranking_model: self.reranking_model,
+            reranking_model,
             index_method: index,
             fusion_method: self.fusion_method.unwrap_or(AiSearchFusionMethod::Rrf),
             indexing_options: self.indexing_options.unwrap_or(AiSearchIndexingOptions {
                 keyword_tokenizer: Some(AiSearchKeywordTokenizer::Porter),
             }),
-            retrieval_options: self.retrieval_options.unwrap_or(AiSearchRetrievalOptions {
-                keyword_match_mode: Some(AiSearchKeywordMatchMode::And),
-            }),
+            retrieval_options,
             chunk: chunk_enabled,
             chunk_size,
             chunk_overlap,
@@ -536,6 +571,64 @@ fn validate_generation_model(
         .ok_or_else(option_unsupported)?;
     if !model.capabilities.contains(&capability) {
         return Err(option_unsupported());
+    }
+    Ok(())
+}
+
+fn validate_reranking_model(
+    catalog: &AiConfig,
+    alias: Option<&str>,
+    required: bool,
+) -> Result<(), PlatformError> {
+    let Some(alias) = alias else {
+        return if required {
+            Err(option_unsupported())
+        } else {
+            Ok(())
+        };
+    };
+    if catalog.reranking_models.contains_key(alias) {
+        Ok(())
+    } else {
+        Err(option_unsupported())
+    }
+}
+
+pub(crate) fn validate_boosts(
+    boosts: &[AiSearchBoost],
+    fields: &[AiSearchMetadataField],
+) -> Result<(), PlatformError> {
+    if boosts.len() > 3 {
+        return Err(limit());
+    }
+    let mut names = BTreeSet::new();
+    for boost in boosts {
+        let normalized = boost.field.to_ascii_lowercase();
+        if boost.field.is_empty()
+            || boost.field.len() > 64
+            || boost.field.chars().any(char::is_control)
+            || !names.insert(normalized)
+        {
+            return Err(input_invalid());
+        }
+        let field_type = if boost.field.eq_ignore_ascii_case("timestamp") {
+            Some(AiSearchMetadataType::Datetime)
+        } else {
+            fields
+                .iter()
+                .find(|field| field.field_name.eq_ignore_ascii_case(&boost.field))
+                .map(|field| field.data_type)
+        }
+        .ok_or_else(input_invalid)?;
+        if matches!(
+            field_type,
+            AiSearchMetadataType::Text | AiSearchMetadataType::Boolean
+        ) && matches!(
+            boost.direction,
+            Some(AiSearchBoostDirection::Asc | AiSearchBoostDirection::Desc)
+        ) {
+            return Err(input_invalid());
+        }
     }
     Ok(())
 }

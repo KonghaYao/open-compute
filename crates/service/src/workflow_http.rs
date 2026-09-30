@@ -2,9 +2,10 @@
 
 use crate::runtime_bridge::WorkerdTransport;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, VersionId, WorkflowId};
-use open_compute_storage::{
-    PlatformStorage, SchedulerStore, WorkflowDefinitionReservation, WorkflowRepository,
-    WorkflowVersion,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::scheduler::SchedulerStore;
+use open_compute_storage::workflows::{
+    WorkflowDefinitionReservation, WorkflowRepository, WorkflowVersion,
 };
 use std::sync::Arc;
 

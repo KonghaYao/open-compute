@@ -4,7 +4,8 @@ use open_compute_core::{
     DaemonGatewayConfig, DaemonServerConfig, ErrorCode, InstanceId, InstanceSelector,
     ObjectStorageConfig, PlatformError,
 };
-use open_compute_storage::{ensure_dir_secure, inspect_control_db};
+use open_compute_storage::fs::ensure_dir_secure;
+use open_compute_storage::inspect::inspect_control_db;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};

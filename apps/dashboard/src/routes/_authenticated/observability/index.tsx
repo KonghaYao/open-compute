@@ -15,6 +15,7 @@ import {
 } from "../../../components/dashboard-page";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { normalizeRfc3339 } from "../../../lib/date-time";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/observability/")({
   component: ObservabilityPage,
@@ -34,14 +35,12 @@ function ObservabilityPage() {
   const from = rangeEnd - hours * 60 * 60 * 1_000;
 
   const usage = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "observability",
+    queryKey: queryKeys.observability(
       "usage",
       selectedInstanceId,
       hours,
       rangeEnd,
-    ],
+    ),
     queryFn: ({ signal }) =>
       client!.openCompute.workers.observability.usage(selectedInstanceId!, {
         signal,
@@ -51,14 +50,12 @@ function ObservabilityPage() {
     refetchInterval: 30_000,
   });
   const logs = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "observability",
+    queryKey: queryKeys.observability(
       "events",
       selectedInstanceId,
       hours,
       rangeEnd,
-    ],
+    ),
     queryFn: ({ signal }) =>
       client!.workers.observability.telemetry.query(
         {

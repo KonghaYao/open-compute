@@ -5,11 +5,15 @@ use crate::scheduler::SchedulerService;
 use open_compute_core::{
     ErrorCode, InstanceId, PlatformError, QueueConsumerId, QueueId, RequestId, WorkerId,
 };
-use open_compute_storage::{
-    NewQueueConsumerDeclaration, PlatformStorage, QUEUE_DEFAULT_MAX_BACKLOG_BYTES,
-    QueueAvailability, QueueConsumerConfig, QueueConsumerRecord, QueueConsumerRepository,
-    QueueConsumerState, QueueRepository, QueueState, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::queue_consumers::{
+    NewQueueConsumerDeclaration, QueueConsumerConfig, QueueConsumerRecord, QueueConsumerRepository,
+    QueueConsumerState,
 };
+use open_compute_storage::queues::{
+    QUEUE_DEFAULT_MAX_BACKLOG_BYTES, QueueAvailability, QueueRepository, QueueState,
+};
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::QueueController;
 use sha2::{Digest as _, Sha256};
 use std::sync::Arc;
@@ -60,7 +64,7 @@ impl QueueApiState {
         &self.storage
     }
 
-    pub(crate) fn scheduler(&self) -> &Arc<open_compute_storage::SchedulerStore> {
+    pub(crate) fn scheduler(&self) -> &Arc<open_compute_storage::scheduler::SchedulerStore> {
         self.scheduler.store()
     }
 
@@ -79,7 +83,7 @@ impl QueueApiState {
         paused: bool,
         request_id: RequestId,
         now_ms: i64,
-    ) -> Result<open_compute_storage::QueueRecord, PlatformError> {
+    ) -> Result<open_compute_storage::queues::QueueRecord, PlatformError> {
         let queue = QueueRepository::new(self.storage.db()).set_delivery_paused(
             instance_id,
             queue_id,
@@ -279,7 +283,7 @@ impl QueueApiState {
 
     fn apply_delivery_pause(
         &self,
-        queue: &open_compute_storage::QueueRecord,
+        queue: &open_compute_storage::queues::QueueRecord,
         record: &QueueConsumerRecord,
     ) -> Result<(), PlatformError> {
         let request_id = RequestId::generate();
@@ -299,7 +303,7 @@ impl QueueApiState {
     }
 }
 
-fn require_ready(queue: &open_compute_storage::QueueRecord) -> Result<(), PlatformError> {
+fn require_ready(queue: &open_compute_storage::queues::QueueRecord) -> Result<(), PlatformError> {
     if queue.state == QueueState::Ready && queue.availability == QueueAvailability::Healthy {
         Ok(())
     } else {

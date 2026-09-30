@@ -1,6 +1,7 @@
 //! Immutable version asset metadata and object-reference authority.
 
-use crate::{ControlDb, VersionState};
+use crate::control_db::ControlDb;
+use crate::worker_repository::VersionState;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, VersionId, WorkerId};
 use rusqlite::{OptionalExtension, Transaction, params};
 

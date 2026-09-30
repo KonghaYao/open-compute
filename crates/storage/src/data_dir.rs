@@ -432,8 +432,10 @@ impl DataDir {
             ));
         }
         self.ensure_scheduler_rebuild_safe(busy_timeout_ms)?;
-        let control =
-            crate::ControlDb::open_readonly_wal_aware(&self.control_db_path(), busy_timeout_ms)?;
+        let control = crate::control_db::ControlDb::open_readonly_wal_aware(
+            &self.control_db_path(),
+            busy_timeout_ms,
+        )?;
         control.quick_check()?;
         crate::migrations::inspect_schema(&control)?;
         let identity = crate::identity::inspect_stored(&control)?;
@@ -516,7 +518,8 @@ impl DataDir {
         let path = self.control_db_path();
         fs::validate_contained(&self.root, &path)?;
         fs::validate_owned_file(&path, true)?;
-        let control = crate::ControlDb::open_readonly_wal_aware(&path, busy_timeout_ms)?;
+        let control =
+            crate::control_db::ControlDb::open_readonly_wal_aware(&path, busy_timeout_ms)?;
         control.quick_check()?;
         crate::migrations::inspect_schema(&control)?;
         // These are checked schema-owned tables, never operator-supplied SQL identifiers.

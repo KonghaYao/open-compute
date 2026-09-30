@@ -15,7 +15,8 @@ use axum::response::Response;
 use bytes::Bytes;
 use futures::{StreamExt as _, TryStreamExt as _};
 use open_compute_core::{BindingId, ErrorCode, PlatformError, ResourceId};
-use open_compute_storage::{AuthorizedBinding, PlatformStorage};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::bindings::AuthorizedBinding;
 use open_compute_workers::ResourcePin;
 use serde::Deserialize;
 use std::str::FromStr;
@@ -24,7 +25,8 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt as _;
 
 pub(super) const FRAME_CONTENT_TYPE: &str = "application/vnd.open-compute.kv.v1+frame";
-pub(super) const MAX_FRAME_BODY_BYTES: usize = open_compute_storage::KV_MAX_VALUE_BYTES + 64 * 1024;
+pub(super) const MAX_FRAME_BODY_BYTES: usize =
+    open_compute_storage::kv::KV_MAX_VALUE_BYTES + 64 * 1024;
 
 #[derive(Clone)]
 pub(super) struct StreamBudget {
@@ -329,7 +331,7 @@ async fn dispatch_stream_get(
 }
 
 fn encode_stream_header(
-    entry: Option<open_compute_storage::KvEntryInfo>,
+    entry: Option<open_compute_storage::kv::KvEntryInfo>,
 ) -> Result<Vec<u8>, PlatformError> {
     let mut output = b"KVS1".to_vec();
     let Some(entry) = entry else {
@@ -339,7 +341,7 @@ fn encode_stream_header(
         output.extend_from_slice(&u32::MAX.to_be_bytes());
         return Ok(output);
     };
-    if entry.value_length > open_compute_storage::KV_MAX_VALUE_BYTES {
+    if entry.value_length > open_compute_storage::kv::KV_MAX_VALUE_BYTES {
         return Err(PlatformError::new(
             ErrorCode::KvValueTooLarge,
             "KV value exceeds its byte limit",
@@ -348,7 +350,7 @@ fn encode_stream_header(
     output.push(1);
     output.extend_from_slice(&entry.expires_at_ms.unwrap_or(-1).to_be_bytes());
     if let Some(metadata) = entry.metadata_json {
-        if metadata.len() > open_compute_storage::KV_MAX_METADATA_BYTES {
+        if metadata.len() > open_compute_storage::kv::KV_MAX_METADATA_BYTES {
             return Err(PlatformError::new(
                 ErrorCode::KvMetadataTooLarge,
                 "KV metadata exceeds its byte limit",
@@ -416,8 +418,8 @@ async fn stage_put_frame(
                 }
                 if header_end.is_some_and(|end| header_bytes.len() == end) {
                     let parsed = parse_json::<FramePutHeader>(&header_bytes[4..])?;
-                    open_compute_storage::validate_key(&parsed.key)?;
-                    let paths = open_compute_storage::KvPaths::open(storage.data_dir().root())?;
+                    open_compute_storage::kv::validate_key(&parsed.key)?;
+                    let paths = open_compute_storage::kv::KvPaths::open(storage.data_dir().root())?;
                     let path = paths.create_write_staging(binding.resource.id, request_id)?;
                     let Ok(file) = tokio::fs::OpenOptions::new()
                         .read(true)
@@ -440,7 +442,7 @@ async fn stage_put_frame(
             value_length = value_length
                 .checked_add(remaining.len())
                 .ok_or_else(value_too_large)?;
-            if value_length > open_compute_storage::KV_MAX_VALUE_BYTES {
+            if value_length > open_compute_storage::kv::KV_MAX_VALUE_BYTES {
                 cleanup_staged(&mut staged).await;
                 return Err(value_too_large());
             }
@@ -525,7 +527,7 @@ fn parse_frame_command(operation: Operation, bytes: &[u8]) -> Result<KvCommand, 
             let valid_count = match operation {
                 Operation::Get | Operation::GetWithMetadata => request.keys.len() == 1,
                 Operation::GetMany => {
-                    request.keys.len() <= open_compute_storage::KV_MAX_MULTI_GET_KEYS
+                    request.keys.len() <= open_compute_storage::kv::KV_MAX_MULTI_GET_KEYS
                 }
                 _ => false,
             };
@@ -536,7 +538,7 @@ fn parse_frame_command(operation: Operation, bytes: &[u8]) -> Result<KvCommand, 
                 ));
             }
             for key in &request.keys {
-                open_compute_storage::validate_key(key)?;
+                open_compute_storage::kv::validate_key(key)?;
             }
             Ok(KvCommand::Get {
                 keys: request.keys,
@@ -558,9 +560,9 @@ fn parse_frame_command(operation: Operation, bytes: &[u8]) -> Result<KvCommand, 
                 return Err(kv_protocol_error());
             }
             let header = parse_json::<FramePutHeader>(&bytes[4..header_end])?;
-            open_compute_storage::validate_key(&header.key)?;
+            open_compute_storage::kv::validate_key(&header.key)?;
             let value = bytes[header_end..].to_vec();
-            if value.len() > open_compute_storage::KV_MAX_VALUE_BYTES {
+            if value.len() > open_compute_storage::kv::KV_MAX_VALUE_BYTES {
                 return Err(PlatformError::new(
                     ErrorCode::KvValueTooLarge,
                     "KV value exceeds the 25 MiB limit",
@@ -577,7 +579,7 @@ fn parse_frame_command(operation: Operation, bytes: &[u8]) -> Result<KvCommand, 
         }
         Operation::Delete => {
             let request = parse_json::<KeyRequest>(bytes)?;
-            open_compute_storage::validate_key(&request.key)?;
+            open_compute_storage::kv::validate_key(&request.key)?;
             Ok(KvCommand::Delete { key: request.key })
         }
         Operation::List => {
@@ -661,7 +663,7 @@ fn encode_frame_result(
 
 fn encode_entry(
     output: &mut Vec<u8>,
-    entry: Option<open_compute_storage::KvEntry>,
+    entry: Option<open_compute_storage::kv::KvEntry>,
 ) -> Result<(), PlatformError> {
     let Some(entry) = entry else {
         output.push(0);

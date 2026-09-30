@@ -56,6 +56,53 @@ fn parses_exact_pinned_compatibility_metadata_and_modules() {
 }
 
 #[test]
+fn accepts_wrangler_code_update_strategy_and_rejects_invalid_delays() {
+    for strategy in [
+        r#"{"mode":"immediate"}"#,
+        r#"{"mode":"deferred","max_delay":300}"#,
+        r#"{"mode":"deferred","max_delay":0.001}"#,
+    ] {
+        let metadata = format!(
+            r#"{{"main_module":"index.js","compatibility_date":"2026-09-08","code_update_strategy":{strategy}}}"#
+        );
+        assert!(
+            parse_parts(
+                vec![
+                    part("metadata", "application/json", metadata.as_bytes()),
+                    part(
+                        "index.js",
+                        "application/javascript+module",
+                        b"export default {}",
+                    ),
+                ],
+                BundleLimits::default(),
+            )
+            .is_ok()
+        );
+    }
+
+    for delay in [-0.001, 0.0001, 86_400.001] {
+        let metadata = format!(
+            r#"{{"main_module":"index.js","compatibility_date":"2026-09-08","code_update_strategy":{{"mode":"deferred","max_delay":{delay}}}}}"#
+        );
+        assert!(
+            parse_parts(
+                vec![
+                    part("metadata", "application/json", metadata.as_bytes()),
+                    part(
+                        "index.js",
+                        "application/javascript+module",
+                        b"export default {}",
+                    ),
+                ],
+                BundleLimits::default(),
+            )
+            .is_err()
+        );
+    }
+}
+
+#[test]
 fn commonjs_accepts_only_referenced_blobs_and_source_maps() {
     let parsed = parse_parts(
             vec![
@@ -191,15 +238,15 @@ fn accepts_commonjs_body_part_and_assets_only_uploads() {
 }
 
 #[test]
-fn accepts_redundant_node_flag_and_rejects_other_compatibility_metadata() {
-    assert!(
+fn preserves_bounded_compatibility_metadata_for_workerd_admission() {
+    for metadata in [
+        br#"{"main_module":"index.js","compatibility_date":"2026-09-08","compatibility_flags":["nodejs_compat"]}"#.as_slice(),
+        br#"{"main_module":"index.js","compatibility_date":"2025-01-01","compatibility_flags":["unknown","unknown"]}"#.as_slice(),
+    ] {
+        assert!(
             parse_parts(
                 vec![
-                    part(
-                        "metadata",
-                        "application/json",
-                        br#"{"main_module":"index.js","compatibility_date":"2026-09-08","compatibility_flags":["nodejs_compat"]}"#,
-                    ),
+                    part("metadata", "application/json", metadata),
                     part(
                         "index.js",
                         "application/javascript+module",
@@ -210,6 +257,24 @@ fn accepts_redundant_node_flag_and_rejects_other_compatibility_metadata() {
             )
             .is_ok()
         );
+    }
+    let omitted = parse_parts(
+        vec![
+            part(
+                "metadata",
+                "application/json",
+                br#"{"main_module":"index.js"}"#,
+            ),
+            part(
+                "index.js",
+                "application/javascript+module",
+                b"export default {}",
+            ),
+        ],
+        BundleLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(omitted.metadata.compatibility_date, "2021-11-02");
     let limited = parse_parts(
             vec![
                 part(
@@ -224,20 +289,26 @@ fn accepts_redundant_node_flag_and_rejects_other_compatibility_metadata() {
         .unwrap();
     assert_eq!(limited.metadata.limits.unwrap().sub_requests, Some(20));
     for metadata in [
-            br#"{"main_module":"index.js","compatibility_date":"2026-08-29"}"#.as_slice(),
-            br#"{"main_module":"index.js","compatibility_date":"2026-09-08","compatibility_flags":["nodejs_compat_v2"]}"#.as_slice(),
-            br#"{"main_module":"index.js","compatibility_date":"2026-09-08","compatibility_flags":["nodejs_compat","nodejs_compat"]}"#.as_slice(),
-            br#"{"main_module":"index.js","compatibility_date":"2026-09-08","limits":{"cpuMs":10}}"#.as_slice(),
-        ] {
-            assert!(parse_parts(
+        br#"{"main_module":"index.js","compatibility_date":"123456789012345678901234567890123"}"#
+            .as_slice(),
+        br#"{"main_module":"index.js","compatibility_date":"2026-09-08","limits":{"cpuMs":10}}"#
+            .as_slice(),
+    ] {
+        assert!(
+            parse_parts(
                 vec![
                     part("metadata", "application/json", metadata),
-                    part("index.js", "application/javascript+module", b"export default {}"),
+                    part(
+                        "index.js",
+                        "application/javascript+module",
+                        b"export default {}"
+                    ),
                 ],
                 BundleLimits::default(),
             )
-            .is_err());
-        }
+            .is_err()
+        );
+    }
     assert!(
         parse_parts(
             vec![

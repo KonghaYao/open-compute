@@ -1,5 +1,5 @@
 use super::*;
-use crate::workers::EffectiveResourceLimits;
+use crate::worker_repository::EffectiveResourceLimits;
 
 #[test]
 fn queue_consumer_unique_index_serializes_concurrent_worker_attachments() {
@@ -7,8 +7,8 @@ fn queue_consumer_unique_index_serializes_concurrent_worker_attachments() {
     let storage = PlatformStorage::bootstrap(&storage_config(&root), &SystemClock).unwrap();
     let account = storage.identity().instance_id;
     let queue_id = open_compute_core::QueueId::generate();
-    let queue_config = crate::QueueConfig::default();
-    let queues = crate::QueueRepository::new(storage.db());
+    let queue_config = crate::queues::QueueConfig::default();
+    let queues = crate::queues::QueueRepository::new(storage.db());
     queues
         .insert_creating(account, queue_id, "one-consumer", queue_config, 1)
         .unwrap();
@@ -31,7 +31,7 @@ fn queue_consumer_unique_index_serializes_concurrent_worker_attachments() {
                     id: version_id,
                     instance_id: account,
                     worker_id,
-                    content_kind: crate::VersionContentKind::Worker,
+                    content_kind: crate::worker_repository::VersionContentKind::Worker,
                     artifact_sha256: Some([5; 32]),
                     artifact_size: Some(100),
                     artifact_schema_version: Some(1),
@@ -45,7 +45,7 @@ fn queue_consumer_unique_index_serializes_concurrent_worker_attachments() {
                     request_id: request,
                     now_ms,
                 },
-                &crate::NewVersionProducts {
+                &crate::worker_repository::NewVersionProducts {
                     queue_consumers: &[NewQueueConsumerDeclaration {
                         id: declaration_id,
                         queue_id,
@@ -69,8 +69,9 @@ fn queue_consumer_unique_index_serializes_concurrent_worker_attachments() {
     };
     let first = create_declaration(first_worker.id, 10);
     let second = create_declaration(second_worker.id, 20);
-    let first_db = crate::ControlDb::open(&root.join("control.sqlite"), 5_000).unwrap();
-    let second_db = crate::ControlDb::open(&root.join("control.sqlite"), 5_000).unwrap();
+    let first_db = crate::control_db::ControlDb::open(&root.join("control.sqlite"), 5_000).unwrap();
+    let second_db =
+        crate::control_db::ControlDb::open(&root.join("control.sqlite"), 5_000).unwrap();
     let barrier = Arc::new(Barrier::new(2));
     let results = thread::scope(|scope| {
         let first_barrier = barrier.clone();

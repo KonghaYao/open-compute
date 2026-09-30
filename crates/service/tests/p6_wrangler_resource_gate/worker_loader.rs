@@ -107,6 +107,21 @@ export default {
       });
       return stub.getEntrypoint().fetch("https://wasm.invalid");
     }
+    if (path.endsWith("/compatibility")) {
+      const params = new URL(request.url).searchParams;
+      try {
+        const stub = env.LOADER.load({
+          ...code("compatibility"),
+          compatibilityDate: params.get("date"),
+          compatibilityFlags: params.getAll("flag"),
+          allowExperimental: true,
+        });
+        await stub.getEntrypoint().fetch("https://compatibility.invalid");
+        return Response.json({ accepted: true });
+      } catch {
+        return Response.json({ accepted: false });
+      }
+    }
     if (path.endsWith("/invalid")) {
       let limitsRejected = false, delegationRejected = false;
       try {
@@ -399,6 +414,7 @@ async fn worker_loader_native_binding_versions_delete_and_restart() {
     let mut config: Value =
         serde_json::from_slice(&fs::read(fixture.project.join("wrangler.jsonc")).unwrap()).unwrap();
     config["worker_loaders"] = json!([{ "binding": "LOADER" }]);
+    config["compatibility_flags"] = json!(["experimental"]);
     fs::write(
         fixture.project.join("wrangler.jsonc"),
         serde_json::to_vec_pretty(&config).unwrap(),
@@ -514,6 +530,7 @@ async fn worker_loader_native_binding_versions_delete_and_restart() {
             "keys": ["LOADER", "OBJECTS", "OTHER"]
         })
     );
+    assert_dynamic_compatibility_matrix(&client, &fixture).await;
     let (status, rpc) = invoke(&client, &fixture, SCRIPT, "/rpc").await;
     assert_eq!(status, 200, "{rpc}");
     assert_eq!(
@@ -529,7 +546,7 @@ async fn worker_loader_native_binding_versions_delete_and_restart() {
         )
         .await;
         assert_eq!(status, 200, "{egress}");
-        assert_eq!(egress, json!({ "rejected": true }));
+        assert_eq!(egress, json!({ "rejected": false }));
     }
     let (status, wasm) = invoke(&client, &fixture, SCRIPT, "/wasm").await;
     assert_eq!(status, 200, "{wasm}");
@@ -914,6 +931,82 @@ async fn invoke(
     let value =
         serde_json::from_slice(&bytes).unwrap_or_else(|_| json!(String::from_utf8_lossy(&bytes)));
     (status, value)
+}
+
+async fn assert_dynamic_compatibility_matrix(client: &platform_process::Client, fixture: &Fixture) {
+    let (compatibility, system_workers) =
+        open_compute_runtime::embedded_runtime_compatibility().unwrap();
+    let paired = compatibility
+        .features
+        .iter()
+        .find(|feature| {
+            !feature.experimental && feature.enable_flag.is_some() && feature.disable_flag.is_some()
+        })
+        .expect("catalog must contain an ordinary enable/disable pair");
+    let enable = paired.enable_flag.clone().unwrap();
+    let disable = paired.disable_flag.clone().unwrap();
+    let experimental = compatibility
+        .features
+        .iter()
+        .find(|feature| {
+            feature.experimental && feature.enable_flag.as_deref() == Some("experimental")
+        })
+        .and_then(|feature| feature.enable_flag.clone())
+        .expect("catalog must contain workerd's current experimental input flag");
+    let maximum = compatibility.binary_maximum_date;
+    let today = jiff::Timestamp::now().strftime("%F").to_string();
+    let latest = maximum.as_str().min(today.as_str()).to_owned();
+    let accepted = [
+        ("2021-11-02".to_owned(), Vec::new()),
+        (system_workers.compatibility_date, Vec::new()),
+        (latest.clone(), Vec::new()),
+        (latest.clone(), vec![enable.clone()]),
+        (latest.clone(), vec![disable.clone()]),
+        (latest.clone(), vec![experimental]),
+    ];
+    for (date, flags) in accepted {
+        assert_dynamic_compatibility(client, fixture, &date, &flags, true).await;
+    }
+    for (date, flags) in [
+        ("not-a-date".to_owned(), Vec::new()),
+        (
+            if maximum > today {
+                maximum.clone()
+            } else {
+                "2999-12-30".to_owned()
+            },
+            Vec::new(),
+        ),
+        ("2999-12-31".to_owned(), Vec::new()),
+        (latest.clone(), vec!["open_compute_unknown_flag".to_owned()]),
+        (latest.clone(), vec![enable.clone(), enable.clone()]),
+        (latest, vec![enable, disable]),
+    ] {
+        assert_dynamic_compatibility(client, fixture, &date, &flags, false).await;
+    }
+}
+
+async fn assert_dynamic_compatibility(
+    client: &platform_process::Client,
+    fixture: &Fixture,
+    date: &str,
+    flags: &[String],
+    accepted: bool,
+) {
+    let mut query = url::form_urlencoded::Serializer::new(String::new());
+    query.append_pair("date", date);
+    for flag in flags {
+        query.append_pair("flag", flag);
+    }
+    let (status, body) = invoke(
+        client,
+        fixture,
+        SCRIPT,
+        &format!("/compatibility?{}", query.finish()),
+    )
+    .await;
+    assert_eq!(status, 200, "dynamic compatibility response: {body}");
+    assert_eq!(body, json!({ "accepted": accepted }), "{date}: {flags:?}");
 }
 
 async fn api(

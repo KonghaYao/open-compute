@@ -3,8 +3,9 @@ use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode, header};
 use open_compute_core::{InstanceId, RequestId, SecretBytes, VersionId};
-use open_compute_storage::{
-    NewCronConfig, NewVersion, NewVersionProducts, StoredVersionSecret, VersionContentKind,
+use open_compute_storage::cron::NewCronConfig;
+use open_compute_storage::worker_repository::{
+    NewVersion, NewVersionProducts, StoredVersionSecret, VersionContentKind,
     WorkerObservabilitySettings,
 };
 use sha2::{Digest as _, Sha256};

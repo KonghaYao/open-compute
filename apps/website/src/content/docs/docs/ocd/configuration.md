@@ -116,13 +116,33 @@ tokenizer = { kind = "qwen3", revision = "pinned-tokenizer-revision", artifact =
 backend = "bailian-embeddings"
 remote_model = "text-embedding-v4"
 profile = "qwen/qwen3-1024"
+
+[ai.backends.cohere-rerank]
+protocol = "cohere_rerank_v2"
+endpoint = "https://api.cohere.com/v2/rerank"
+auth = { kind = "bearer", secret = { env = "COHERE_API_KEY" } }
+
+[ai.reranking_models."company/cohere-rerank"]
+backend = "cohere-rerank"
+remote_model = "rerank-v4.0-fast"
+
+[ai.backends.generic-rerank]
+protocol = "rerank_v1"
+endpoint = "https://provider.example/v1/rerank"
+auth = { kind = "bearer", secret = { env = "RERANK_API_KEY" } }
+
+[ai.reranking_models."company/generic-rerank"]
+backend = "generic-rerank"
+remote_model = "BAAI/bge-reranker-v2-m3"
 ```
 
-`default_embedding_model` is required before AI Search instances can be created. Add `default_generation_model` and a matching `generation_models` entry only when AI Search chat, query rewrite, or reranking is needed.
+`default_embedding_model` is required before a vector AI Search instance can be created. Chat and query rewrite use `default_generation_model` plus `generation_models`; reranking independently uses `default_reranking_model` plus `reranking_models` and never falls back to a generation model.
 
 Authentication is a closed choice: `bearer`, one custom secret `header`, or `none`. For providers that require a custom key header, use `auth = { kind = "header", name = "X-API-Key", secret = { file = "/run/secrets/provider-key" } }`. The optional `headers` map is only for non-secret static metadata. It cannot override `Authorization`, the custom auth header, host/content headers, cookies, proxy headers, or hop-by-hop headers. `none` is accepted only for loopback HTTP; non-loopback endpoints require HTTPS.
 
 Profiles keep model facts reusable without making them implicit. Dimensions, maximum input tokens, whether to send `dimensions`, and a digest-pinned offline tokenizer belong in the profile. AI Search fixes its metric to cosine. `config check` validates the artifact declaration without reading it; `ocd` verifies the local bytes while composing AI Search services and never downloads a tokenizer.
+
+`cohere_rerank_v2` sends the fixed Cohere v2 shape with `top_n`. `rerank_v1` sends the shared `/v1/rerank` subset without `top_n`; both require a complete `results[{index,relevance_score}]` response. `max_provider_request_bytes` and `max_provider_response_bytes` bound embeddings, chat, rewrite, and rerank bodies.
 
 ## `[data]`: platform state and lock
 
@@ -182,7 +202,7 @@ The path is resolved relative to the loaded instance config. The directory must 
 
 ## `[private_services.<name>]`: fixed private HTTP Service targets
 
-An operator may expose one fixed private or loopback HTTP endpoint through the standard Service Binding `fetch()` interface without opening general tenant egress to private addresses:
+An operator may expose one fixed private or loopback HTTP endpoint through the standard Service Binding `fetch()` interface with a host-pinned destination, caller policy, and injected credential:
 
 ```toml
 [private_services.inventory]
@@ -196,7 +216,7 @@ credential = { file = "/run/secrets/inventory-key" }
 allow = [{ account_id = "<instance-id>", worker_id = "<worker-id>", entrypoint = "api" }]
 ```
 
-The endpoint is resolved to a private address and pinned when `ocd` starts. Redirects are returned, never followed. The caller cannot choose the URL or credential; internal and tenant authentication headers are stripped, and the configured credential is injected only on the host-side request. Upload admission and every invocation recheck the exact instance, Worker, optional Version, entrypoint, and policy revision. A newly created Worker therefore needs its stable Worker ID before this binding can be added. Private targets support Service Binding HTTP `fetch()` only; RPC and `connect()` fail closed. Ordinary tenant `fetch()` remains public-address-only.
+The endpoint is resolved to a private address and pinned when `ocd` starts. Redirects are returned, never followed. The caller cannot choose the URL or credential; internal and tenant authentication headers are stripped, and the configured credential is injected only on the host-side request. Upload admission and every invocation recheck the exact instance, Worker, optional Version, entrypoint, and policy revision. A newly created Worker therefore needs its stable Worker ID before this binding can be added. Private targets support Service Binding HTTP `fetch()` only; RPC and `connect()` fail closed. General tenant outbound can reach host-routable IPs; the operator owns destination filtering through the host firewall, namespace, container, or VM.
 
 ## Other sections
 

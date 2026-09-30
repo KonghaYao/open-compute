@@ -1,6 +1,7 @@
 //! Immutable cross-Worker Service declarations and dynamic target authority.
 
-use crate::{ControlDb, VersionContentKind, VersionState};
+use crate::control_db::ControlDb;
+use crate::worker_repository::{VersionContentKind, VersionState};
 use open_compute_core::{DeploymentId, ErrorCode, InstanceId, PlatformError, VersionId, WorkerId};
 use rusqlite::{OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};

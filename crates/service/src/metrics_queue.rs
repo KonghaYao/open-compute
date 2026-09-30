@@ -1,7 +1,9 @@
 //! Fixed low-cardinality P2.2 Queue producer and retention metrics.
 
 use super::{Inner, write_help};
-use open_compute_storage::{CronSlotSummary, QueueCompletionSummary, QueueDlqForwardSummary};
+use open_compute_storage::scheduler::{
+    CronSlotSummary, QueueCompletionSummary, QueueDlqForwardSummary,
+};
 use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::Duration;

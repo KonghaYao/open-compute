@@ -6,7 +6,7 @@ use open_compute_artifacts::{
     ARTIFACT_KEY_VERSION, ArtifactRef, ObjectBackend, SnapshotObjectStore,
 };
 use open_compute_core::{ErrorCode, InstanceId, PlatformError};
-use open_compute_storage::inspect_master_key;
+use open_compute_storage::inspect::inspect_master_key;
 use std::collections::HashSet;
 
 /// Snapshot references loaded once while the daemon owns the data directory.

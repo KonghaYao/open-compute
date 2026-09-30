@@ -30,10 +30,11 @@ use open_compute_service::service_invocations::ServiceInvocationRegistry;
 use open_compute_service::{
     SqliteKvBindingExecutor, bind_binding_backend, serve_binding_backend_with_assets,
 };
-use open_compute_storage::{
-    BuiltinBindingKind, CacheManager, PlatformStorage, ServiceTarget, WorkerRepository,
-    version_runtime_features,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::cache::CacheManager;
+use open_compute_storage::runtime_features::{BuiltinBindingKind, version_runtime_features};
+use open_compute_storage::services::ServiceTarget;
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateVersionOutcome, CreateVersionRequest, ModuleInput,
     ModuleType, ResourcePins, RuntimeSource, RuntimeValidator, VersionCacheInput,
@@ -138,6 +139,7 @@ async fn p3_cache_images_real_runtime_semantics_and_lifecycle_matrix() {
 
 fn features(tag: &str) -> VersionRuntimeFeatures {
     VersionRuntimeFeatures {
+        compatibility_date: "2026-09-08".to_owned(),
         cache: VersionCacheInput {
             default: VersionCachePolicyInput {
                 enabled: true,
@@ -225,7 +227,8 @@ fn request(
         runtime_features,
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: promote.then_some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: promote
+            .then_some(open_compute_storage::worker_repository::DeploymentSource::VersionsApi),
         observability: None,
         request_id: RequestId::generate(),
         now_ms,
@@ -236,7 +239,7 @@ async fn deploy(
     controller: &VersionController<'_>,
     request: CreateVersionRequest,
     supervisor: &WorkerdSupervisor,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     let result = controller
         .create_version(request)
         .await
@@ -257,7 +260,7 @@ async fn dispatch(
     repo: &WorkerRepository<'_>,
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     uri: &str,
 ) -> (u16, String, Option<String>, Option<String>) {
     dispatch_request(
@@ -281,7 +284,7 @@ async fn dispatch_request(
     repo: &WorkerRepository<'_>,
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     request: Request<Body>,
 ) -> (u16, String, Option<String>, Option<String>) {
     let route_generation =
@@ -327,7 +330,7 @@ async fn open_image_session(
     storage: &PlatformStorage,
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     generation: &str,
     bytes: &[u8],
 ) {

@@ -7,7 +7,8 @@ use open_compute_core::{
     CanonicalBindingConfig, CanonicalPermissions, InstanceId, RequestId, ResourceAvailability,
     ResourceId, ResourceState, SecretString,
 };
-use open_compute_storage::{ResourceRecord, VersionBindingRecord};
+use open_compute_storage::bindings::VersionBindingRecord;
+use open_compute_storage::resources::ResourceRecord;
 
 #[test]
 fn unavailable_executor_fails_closed() {
@@ -522,7 +523,13 @@ async fn listener_wrappers_bind_and_shutdown_cleanly() {
 
 #[tokio::test]
 async fn document_parser_composition_wrapper_binds_every_owned_product_authority() {
-    let fixture = crate::p3_3_test_support::RuntimeFeatureFixture::create(Default::default()).await;
+    let fixture = crate::p3_3_test_support::RuntimeFeatureFixture::create(
+        open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
+    )
+    .await;
     let pins = open_compute_workers::VersionPins::new();
     let assets = Arc::new(crate::asset_backend::AssetBindingService::new(
         fixture.storage.clone(),

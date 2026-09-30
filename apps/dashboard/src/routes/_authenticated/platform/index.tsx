@@ -15,6 +15,7 @@ import {
 } from "../../../components/dashboard-page";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/platform/")({
   component: PlatformPage,
@@ -26,7 +27,7 @@ function PlatformPage() {
   const [upgradeCheck, setUpgradeCheck] = useState<UpgradeCheck | null>(null);
 
   const status = useQuery({
-    queryKey: ["platform", instanceId],
+    queryKey: queryKeys.platform(instanceId),
     queryFn: async ({ signal }) =>
       Promise.all([
         client!.openCompute.capabilities.getForAccount(instanceId!, { signal }),
@@ -143,9 +144,9 @@ function PlatformPage() {
                     value: capabilities?.wrangler_version ?? "Unknown",
                   },
                   {
-                    label: "Compatibility dates",
+                    label: "Compatibility maximum",
                     value: capabilities
-                      ? `${capabilities.compatibility_date.minimum} – ${capabilities.compatibility_date.maximum}`
+                      ? capabilities.compatibility.binary_maximum_date
                       : "Unknown",
                   },
                   {

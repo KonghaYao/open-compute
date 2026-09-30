@@ -4,13 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { importFrameworkOutput } from "../src/import/framework-output.ts";
-import { loadFormalRuntimeLock } from "../src/runtime-lock.ts";
 
-function generatedConfig(lock, overrides = {}) {
+const COMPATIBILITY_DATE = "2026-09-08";
+
+function generatedConfig(overrides = {}) {
   return {
     name: "framework-cloudflare",
     main: "index.js",
-    compatibility_date: lock.effectiveCompatibilityDate,
+    compatibility_date: COMPATIBILITY_DATE,
     rules: [{ type: "ESModule", globs: ["**/*.js"] }],
     no_bundle: true,
     ...overrides,
@@ -18,7 +19,6 @@ function generatedConfig(lock, overrides = {}) {
 }
 
 async function fixture(t, wrangler = {}) {
-  const lock = await loadFormalRuntimeLock();
   const root = await mkdtemp(join(tmpdir(), "open-compute-framework-output-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, ".wrangler", "deploy"), { recursive: true });
@@ -34,7 +34,7 @@ async function fixture(t, wrangler = {}) {
   await writeFile(
     join(root, "dist", "server", "wrangler.json"),
     JSON.stringify(
-      generatedConfig(lock, {
+      generatedConfig({
         ...wrangler,
         assets: {
           directory: "../client",
@@ -115,12 +115,16 @@ test("imports generated server modules and client assets without rebundling or f
   withoutSelectors(output);
 });
 
-test("accepts empty and redundant current-default flags without persisting selectors", async (t) => {
+test("accepts bounded compatibility metadata without interpreting workerd semantics", async (t) => {
   for (const flags of [
     undefined,
     [],
     ["nodejs_compat"],
     ["rpc", "enable_ctx_exports", "nodejs_compat_v2", "nodejs_compat"],
+    ["nodejs_compat", "nodejs_compat"],
+    ["no_nodejs_compat"],
+    ["experimental"],
+    ["unknown_flag"],
   ]) {
     const project = await fixture(
       t,
@@ -141,11 +145,10 @@ test("imports matching framework limits and rejects a conflicting generated ceil
   assert.deepEqual(output.limits, project.limits);
 
   const config = join(project.project, "dist", "server", "wrangler.json");
-  const lock = await loadFormalRuntimeLock();
   await writeFile(
     config,
     JSON.stringify(
-      generatedConfig(lock, {
+      generatedConfig({
         limits: { cpu_ms: 2501, subrequests: 75 },
       }),
     ),
@@ -153,43 +156,31 @@ test("imports matching framework limits and rejects a conflicting generated ceil
   await assert.rejects(importFrameworkOutput(project), /limits conflict/);
 });
 
-test("rejects missing, older, newer, duplicate, opt-out, experimental, and unknown flags", async (t) => {
-  const lock = await loadFormalRuntimeLock();
+test("rejects only malformed compatibility metadata before workerd admission", async (t) => {
   const project = await fixture(t);
   const wrangler = join(project.project, "dist", "server", "wrangler.json");
   const write = (body) =>
-    writeFile(wrangler, JSON.stringify(generatedConfig(lock, body)));
+    writeFile(wrangler, JSON.stringify(generatedConfig(body)));
 
-  await write({ compatibility_date: "2026-08-21" });
-  await assert.rejects(importFrameworkOutput(project), /compatibility date/);
-  await write({ compatibility_date: "2026-08-31" });
-  await assert.rejects(importFrameworkOutput(project), /compatibility date/);
   await write({ compatibility_date: undefined });
   await assert.rejects(importFrameworkOutput(project), /compatibility date/);
   await write({
-    compatibility_date: lock.effectiveCompatibilityDate,
-    compatibility_flags: ["nodejs_compat", "nodejs_compat"],
+    compatibility_date: "x".repeat(33),
   });
-  await assert.rejects(importFrameworkOutput(project), /duplicated/);
+  await assert.rejects(importFrameworkOutput(project), /compatibility date/);
   await write({
-    compatibility_date: lock.effectiveCompatibilityDate,
-    compatibility_flags: ["no_nodejs_compat"],
+    compatibility_date: COMPATIBILITY_DATE,
+    compatibility_flags: [42],
   });
-  await assert.rejects(importFrameworkOutput(project), /pinned baseline/);
+  await assert.rejects(importFrameworkOutput(project), /compatibility flags/);
   await write({
-    compatibility_date: lock.effectiveCompatibilityDate,
-    compatibility_flags: ["experimental"],
+    compatibility_date: COMPATIBILITY_DATE,
+    compatibility_flags: ["x".repeat(129)],
   });
-  await assert.rejects(importFrameworkOutput(project), /pinned baseline/);
-  await write({
-    compatibility_date: lock.effectiveCompatibilityDate,
-    compatibility_flags: ["unknown_flag"],
-  });
-  await assert.rejects(importFrameworkOutput(project), /pinned baseline/);
+  await assert.rejects(importFrameworkOutput(project), /compatibility flags/);
 });
 
 test("reconciles provider identities while preserving local services and binding resource IDs", async (t) => {
-  const lock = await loadFormalRuntimeLock();
   const project = await fixture(t);
   project.services = {
     SELF: {
@@ -202,7 +193,7 @@ test("reconciles provider identities while preserving local services and binding
   await writeFile(
     join(project.project, "dist", "server", "wrangler.json"),
     JSON.stringify(
-      generatedConfig(lock, {
+      generatedConfig({
         services: [
           {
             binding: "SELF",
@@ -228,7 +219,7 @@ test("reconciles provider identities while preserving local services and binding
   await writeFile(
     join(project.project, "dist", "server", "wrangler.json"),
     JSON.stringify(
-      generatedConfig(lock, {
+      generatedConfig({
         services: [
           {
             binding: "SELF",
@@ -245,7 +236,6 @@ test("reconciles provider identities while preserving local services and binding
 });
 
 test("imports Wrangler resource declarations while retaining local resource IDs", async (t) => {
-  const lock = await loadFormalRuntimeLock();
   const project = await fixture(t);
   project.bindings = {
     VECTOR: { type: "vectorize_index", id: "local-vector" },
@@ -256,7 +246,7 @@ test("imports Wrangler resource declarations while retaining local resource IDs"
   await writeFile(
     join(project.project, "dist", "server", "wrangler.json"),
     JSON.stringify(
-      generatedConfig(lock, {
+      generatedConfig({
         vectorize: [{ binding: "VECTOR", index_name: "provider-vector" }],
         ai_search_namespaces: [
           { binding: "SEARCH_NS", namespace: "provider-namespace" },
@@ -270,12 +260,11 @@ test("imports Wrangler resource declarations while retaining local resource IDs"
 });
 
 test("rejects binding-shape drift, unsupported generated capabilities, auxiliary Workers, and links", async (t) => {
-  const lock = await loadFormalRuntimeLock();
   const project = await fixture(t);
   await writeFile(
     join(project.project, "dist", "server", "wrangler.json"),
     JSON.stringify(
-      generatedConfig(lock, {
+      generatedConfig({
         kv_namespaces: [{ binding: "KV", id: "x" }],
       }),
     ),
@@ -285,7 +274,7 @@ test("rejects binding-shape drift, unsupported generated capabilities, auxiliary
   await writeFile(
     join(project.project, "dist", "server", "wrangler.json"),
     JSON.stringify(
-      generatedConfig(lock, {
+      generatedConfig({
         ai: { binding: "AI" },
       }),
     ),
@@ -296,7 +285,7 @@ test("rejects binding-shape drift, unsupported generated capabilities, auxiliary
   await writeFile(
     join(project.project, "dist", "server", "wrangler.json"),
     JSON.stringify(
-      generatedConfig(lock, {
+      generatedConfig({
         browser: { binding: "BROWSER" },
       }),
     ),
@@ -321,7 +310,7 @@ test("rejects binding-shape drift, unsupported generated capabilities, auxiliary
   );
   await writeFile(
     join(project.project, "dist", "server", "wrangler.json"),
-    JSON.stringify(generatedConfig(lock)),
+    JSON.stringify(generatedConfig()),
   );
   await symlink(
     join(project.project, "dist", "server", "index.js"),
@@ -331,7 +320,6 @@ test("rejects binding-shape drift, unsupported generated capabilities, auxiliary
 });
 
 test("requires generated class-bound bindings to match local class names", async (t) => {
-  const lock = await loadFormalRuntimeLock();
   const project = await fixture(t);
   project.bindings = {
     OBJECTS: {
@@ -345,7 +333,7 @@ test("requires generated class-bound bindings to match local class names", async
   await writeFile(
     wrangler,
     JSON.stringify(
-      generatedConfig(lock, {
+      generatedConfig({
         durable_objects: {
           bindings: [{ name: "OBJECTS", class_name: "PortableObject" }],
         },
@@ -363,7 +351,7 @@ test("requires generated class-bound bindings to match local class names", async
   await writeFile(
     wrangler,
     JSON.stringify(
-      generatedConfig(lock, {
+      generatedConfig({
         durable_objects: {
           bindings: [{ name: "OBJECTS", class_name: "DifferentObject" }],
         },

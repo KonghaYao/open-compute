@@ -1,5 +1,5 @@
 use super::*;
-use crate::ResourceRecord;
+use crate::resources::ResourceRecord;
 use open_compute_core::{
     BindingKind, D1Config, InstanceId, ResourceAvailability, ResourceId, ResourceState,
 };

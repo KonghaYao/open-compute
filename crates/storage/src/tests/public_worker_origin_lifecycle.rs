@@ -1,5 +1,6 @@
 use super::*;
-use crate::{PublicGatewayRepository, WorkerOriginExposure};
+use crate::public_gateway::PublicGatewayRepository;
+use crate::worker_repository::WorkerOriginExposure;
 use open_compute_core::RequestId;
 
 #[test]

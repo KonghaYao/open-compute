@@ -13,8 +13,10 @@ use axum::http::{Method, StatusCode, header};
 use open_compute_core::clock::SystemClock;
 use open_compute_core::config::{DataConfig, MetricsConfig};
 use open_compute_core::{InstanceId, RequestId, SecretString, WorkerId};
-use open_compute_storage::{
-    PlatformStorage, PublicGatewayRepository, RouteRecord, WorkerOriginExposure, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::public_gateway::PublicGatewayRepository;
+use open_compute_storage::worker_repository::{
+    RouteRecord, WorkerOriginExposure, WorkerRepository,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};

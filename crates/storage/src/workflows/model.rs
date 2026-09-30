@@ -1,6 +1,6 @@
 //! Shared durable Workflow catalog and execution identities.
 
-use crate::VersionState;
+use crate::worker_repository::VersionState;
 use open_compute_core::{
     BindingId, InstanceId, ResourceAvailability, ResourceState, VersionId, WorkerId, WorkflowId,
     WorkflowInstanceId, WorkflowOperationId, WorkflowToken, WorkflowVersionId,

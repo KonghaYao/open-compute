@@ -13,6 +13,7 @@ import {
 import { DataTable } from "../../../components/page-layout";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { formatBytes } from "../../../lib/format";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/r2/")({
   validateSearch: (
@@ -34,14 +35,7 @@ function R2Page() {
   const [previous, setPrevious] = useState<(string | undefined)[]>([]);
 
   const buckets = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "r2",
-      selectedInstanceId,
-      "buckets",
-      filter,
-      startAfter,
-    ],
+    queryKey: queryKeys.r2(selectedInstanceId, "buckets", filter, startAfter),
     queryFn: ({ signal }) =>
       client!.r2.buckets.list(
         {
@@ -57,13 +51,11 @@ function R2Page() {
   const rows = (buckets.data?.buckets ?? []).slice(0, 10);
   const hasNext = (buckets.data?.buckets?.length ?? 0) > 10;
   const usage = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "r2",
+    queryKey: queryKeys.r2(
       selectedInstanceId,
       "bucket-usage",
       rows.map((bucket) => bucket.name),
-    ],
+    ),
     queryFn: async ({ signal }) =>
       Object.fromEntries(
         await Promise.all(

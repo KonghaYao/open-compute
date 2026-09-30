@@ -1,10 +1,8 @@
 use super::*;
 use open_compute_core::config::DataConfig;
 use open_compute_core::{ErrorCode, SystemClock};
-use open_compute_storage::{
-    QueueContentType, QueueCreateReservation, QueueEnqueueRequest, QueueMessageInput,
-    QueueRepository, QueueState,
-};
+use open_compute_storage::queues::{QueueCreateReservation, QueueRepository, QueueState};
+use open_compute_storage::scheduler::{QueueContentType, QueueEnqueueRequest, QueueMessageInput};
 
 fn storage() -> (tempfile::TempDir, PlatformStorage, Arc<SchedulerStore>) {
     let temp = tempfile::tempdir().unwrap();

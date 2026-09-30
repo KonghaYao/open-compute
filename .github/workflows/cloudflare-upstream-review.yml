@@ -40,12 +40,10 @@ jobs:
           classification="$(sed -n 's/^classification: //p' "$RUNNER_TEMP/summary.txt")"
           {
             echo "classification=$classification"
-            {
-              echo "summary<<SUMMARY"
-              cat "$RUNNER_TEMP/summary.txt"
-              echo "SUMMARY"
-            } >> "$GITHUB_OUTPUT"
-          } >> /dev/null
+            echo "summary<<SUMMARY"
+            cat "$RUNNER_TEMP/summary.txt"
+            echo "SUMMARY"
+          } >> "$GITHUB_OUTPUT"
           test -n "$classification"
       - name: Upload raw scan evidence
         if: ${{ always() && !cancelled() }}

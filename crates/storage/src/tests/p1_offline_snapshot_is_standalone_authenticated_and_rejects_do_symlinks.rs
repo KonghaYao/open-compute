@@ -7,8 +7,13 @@ fn p1_offline_snapshot_is_standalone_authenticated_and_rejects_do_symlinks() {
     let storage = PlatformStorage::bootstrap(&config, &SystemClock).unwrap();
     let scheduler_path = storage.data_dir().ensure_scheduler_db().unwrap();
     drop(
-        crate::SchedulerStore::open(&scheduler_path, 5_000, 1, storage.identity().instance_id)
-            .unwrap(),
+        crate::scheduler::SchedulerStore::open(
+            &scheduler_path,
+            5_000,
+            1,
+            storage.identity().instance_id,
+        )
+        .unwrap(),
     );
     let do_root = storage
         .data_dir()
@@ -23,20 +28,20 @@ fn p1_offline_snapshot_is_standalone_authenticated_and_rejects_do_symlinks() {
     storage
         .bind_object_authority(ObjectStorageKind::Local, &[0xdd; 32])
         .unwrap();
-    let artifacts = crate::CloudflareArtifactsRepository::new(storage.db());
+    let artifacts = crate::cloudflare_artifacts::CloudflareArtifactsRepository::new(storage.db());
     let namespace = artifacts
         .ensure_namespace(storage.identity().instance_id, "apps", None, 1)
         .unwrap();
     let repository = artifacts
         .reserve_repository(
             &namespace,
-            crate::NewArtifactRepository {
+            crate::cloudflare_artifacts::NewArtifactRepository {
                 name: "source",
                 description: "",
                 default_branch: "main",
                 read_only: false,
                 source: None,
-                initial_state: crate::ArtifactRepositoryState::Creating,
+                initial_state: crate::cloudflare_artifacts::ArtifactRepositoryState::Creating,
                 now_ms: 1,
             },
         )
@@ -65,10 +70,10 @@ fn p1_offline_snapshot_is_standalone_authenticated_and_rejects_do_symlinks() {
     drop(storage);
 
     let data_dir = DataDir::acquire_existing_offline(&config).unwrap();
-    let key = crate::inspect_master_key(&config).unwrap();
+    let key = crate::inspect::inspect_master_key(&config).unwrap();
     let snapshot_id = uuid::Uuid::now_v7().hyphenated().to_string();
     let hardening = HardeningConfig::default();
-    let mut request = crate::PreparePlatformSnapshotRequest {
+    let mut request = crate::platform_snapshot::PreparePlatformSnapshotRequest {
         snapshot_id: &snapshot_id,
         label: "p1-test",
         created_at_ms: 1,
@@ -80,7 +85,7 @@ fn p1_offline_snapshot_is_standalone_authenticated_and_rejects_do_symlinks() {
         config_policy_sha256: &"f".repeat(64),
         object_prefix: &format!(
             "system/snapshots/v1/{}/{snapshot_id}/objects/",
-            crate::inspect_control_db(&data_dir.control_db_path(), 5_000)
+            crate::inspect::inspect_control_db(&data_dir.control_db_path(), 5_000)
                 .unwrap()
                 .1
                 .instance_id
@@ -92,7 +97,7 @@ fn p1_offline_snapshot_is_standalone_authenticated_and_rejects_do_symlinks() {
     let mut wrong_key_request = request.clone();
     wrong_key_request.master_key_fingerprint = &wrong_fingerprint;
     assert_eq!(
-        crate::prepare_platform_snapshot(&data_dir, &wrong_key_request)
+        crate::platform_snapshot::prepare_platform_snapshot(&data_dir, &wrong_key_request)
             .unwrap_err()
             .code(),
         ErrorCode::MasterKeyMismatch
@@ -101,14 +106,14 @@ fn p1_offline_snapshot_is_standalone_authenticated_and_rejects_do_symlinks() {
     let mut wrong_schema_request = request.clone();
     wrong_schema_request.release.snapshot_format_version += 1;
     assert_eq!(
-        crate::prepare_platform_snapshot(&data_dir, &wrong_schema_request)
+        crate::platform_snapshot::prepare_platform_snapshot(&data_dir, &wrong_schema_request)
             .unwrap_err()
             .code(),
         ErrorCode::SnapshotInvalid
     );
 
     assert_eq!(
-        crate::prepare_platform_snapshot(&data_dir, &request)
+        crate::platform_snapshot::prepare_platform_snapshot(&data_dir, &request)
             .unwrap_err()
             .code(),
         ErrorCode::SnapshotInvalid
@@ -128,13 +133,14 @@ fn p1_offline_snapshot_is_standalone_authenticated_and_rejects_do_symlinks() {
     fs::remove_file(do_root.join("forbidden-link")).unwrap();
     request.release.snapshot_format_version = 2;
     assert_eq!(
-        crate::prepare_platform_snapshot(&data_dir, &request)
+        crate::platform_snapshot::prepare_platform_snapshot(&data_dir, &request)
             .unwrap_err()
             .code(),
         ErrorCode::SnapshotInvalid
     );
     request.release.snapshot_format_version = 1;
-    let mut prepared = crate::prepare_platform_snapshot(&data_dir, &request).unwrap();
+    let mut prepared =
+        crate::platform_snapshot::prepare_platform_snapshot(&data_dir, &request).unwrap();
     assert!(prepared.manifest.files.iter().any(|file| {
         file.role == open_compute_core::SnapshotFileRole::DurableObjectFile
             && file.restore_path.ends_with("state.bin")
@@ -143,11 +149,11 @@ fn p1_offline_snapshot_is_standalone_authenticated_and_rejects_do_symlinks() {
         file.role == open_compute_core::SnapshotFileRole::ArtifactGitFile
             && file.restore_path.ends_with("/HEAD")
     }));
-    crate::sign_snapshot_manifest(&mut prepared.manifest, &key).unwrap();
-    crate::verify_snapshot_manifest_mac(&prepared.manifest, &key).unwrap();
+    crate::platform_snapshot::sign_snapshot_manifest(&mut prepared.manifest, &key).unwrap();
+    crate::platform_snapshot::verify_snapshot_manifest_mac(&prepared.manifest, &key).unwrap();
     prepared.manifest.label.push('x');
     assert_eq!(
-        crate::verify_snapshot_manifest_mac(&prepared.manifest, &key)
+        crate::platform_snapshot::verify_snapshot_manifest_mac(&prepared.manifest, &key)
             .unwrap_err()
             .code(),
         ErrorCode::SnapshotInvalid
@@ -169,7 +175,7 @@ fn p1_offline_snapshot_is_standalone_authenticated_and_rejects_do_symlinks() {
     };
     request.hardening = &file_limited;
     assert_eq!(
-        crate::prepare_platform_snapshot(&data_dir, &request)
+        crate::platform_snapshot::prepare_platform_snapshot(&data_dir, &request)
             .unwrap_err()
             .code(),
         ErrorCode::SnapshotInvalid
@@ -194,7 +200,7 @@ fn p1_offline_snapshot_is_standalone_authenticated_and_rejects_do_symlinks() {
     };
     request.hardening = &total_limited;
     assert_eq!(
-        crate::prepare_platform_snapshot(&data_dir, &request)
+        crate::platform_snapshot::prepare_platform_snapshot(&data_dir, &request)
             .unwrap_err()
             .code(),
         ErrorCode::SnapshotInvalid

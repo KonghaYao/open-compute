@@ -6,10 +6,11 @@ use open_compute_artifacts::GitRepositoryStore;
 use open_compute_core::{
     ArtifactRepoId, ArtifactTokenId, ArtifactsConfig, ErrorCode, InstanceId, PlatformError,
 };
-use open_compute_storage::{
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::cloudflare_artifacts::{
     ArtifactNamespaceRecord, ArtifactRepositoryRecord, ArtifactRepositoryState,
     ArtifactTokenRecord, ArtifactTokenScope, CloudflareArtifactsRepository, NewArtifactRepository,
-    NewArtifactToken, PlatformStorage,
+    NewArtifactToken,
 };
 use rand::TryRngCore as _;
 use std::sync::Arc;

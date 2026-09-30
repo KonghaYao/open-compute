@@ -186,9 +186,9 @@ pub(crate) async fn run_kv_maintenance(
     let batch = usize::try_from(config.max_connections.min(64)).unwrap_or(64);
     let pass = tokio::task::spawn_blocking(move || {
         let instance_id = storage.identity().instance_id;
-        let catalog = open_compute_storage::KvNamespaceRepository::new(storage.db());
-        let resources = open_compute_storage::ResourceRepository::new(storage.db());
-        let paths = open_compute_storage::KvPaths::open(storage.data_dir().root())?;
+        let catalog = open_compute_storage::kv::KvNamespaceRepository::new(storage.db());
+        let resources = open_compute_storage::resources::ResourceRepository::new(storage.db());
+        let paths = open_compute_storage::kv::KvPaths::open(storage.data_dir().root())?;
         let now = open_compute_core::wall_time_ms();
         for record in catalog.list(instance_id)?.into_iter().take(batch) {
             if record.resource.state != open_compute_core::ResourceState::Ready
@@ -201,7 +201,7 @@ pub(crate) async fn run_kv_maintenance(
                 record.resource.instance_id,
                 record.resource.id,
             )?;
-            let engine = match open_compute_storage::KvEngine::from_record(path, &record) {
+            let engine = match open_compute_storage::kv::KvEngine::from_record(path, &record) {
                 Ok(engine) => engine,
                 Err(error) => {
                     metrics.inc_kv_corruption(2);

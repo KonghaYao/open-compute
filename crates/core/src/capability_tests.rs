@@ -98,7 +98,7 @@ fn wrangler() -> WranglerCapabilitiesV1 {
         constraint: None,
     };
     WranglerCapabilitiesV1 {
-        version: "4.138.0".to_owned(),
+        version: "4.143.0".to_owned(),
         config_schema_sha256: "e".repeat(64),
         fields: vec![item.clone()],
         bindings: vec![WranglerCapabilityItemV1 {
@@ -215,7 +215,27 @@ fn capability_status_serialization_and_contract_are_strict() {
         schema_version: 1,
         release,
         runtime: RuntimeCapabilityV1 {
-            effective_compatibility_date: "2026-09-08".to_owned(),
+            compatibility: RuntimeCompatibilityV1 {
+                validation: "workerd_code_version".to_owned(),
+                binary_maximum_date: "2026-09-25".to_owned(),
+                future_dates_allowed: false,
+                experimental_enabled: true,
+                features: vec![CompatibilityFeatureV1 {
+                    field: "nodeJsCompat".to_owned(),
+                    enable_flag: Some("nodejs_compat".to_owned()),
+                    disable_flag: None,
+                    default_on_date: None,
+                    enabled_for_all_dates: false,
+                    experimental: false,
+                    python_snapshot_release: false,
+                    implied_by: Vec::new(),
+                }],
+                catalog_sha256: "b".repeat(64),
+            },
+            system_workers: SystemWorkerCompatibilityV1 {
+                compatibility_date: "2026-09-08".to_owned(),
+                compatibility_flags: vec!["experimental".to_owned()],
+            },
             workerd_lock_sha256: "a".repeat(64),
             workers_types_version: "5.20260830.1".to_owned(),
             workers_types_git_head: "e".repeat(40),
@@ -313,4 +333,86 @@ fn member_and_product_status_combinations_validate_exactly() {
     };
     assert!(platform.validate());
     assert!(unsupported_product().validate());
+}
+
+#[test]
+fn compatibility_catalog_validation_rejects_malformed_and_duplicate_authority() {
+    let implication = CompatibilityImplicationV1 {
+        flags: vec!["nodejsCompat".to_owned()],
+        after_date: "2024-09-23".to_owned(),
+    };
+    let feature = CompatibilityFeatureV1 {
+        field: "nodeJsCompat".to_owned(),
+        enable_flag: Some("nodejs_compat".to_owned()),
+        disable_flag: Some("no_nodejs_compat".to_owned()),
+        default_on_date: Some("2024-09-23".to_owned()),
+        enabled_for_all_dates: false,
+        experimental: false,
+        python_snapshot_release: false,
+        implied_by: vec![implication],
+    };
+    let catalog = RuntimeCompatibilityV1 {
+        validation: "workerd_code_version".to_owned(),
+        binary_maximum_date: "2026-10-06".to_owned(),
+        future_dates_allowed: false,
+        experimental_enabled: true,
+        features: vec![feature.clone()],
+        catalog_sha256: "a".repeat(64),
+    };
+    assert!(catalog.validate());
+
+    for invalid in [
+        RuntimeCompatibilityV1 {
+            future_dates_allowed: true,
+            ..catalog.clone()
+        },
+        RuntimeCompatibilityV1 {
+            binary_maximum_date: "2026-1-06".to_owned(),
+            ..catalog.clone()
+        },
+        RuntimeCompatibilityV1 {
+            features: Vec::new(),
+            ..catalog.clone()
+        },
+        RuntimeCompatibilityV1 {
+            features: vec![CompatibilityFeatureV1 {
+                field: String::new(),
+                ..feature.clone()
+            }],
+            ..catalog.clone()
+        },
+        RuntimeCompatibilityV1 {
+            features: vec![CompatibilityFeatureV1 {
+                enable_flag: None,
+                disable_flag: None,
+                ..feature.clone()
+            }],
+            ..catalog.clone()
+        },
+        RuntimeCompatibilityV1 {
+            features: vec![feature.clone(), feature],
+            ..catalog.clone()
+        },
+        RuntimeCompatibilityV1 {
+            catalog_sha256: "bad".to_owned(),
+            ..catalog
+        },
+    ] {
+        assert!(!invalid.validate());
+    }
+
+    assert!(
+        SystemWorkerCompatibilityV1 {
+            compatibility_date: "2026-09-08".to_owned(),
+            compatibility_flags: Vec::new(),
+        }
+        .validate()
+    );
+    assert!(
+        !SystemWorkerCompatibilityV1 {
+            compatibility_date: "2026-09-08".to_owned(),
+            compatibility_flags: vec!["experimental".to_owned(), "experimental".to_owned()],
+        }
+        .validate()
+    );
 }

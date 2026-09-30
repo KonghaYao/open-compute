@@ -6,8 +6,8 @@
     "description": "Mechanically selected from the pinned official Cloudflare OpenAPI snapshot; do not hand-edit."
   },
   "x-open-compute-upstream": {
-    "revision": "425ceea95cdaa4c43dd462279e42d74fbc00441e",
-    "sha256": "9f89b89c428968dcb37c5df51c249a24018128b52259567ff9cda11d103b3a92"
+    "revision": "780de88d0324b007c907a1782259b1a0e5e87c7d",
+    "sha256": "e514c72ea05ed98d709d09447d95d81f1dfb43372b23162474990498fe9577a7"
   },
   "x-open-compute-operation-inventory": [
     {
@@ -62,7 +62,7 @@
       "operationId": "worker-subdomain-get-subdomain",
       "status": "supported_with_deviation",
       "source": "cloudflare-openapi",
-      "constraint": "Fixed Wrangler 4.138.0 discards this Workflow deploy prerequisite; open-compute returns a stable account-scoped non-DNS label and does not provide workers.dev DNS, routing, registration, update, or deletion",
+      "constraint": "Fixed Wrangler 4.143.0 discards this Workflow deploy prerequisite; open-compute returns a stable account-scoped non-DNS label and does not provide workers.dev DNS, routing, registration, update, or deletion",
       "deviations": ["OC-ACCOUNT-SUBDOMAIN-001"],
       "operationSha256": "5fd74e1bc71ea92d9ed0bb981b9b7070326dc06908949788fcdf304cc3a78b82"
     },
@@ -102,7 +102,7 @@
       "source": "cloudflare-openapi",
       "constraint": "force=true bypasses retained Version and inbound Service references and may rotate the single workerd generation, but external D1, KV, R2, Queue, Workflow, and Durable Object resources remain independent authorities rather than being cascade-deleted with the Script",
       "deviations": ["OC-DEPLOY-001"],
-      "operationSha256": "d0a90759a9f257271f60aa928ef403fb82f2da3e3a3015f7087ac4e298a20d06"
+      "operationSha256": "9b1d3cb349e54f0b70a6ea0482303a207654ab4d1c61bced2652db8e20837410"
     },
     {
       "id": "POST /accounts/{account_id}/workers/scripts/{script_name}/versions",
@@ -147,7 +147,7 @@
       "operationId": "worker-deployments-create-deployment",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "5456626330f754bdfae44fc5d2301790c36c53b438aa078d3795cfd561a20de2"
+      "operationSha256": "5f64310a59b76625db22e7334f89cf74772d8cada0cf54864e6e31a8dc5351fd"
     },
     {
       "id": "GET /accounts/{account_id}/workers/scripts/{script_name}/deployments/{deployment_id}",
@@ -223,7 +223,7 @@
       "source": "cloudflare-openapi",
       "constraint": "Script Tail sessions are process-local and receive only the selected target Script; they do not aggregate nested target logs",
       "deviations": ["OC-OBSERVABILITY-001"],
-      "operationSha256": "23a59214b64bd9fbbcbfdcbb07fe48f8ce54a4562be1c9395b9c3e9b091731d0"
+      "operationSha256": "fe85b88074e6975d062f1b16282a31c145a2363547c20a91ce3d159772c6c2c6"
     },
     {
       "id": "DELETE /accounts/{account_id}/workers/scripts/{script_name}/tails/{id}",
@@ -307,7 +307,7 @@
       "operationId": "worker-put-script-secret",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "ab3e27ed16586e688fafd2c8cc2f4f58e6ff4d4d60dfc765b10d907ab06b2d1b"
+      "operationSha256": "8c47448726ebba91e42dd8446ae48975287ba4078c3d9285dbd7f812d8ffcab5"
     },
     {
       "id": "GET /accounts/{account_id}/workers/scripts/{script_name}/secrets/{secret_name}",
@@ -334,7 +334,7 @@
       "operationId": "worker-patch-script-secrets-bulk",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "fc3fb1b906041309ba69c30174d5f5b1fe1fdbc1c70fe76ef4cd7e2c3ae0d6a3"
+      "operationSha256": "8c10f48180dd442becd219db9ed6ac11eecc3ed7f0cb2d473614df189d9fba4d"
     },
     {
       "id": "GET /accounts/{account_id}/workers/scripts/{script_name}/schedules",
@@ -361,7 +361,7 @@
       "operationId": "worker-script-get-subdomain",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "8af98dc3ad314b9b0806d504c517dde22746f04ead4571b8f828f323c00fa0cb"
+      "operationSha256": "cd4e566a10dc8d27215ebacf79228c49aa6afa97e7e93112d590ce6f73294c65"
     },
     {
       "id": "POST /accounts/{account_id}/workers/scripts/{script_name}/subdomain",
@@ -370,7 +370,7 @@
       "operationId": "worker-script-post-subdomain",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "1efba0338864a4da8e374dd4561c984db76770b513f478f4e5db5f306e942949"
+      "operationSha256": "be5e2f8511d558641f92461ef52ed1751329ca08154b40e2ec7e57dad3b742e6"
     },
     {
       "id": "DELETE /accounts/{account_id}/workers/scripts/{script_name}/subdomain",
@@ -379,7 +379,7 @@
       "operationId": "worker-script-delete-subdomain",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "da11763de07496b14d7da78cd8c543d06b47cf480ac7cdc046ee5476edb1e2a0"
+      "operationSha256": "84c655421adec656c1fa69728dc1ed08477928c727c211cf9af761afc50426e6"
     },
     {
       "id": "GET /accounts/{account_id}/workers/workers/{worker_id}",
@@ -406,7 +406,7 @@
       "operationId": "worker-script-update-create-assets-upload-session",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "c7168d2049b9dbb96e644092569549fc475f4250a48b396b79f27139f3a56c8c"
+      "operationSha256": "750212980636e0e3c334b84047aa56fc288d778053ed9aba00e73395fe071c22"
     },
     {
       "id": "POST /accounts/{account_id}/workers/assets/upload",
@@ -415,7 +415,7 @@
       "operationId": "worker-assets-upload",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "44b6d1d5ca659ad70cf45ba7668691433a24e007be28c8d01bf7f34a2505db22"
+      "operationSha256": "28cce8e09e04683407bc18dd32ef865ede86b10838d2aab791567312822d3c68"
     },
     {
       "id": "GET /accounts/{account_id}/storage/kv/namespaces",
@@ -424,7 +424,7 @@
       "operationId": "workers-kv-namespace-list-namespaces",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "716f832d7af2d46f7e2b606b0547bd80cdb054924c619e1bd69b042df65bc106"
+      "operationSha256": "5bdbdfb6f9d98c1d0bf2db32a71c6c325689b1eed266f6f89cffd9d8028ca37a"
     },
     {
       "id": "POST /accounts/{account_id}/storage/kv/namespaces",
@@ -433,7 +433,7 @@
       "operationId": "workers-kv-namespace-create-a-namespace",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "39abb6b53c95018aeba5b3b407161be7fe4d768f421c592575587f2a9eb2fa27"
+      "operationSha256": "93a92688f2f75da7c6deccb76149d96c83972230a7788345eb324886b2f4707a"
     },
     {
       "id": "GET /accounts/{account_id}/storage/kv/namespaces/{namespace_id}",
@@ -442,7 +442,7 @@
       "operationId": "workers-kv-namespace-get-a-namespace",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "b9620e36b6ec4c72f5158bbf5b7919d4885d6799e76dd6ca00d50d36b67495ce"
+      "operationSha256": "05b6138121e5e869a940f466f7c6b07809e1848651d39c80250f1f460ab67676"
     },
     {
       "id": "PUT /accounts/{account_id}/storage/kv/namespaces/{namespace_id}",
@@ -451,7 +451,7 @@
       "operationId": "workers-kv-namespace-rename-a-namespace",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "98cb0eed937e06def236c002ef07fb91302080152bec505bffa310e011cd1390"
+      "operationSha256": "6a2bfdd3018fc9dd7253c549203cbef0ec03f29bbf6e4a84318678ac8a1c599b"
     },
     {
       "id": "DELETE /accounts/{account_id}/storage/kv/namespaces/{namespace_id}",
@@ -460,7 +460,7 @@
       "operationId": "workers-kv-namespace-remove-a-namespace",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "b167db001dc927985bc98498d7c4c607b3cafe1bfde17d67def2f6edec6b5062"
+      "operationSha256": "2ca913071a9cfc088e1164734099582798ad51a09a890c8c2021fa9b83beeeb0"
     },
     {
       "id": "GET /accounts/{account_id}/storage/kv/namespaces/{namespace_id}/keys",
@@ -469,7 +469,7 @@
       "operationId": "workers-kv-namespace-list-a-namespace'-s-keys",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "9f5b9771456c1f68edf4c7f6418a9074cae47bc18507484dc6f8a5748f9aa818"
+      "operationSha256": "e34f2ce665f02228531d2517ec214291341d5541b7f1e469cf34b18f63e49ee1"
     },
     {
       "id": "GET /accounts/{account_id}/storage/kv/namespaces/{namespace_id}/values/{key_name}",
@@ -478,7 +478,7 @@
       "operationId": "workers-kv-namespace-read-key-value-pair",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "ba86e9253a70dd6dee1c33c7a46640a9736b7701e7aeb06039908be829cd8b3c"
+      "operationSha256": "f766285d25c148cc95e1b3072ebb3fac7b912b2744306a50b511c5a86ce81142"
     },
     {
       "id": "PUT /accounts/{account_id}/storage/kv/namespaces/{namespace_id}/values/{key_name}",
@@ -487,7 +487,7 @@
       "operationId": "workers-kv-namespace-write-key-value-pair-with-metadata",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "70462b3e92211b6bf5a6881e6ea3a5db3e4838b39a34315e1cbd3c32e5a5fe79"
+      "operationSha256": "8c3eec783b86db2a5bf4f92859fd69626d882b7b1c01d54718e5e54024c9f5f0"
     },
     {
       "id": "DELETE /accounts/{account_id}/storage/kv/namespaces/{namespace_id}/values/{key_name}",
@@ -496,7 +496,7 @@
       "operationId": "workers-kv-namespace-delete-key-value-pair",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "24abc923d052678d7624b9ddc2f474be06e1bcd5dc1b488ab815f895700ed1be"
+      "operationSha256": "228b12b000646ff0eb06e4be503e125483cdd60b04eddd7d4ffb3a202708d1e1"
     },
     {
       "id": "GET /accounts/{account_id}/storage/kv/namespaces/{namespace_id}/metadata/{key_name}",
@@ -505,7 +505,7 @@
       "operationId": "workers-kv-namespace-read-the-metadata-for-a-key",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "4340520d713422f7f293c8dd931c539157c6b588dcb0af9abd48983c02d7b32d"
+      "operationSha256": "5e27558e24c83b9203cf5a24669e01334f63edbfee0be923d44592a3de520a82"
     },
     {
       "id": "PUT /accounts/{account_id}/storage/kv/namespaces/{namespace_id}/bulk",
@@ -514,7 +514,7 @@
       "operationId": "workers-kv-namespace-write-multiple-key-value-pairs",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "6fe0de6657873df093df5ab7bad76dce637fae20dccce480a6c7ff99ae04feb1"
+      "operationSha256": "9955272a134e4edee051c18402037a7751ba32c7c84dcdb85d5c0575fbe5c79f"
     },
     {
       "id": "POST /accounts/{account_id}/storage/kv/namespaces/{namespace_id}/bulk/get",
@@ -523,7 +523,7 @@
       "operationId": "workers-kv-namespace-get-multiple-key-value-pairs",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "021a486cd2f6c9034cc9b8fa75d2fdd9d6d6ae4a564044ac230e3fdd14d862eb"
+      "operationSha256": "ca3d81b54f1c2c7260d72fb41b87fdc1c94d5f4535613e59be72feb661ea9873"
     },
     {
       "id": "POST /accounts/{account_id}/storage/kv/namespaces/{namespace_id}/bulk/delete",
@@ -532,7 +532,7 @@
       "operationId": "workers-kv-namespace-delete-multiple-key-value-pairs",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "d38277c1b8a6a982e64b4dea98e4722f19b1b2d2334d4652eea3244f8cc7a3ba"
+      "operationSha256": "cd863638a7bad46f4500a880d09044d949b8024a1be31c0b1c9d6c87578603a7"
     },
     {
       "id": "GET /accounts/{account_id}/d1/database",
@@ -613,7 +613,7 @@
       "operationId": "d1-export-database",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "23d1c2137fd45abf372aefb08f6f61a9387053306f103d2ec24b6a6920806b03"
+      "operationSha256": "4b10553fa531e256103dba147014d6f7730bd56c31cdf3f090c86c32b8701d98"
     },
     {
       "id": "POST /accounts/{account_id}/d1/database/{database_id}/import",
@@ -622,7 +622,7 @@
       "operationId": "d1-import-database",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "5f1b0d9dce5aa256d655cab416c1c30adc254aad0f09a0805417480b83460852"
+      "operationSha256": "bc10d7b379eb720e149e6337c831e6363097c028416c20b60af6c424b0ac0398"
     },
     {
       "id": "GET /accounts/{account_id}/d1/database/{database_id}/time_travel/bookmark",
@@ -653,7 +653,7 @@
       "operationId": "r2-list-buckets",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "00abecf28dfbc4059f80be5800f5fb89002dcbb84f9fbd0a0a53ae1cf74768ea"
+      "operationSha256": "990934c57aa454a9b6d5294519dbafedb120cbcda7295c3987263ec7b6e7cc49"
     },
     {
       "id": "POST /accounts/{account_id}/r2/buckets",
@@ -662,7 +662,7 @@
       "operationId": "r2-create-bucket",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "c49bec7aba175a42fd5b4a69c3f95371b38a05a917a8342b41feaf20b64f2d82"
+      "operationSha256": "1c36f576b401e83f8383488e0b91a87274536c6457ad2a7210499e285b4a2835"
     },
     {
       "id": "GET /accounts/{account_id}/r2/buckets/{bucket_name}",
@@ -671,7 +671,7 @@
       "operationId": "r2-get-bucket",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "b99abcc46cccfb7f2ec075387823171211b8ce5b3d08b9984ae60dd15836dd01"
+      "operationSha256": "70f06c6859d6c0b0fc3130f0d5633cd3bb880b0390c0fb10785c5730bbeea40d"
     },
     {
       "id": "PUT /accounts/{account_id}/r2/buckets/{bucket_name}",
@@ -689,7 +689,7 @@
       "operationId": "r2-delete-bucket",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "7f0b13fb469f1021cac9a141b0fdb101b992c251983d08c754b216abf3dc67da"
+      "operationSha256": "db18477f65d10891d83f85a48b15b707d0c1734cb3cd7fbd4cd3623a7fe2be46"
     },
     {
       "id": "GET /accounts/{account_id}/r2/buckets/{bucket_name}/objects/{object_key}",
@@ -698,7 +698,7 @@
       "operationId": "r2-get-object",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "ff3cbe28ce13eaaa219abb70874d0a1093d59542ecaebcfaa15e871da0c75357"
+      "operationSha256": "b5ee1e67cd6d13a0c644d5422ed54fcf60bee4bf83c0cdec735130a19eb538c3"
     },
     {
       "id": "PUT /accounts/{account_id}/r2/buckets/{bucket_name}/objects/{object_key}",
@@ -707,7 +707,7 @@
       "operationId": "r2-put-object",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "3490a76656c7627f75128b819368582f2b399f01e00f2e1ce4ec5cb2e81a82eb"
+      "operationSha256": "b3eee264e4b542c5d07a73c37aadce1121a4d7901ec18ec37d7bba69921cf177"
     },
     {
       "id": "DELETE /accounts/{account_id}/r2/buckets/{bucket_name}/objects/{object_key}",
@@ -716,7 +716,7 @@
       "operationId": "r2-delete-object",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "d1ab4e18726689d071479c6f991ba72ccb2659521d05c91adc85f9a04593e825"
+      "operationSha256": "ec38f873660cd49514a79774aca8d978904a97c536ccce83fe0c60473833ac9f"
     },
     {
       "id": "GET /accounts/{account_id}/r2/buckets/{bucket_name}/objects",
@@ -725,7 +725,7 @@
       "operationId": "r2-list-objects",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "ea5cf56128416cb1b7dbf148b264c918f279d28fa1f13648acf7f1b0170a8b04"
+      "operationSha256": "fd60b192bfb1263a3e1c0f1b614298ca5441d5a70ac88616813554453a584ceb"
     },
     {
       "id": "GET /accounts/{account_id}/vectorize/v2/indexes",
@@ -860,7 +860,7 @@
       "operationId": "ai-search-list-tokens",
       "status": "supported_with_deviation",
       "source": "cloudflare-openapi",
-      "constraint": "Fixed Wrangler 4.138.0 requires account token metadata before AI Search creation; open-compute exposes one stable installation-managed metadata record without Cloudflare account credential storage or token mutation",
+      "constraint": "Fixed Wrangler 4.143.0 requires account token metadata before AI Search creation; open-compute exposes one stable installation-managed metadata record without Cloudflare account credential storage or token mutation",
       "deviations": ["OC-AI-SEARCH-TOKEN-001"],
       "operationSha256": "5325159dd20b495d3374783d44caf0f117b2f8561a59ca2f0d64fbe383c5c7de"
     },
@@ -1060,7 +1060,7 @@
       "operationId": "ai-search-namespace-instance-upload-item",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "4611d2c744291ed9016509fafd47e67b4fc4af0565afa08227dfbd10a6930a17"
+      "operationSha256": "090c18ff2567a26365737abf59becb9105d95e096847b4b8d8e15a8cb09c4827"
     },
     {
       "id": "PUT /accounts/{account_id}/ai-search/namespaces/{name}/instances/{id}/items",
@@ -1069,7 +1069,7 @@
       "operationId": "ai-search-namespace-instance-create-or-update-item",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "bf18dacc0e12a4fc1a6bbdffa7dd44b686616ba105a091fb9b568f5f1870fd77"
+      "operationSha256": "438b3eabbfa192597a09a374e8d3550bd41bf255861e41cbe42b9c0475d61605"
     },
     {
       "id": "GET /accounts/{account_id}/ai-search/namespaces/{name}/instances/{id}/items/{item_id}",
@@ -1087,7 +1087,7 @@
       "operationId": "ai-search-namespace-instance-sync-item",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "6ebddf3c92a5834ad276d48ae4b5a4cf03a01e35eb7b68215e204cf89d78c89b"
+      "operationSha256": "d66ec66fa38bda6c05d0dd6c61ed32704306bc426d4b783811fd196c49c39940"
     },
     {
       "id": "DELETE /accounts/{account_id}/ai-search/namespaces/{name}/instances/{id}/items/{item_id}",
@@ -1096,7 +1096,7 @@
       "operationId": "ai-search-namespace-instance-delete-item",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "9343fb555ea2216d9bd885c3825361d4768266d4bbe15227dc0918586b1c4ca2"
+      "operationSha256": "a75c874b4e0d8b6aed263b0135ce0b441574edf1b078849f7e0758d9526c8419"
     },
     {
       "id": "GET /accounts/{account_id}/ai-search/namespaces/{name}/instances/{id}/items/{item_id}/download",
@@ -1159,7 +1159,7 @@
       "operationId": "queues-update",
       "status": "supported",
       "source": "cloudflare-openapi",
-      "operationSha256": "54a09f7fb8a64fe9abaa3077dd1067116b4a966bc72eba67fb1f295e152ca0e9"
+      "operationSha256": "34cff6eb3cc62b2550066eecd48f3a61ce1b954c9392615bd303e8392c78e828"
     },
     {
       "id": "DELETE /accounts/{account_id}/queues/{queue_id}",
@@ -2088,7 +2088,8 @@
             "description": "If true, delete the Worker even when other Workers still reference it. Service bindings in those Workers may be left broken. Durable Object namespaces implemented by the deleted Worker are deleted even if other Workers reference them.",
             "schema": {
               "type": "boolean"
-            }
+            },
+            "x-fern-parameter-name": "delete-with-references"
           }
         ],
         "responses": {
@@ -2549,7 +2550,8 @@
             "description": "If set to true, the deployment will be created even if normally blocked by something such rolling back to an older version when a secret has changed.",
             "schema": {
               "type": "boolean"
-            }
+            },
+            "x-fern-parameter-name": "bypass-deployment-checks"
           }
         ],
         "requestBody": {
@@ -3210,8 +3212,7 @@
         "x-fern-audiences": ["sdk"],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "workers.tail",
-        "x-fern-sdk-method-name": "start",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "start"
       }
     },
     "/accounts/{account_id}/workers/scripts/{script_name}/tails/{id}": {
@@ -5632,17 +5633,9 @@
         ],
         "tags": ["Worker Script"],
         "x-api-token-group": ["Workers Scripts Write"],
-        "x-fern-audiences": ["sdk"],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "workers.secrets",
-        "x-fern-sdk-method-name": "update",
-        "x-forge-hidden": true,
-        "x-forge-params": {
-          "name": {
-            "positional": true,
-            "required": true
-          }
-        }
+        "x-fern-sdk-method-name": "update"
       }
     },
     "/accounts/{account_id}/workers/scripts/{script_name}/secrets/{secret_name}": {
@@ -5899,11 +5892,9 @@
           }
         ],
         "tags": ["Worker Script"],
-        "x-fern-audiences": ["sdk"],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "workers.secrets",
-        "x-fern-sdk-method-name": "bulk-edit",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "bulk"
       }
     },
     "/accounts/{account_id}/workers/scripts/{script_name}/schedules": {
@@ -6162,8 +6153,7 @@
         "x-fern-audiences": ["sdk"],
         "x-fern-availability": "deprecated",
         "x-fern-sdk-group-name": "workers.legacy.scripts.subdomain",
-        "x-fern-sdk-method-name": "get",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "get"
       },
       "post": {
         "operationId": "worker-script-post-subdomain",
@@ -6263,8 +6253,7 @@
         "x-fern-audiences": ["sdk"],
         "x-fern-availability": "deprecated",
         "x-fern-sdk-group-name": "workers.legacy.scripts.subdomain",
-        "x-fern-sdk-method-name": "create",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "create"
       },
       "delete": {
         "operationId": "worker-script-delete-subdomain",
@@ -6339,7 +6328,6 @@
         "x-fern-availability": "deprecated",
         "x-fern-sdk-group-name": "workers.legacy.scripts.subdomain",
         "x-fern-sdk-method-name": "delete",
-        "x-forge-hidden": true,
         "x-forge-require-confirmation": "This will disable all workers.dev subdomains for the Worker script."
       }
     },
@@ -6602,8 +6590,7 @@
         "x-fern-audiences": ["sdk"],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "workers.assets.upload",
-        "x-fern-sdk-method-name": "create-session",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "create-session"
       }
     },
     "/accounts/{account_id}/workers/assets/upload": {
@@ -6691,15 +6678,14 @@
         "x-fern-audiences": ["sdk"],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "workers.assets.upload",
-        "x-fern-sdk-method-name": "create",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "create"
       }
     },
     "/accounts/{account_id}/storage/kv/namespaces": {
       "get": {
         "operationId": "workers-kv-namespace-list-namespaces",
-        "summary": "List Namespaces",
-        "description": "Returns the namespaces owned by an account.",
+        "summary": "List namespaces",
+        "description": "Lists Workers KV namespaces owned by the specified account. Use `page` and `per_page` to select a page of results, and `order` and `direction` to control sorting.",
         "parameters": [
           {
             "name": "account_id",
@@ -6734,7 +6720,7 @@
             "name": "order",
             "in": "query",
             "schema": {
-              "description": "Field to order results by.",
+              "description": "Namespace field to sort by (`id` or `title`).",
               "type": "string",
               "example": "id",
               "enum": ["id", "title"]
@@ -6744,7 +6730,7 @@
             "name": "direction",
             "in": "query",
             "schema": {
-              "description": "Direction to order namespaces.",
+              "description": "Sort namespaces in ascending (`asc`) or descending (`desc`) order.",
               "type": "string",
               "example": "asc",
               "enum": ["asc", "desc"]
@@ -6804,13 +6790,12 @@
         ],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.namespaces",
-        "x-fern-sdk-method-name": "list",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "list"
       },
       "post": {
         "operationId": "workers-kv-namespace-create-a-namespace",
-        "summary": "Create a Namespace",
-        "description": "Creates a namespace under the given title. A `400` is returned if the account already owns a namespace with this title. A namespace must be explicitly deleted to be replaced.",
+        "summary": "Create a namespace",
+        "description": "Creates a Workers KV namespace in the specified account with the given title. Returns `400` if the account already owns a namespace with that title; an existing namespace must be explicitly deleted before it can be replaced. An optional jurisdiction restricts where data is durably stored and can only be set at creation time.",
         "parameters": [
           {
             "name": "account_id",
@@ -6878,15 +6863,14 @@
         "x-api-token-group": ["Workers KV Storage Write"],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.namespaces",
-        "x-fern-sdk-method-name": "create",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "create"
       }
     },
     "/accounts/{account_id}/storage/kv/namespaces/{namespace_id}": {
       "get": {
         "operationId": "workers-kv-namespace-get-a-namespace",
-        "summary": "Get a Namespace",
-        "description": "Get the namespace corresponding to the given ID.",
+        "summary": "Get a namespace",
+        "description": "Returns the Workers KV namespace for the specified account and namespace ID.",
         "parameters": [
           {
             "name": "namespace_id",
@@ -6955,13 +6939,12 @@
         ],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.namespaces",
-        "x-fern-sdk-method-name": "get",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "get"
       },
       "put": {
         "operationId": "workers-kv-namespace-rename-a-namespace",
-        "summary": "Rename a Namespace",
-        "description": "Modifies a namespace's title.",
+        "summary": "Rename a namespace",
+        "description": "Changes the title of the specified Workers KV namespace and returns the updated namespace. The namespace ID and stored key-value pairs are unchanged.",
         "parameters": [
           {
             "name": "namespace_id",
@@ -7038,13 +7021,12 @@
         "x-api-token-group": ["Workers KV Storage Write"],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.namespaces",
-        "x-fern-sdk-method-name": "update",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "update"
       },
       "delete": {
         "operationId": "workers-kv-namespace-remove-a-namespace",
-        "summary": "Remove a Namespace",
-        "description": "Deletes the namespace corresponding to the given ID.",
+        "summary": "Delete a namespace",
+        "description": "Deletes the specified Workers KV namespace and its stored key-value pairs from the account.",
         "parameters": [
           {
             "name": "namespace_id",
@@ -7105,14 +7087,14 @@
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.namespaces",
         "x-fern-sdk-method-name": "delete",
-        "x-forge-hidden": true
+        "x-forge-require-confirmation": "This operation deletes the selected Workers KV namespace and all of its key-value pairs."
       }
     },
     "/accounts/{account_id}/storage/kv/namespaces/{namespace_id}/keys": {
       "get": {
         "operationId": "workers-kv-namespace-list-a-namespace'-s-keys",
-        "summary": "List a Namespace's Keys",
-        "description": "Lists a namespace's keys.",
+        "summary": "List keys in a namespace",
+        "description": "Lists key names in the specified Workers KV namespace, with expiration times and metadata when present. Use `prefix` to filter names and `cursor` to request the next page. Values are not included.",
         "parameters": [
           {
             "name": "namespace_id",
@@ -7134,7 +7116,7 @@
             "name": "limit",
             "in": "query",
             "schema": {
-              "description": "Limits the number of keys returned in the response. The cursor attribute may be used to iterate over the next batch of keys if there are more than the limit.",
+              "description": "Maximum number of keys to return in one response. Pass `result_info.cursor` from the response as `cursor` to request the next page.",
               "type": "number",
               "default": 1000,
               "maximum": 1000,
@@ -7154,7 +7136,7 @@
             "name": "cursor",
             "in": "query",
             "schema": {
-              "description": "Opaque token indicating the position from which to continue when requesting the next set of records if the amount of list results was limited by the limit parameter. A valid value for the cursor can be obtained from the `cursors` object in the `result_info` structure.",
+              "description": "Opaque pagination token from `result_info.cursor` in the previous response. Pass it unchanged to request the next page of keys.",
               "type": "string",
               "example": "6Ck1la0VxJ0djhidm1MdX2FyDGxLKVeeHZZmORS_8XeSuhz9SjIJRaSa2lnsF01tQOHrfTGAP3R5X1Kv5iVUuMbNKhWNAXHOl6ePB0TUL8nw",
               "x-stainless-pagination-property": {
@@ -7222,15 +7204,14 @@
         ],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.keys",
-        "x-fern-sdk-method-name": "list",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "list"
       }
     },
     "/accounts/{account_id}/storage/kv/namespaces/{namespace_id}/values/{key_name}": {
       "get": {
         "operationId": "workers-kv-namespace-read-key-value-pair",
-        "summary": "Read key-value pair",
-        "description": "Returns the value associated with the given key in the given namespace. Use URL-encoding to use special characters (for example, `:`, `!`, `%`) in the key name. If the KV-pair is set to expire at some point, the expiration time as measured in seconds since the UNIX epoch will be returned in the `expiration` response header.",
+        "summary": "Get a key's value",
+        "description": "Returns the value stored under the specified key in the Workers KV namespace as raw bytes. Use URL-encoding for special characters (for example, `:`, `!`, `%`) in the key name when constructing the request URL. If the key-value pair expires, the `expiration` response header contains its expiration time in seconds since the UNIX epoch.",
         "parameters": [
           {
             "name": "key_name",
@@ -7295,13 +7276,12 @@
         ],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.keys",
-        "x-fern-sdk-method-name": "get",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "get"
       },
       "put": {
         "operationId": "workers-kv-namespace-write-key-value-pair-with-metadata",
-        "summary": "Write key-value pair with optional metadata",
-        "description": "Write a value identified by a key. Use URL-encoding to use special characters (for example, `:`, `!`, `%`) in the key name. Body should be the value to be stored. If JSON metadata to be associated with the key/value pair is needed, use `multipart/form-data` content type for your PUT request (see dropdown below in `REQUEST BODY SCHEMA`). Existing values, expirations, and metadata will be overwritten. If neither `expiration` nor `expiration_ttl` is specified, the key-value pair will never expire. If both are set, `expiration_ttl` is used and `expiration` is ignored.",
+        "summary": "Write a key-value pair with optional metadata",
+        "description": "Writes a value under the specified key in the Workers KV namespace, creating the key-value pair or replacing its existing value, expiration, and metadata. Send the value as an `application/octet-stream` request body, or use `multipart/form-data` with a `value` part and an optional JSON `metadata` part. Use URL-encoding for special characters (for example, `:`, `!`, `%`) in the key name when constructing the request URL. If neither `expiration` nor `expiration_ttl` is specified, the key-value pair will not expire. If both are set, `expiration_ttl` takes precedence.",
         "parameters": [
           {
             "name": "key_name",
@@ -7407,13 +7387,12 @@
         "x-api-token-group": ["Workers KV Storage Write"],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.keys",
-        "x-fern-sdk-method-name": "update",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "put"
       },
       "delete": {
         "operationId": "workers-kv-namespace-delete-key-value-pair",
-        "summary": "Delete key-value pair",
-        "description": "Remove a KV pair from the namespace. Use URL-encoding to use special characters (for example, `:`, `!`, `%`) in the key name.",
+        "summary": "Delete a key-value pair",
+        "description": "Deletes the specified key and its value from the Workers KV namespace. Use URL-encoding for special characters (for example, `:`, `!`, `%`) in the key name when constructing the request URL.",
         "parameters": [
           {
             "name": "key_name",
@@ -7482,14 +7461,14 @@
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.keys",
         "x-fern-sdk-method-name": "delete",
-        "x-forge-hidden": true
+        "x-forge-require-confirmation": "This operation deletes the selected key-value pair from the Workers KV namespace."
       }
     },
     "/accounts/{account_id}/storage/kv/namespaces/{namespace_id}/metadata/{key_name}": {
       "get": {
         "operationId": "workers-kv-namespace-read-the-metadata-for-a-key",
-        "summary": "Read the metadata for a key",
-        "description": "Returns the metadata associated with the given key in the given namespace. Use URL-encoding to use special characters (for example, `:`, `!`, `%`) in the key name.",
+        "summary": "Get a key's metadata",
+        "description": "Returns the JSON metadata associated with the specified key in the Workers KV namespace, without retrieving its value. Use URL-encoding for special characters (for example, `:`, `!`, `%`) in the key name when constructing the request URL.",
         "parameters": [
           {
             "name": "key_name",
@@ -7566,15 +7545,14 @@
         ],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.metadata",
-        "x-fern-sdk-method-name": "get",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "get"
       }
     },
     "/accounts/{account_id}/storage/kv/namespaces/{namespace_id}/bulk": {
       "put": {
         "operationId": "workers-kv-namespace-write-multiple-key-value-pairs",
         "summary": "Write multiple key-value pairs",
-        "description": "Write multiple keys and values at once. Body should be an array of up to 10,000 key-value pairs to be stored, along with optional expiration information. Existing values and expirations will be overwritten. If neither `expiration` nor `expiration_ttl` is specified, the key-value pair will never expire. If both are set, `expiration_ttl` is used and `expiration` is ignored. The entire request size must be 100 megabytes or less.",
+        "description": "Writes up to 10,000 key-value pairs to the specified Workers KV namespace from a JSON array, with optional metadata and expiration settings for each pair. Existing values and expirations are overwritten. If neither `expiration` nor `expiration_ttl` is specified, the key-value pair will not expire. If both are set, `expiration_ttl` takes precedence. The entire request must be 100 megabytes or less. The result reports the number of successful writes and any keys that failed and should be retried.",
         "parameters": [
           {
             "name": "namespace_id",
@@ -7662,15 +7640,14 @@
         "x-api-token-group": ["Workers KV Storage Write"],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.bulk",
-        "x-fern-sdk-method-name": "update",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "put"
       }
     },
     "/accounts/{account_id}/storage/kv/namespaces/{namespace_id}/bulk/get": {
       "post": {
         "operationId": "workers-kv-namespace-get-multiple-key-value-pairs",
         "summary": "Get multiple key-value pairs",
-        "description": "Retrieve up to 100 KV pairs from the namespace. Keys must contain text-based values. JSON values can optionally be parsed instead of being returned as a string value. Metadata can be included if `withMetadata` is true.",
+        "description": "Retrieves the text-based values of up to 100 keys from the specified Workers KV namespace. The result maps each requested key to its value. Set `type` to `json` to parse JSON values instead of returning strings, and set `withMetadata` to `true` to include metadata with each value. Binary values are not supported by this operation.",
         "parameters": [
           {
             "name": "namespace_id",
@@ -7705,7 +7682,7 @@
                     "maxItems": 100
                   },
                   "type": {
-                    "description": "Whether to parse JSON values in the response.",
+                    "description": "Return values as strings with `text`, or parse stored JSON values with `json`.",
                     "type": "string",
                     "default": "text",
                     "enum": ["text", "json"]
@@ -7778,15 +7755,14 @@
         ],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.bulk",
-        "x-fern-sdk-method-name": "get",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "get"
       }
     },
     "/accounts/{account_id}/storage/kv/namespaces/{namespace_id}/bulk/delete": {
       "post": {
         "operationId": "workers-kv-namespace-delete-multiple-key-value-pairs",
         "summary": "Delete multiple key-value pairs",
-        "description": "Remove multiple KV pairs from the namespace. Body should be an array of up to 10,000 keys to be removed.",
+        "description": "Deletes up to 10,000 key-value pairs from the specified Workers KV namespace. Send a JSON array of the key names to delete. The result reports the number of successful deletions and any keys that failed and should be retried.",
         "parameters": [
           {
             "name": "namespace_id",
@@ -7875,8 +7851,7 @@
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "kv.bulk",
         "x-fern-sdk-method-name": "delete",
-        "x-forge-hidden": true,
-        "x-forge-require-confirmation": "This operation deletes the specified keys from the namespace."
+        "x-forge-require-confirmation": "This operation deletes the specified keys and their values from the Workers KV namespace."
       }
     },
     "/accounts/{account_id}/d1/database": {
@@ -9319,6 +9294,7 @@
         ],
         "tags": ["D1"],
         "x-fern-availability": "generally-available",
+        "x-fern-ignore": true,
         "x-fern-sdk-group-name": "d1",
         "x-fern-sdk-method-name": "export",
         "x-forge-epilogue": "This command acts on remote D1 Databases.",
@@ -9636,6 +9612,7 @@
         ],
         "tags": ["D1"],
         "x-fern-availability": "generally-available",
+        "x-fern-ignore": true,
         "x-fern-sdk-group-name": "d1",
         "x-fern-sdk-method-name": "import",
         "x-forge-epilogue": "This command acts on remote D1 Databases.",
@@ -10009,7 +9986,7 @@
       "get": {
         "operationId": "r2-list-buckets",
         "summary": "List Buckets",
-        "description": "Lists all R2 buckets on your account.",
+        "description": "Lists a page of R2 buckets in the account and selected jurisdiction. Use the returned cursor to retrieve the next page.",
         "parameters": [
           {
             "name": "account_id",
@@ -10133,13 +10110,12 @@
         ],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "r2.buckets",
-        "x-fern-sdk-method-name": "list",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "list"
       },
       "post": {
         "operationId": "r2-create-bucket",
         "summary": "Create Bucket",
-        "description": "Creates a new R2 bucket.",
+        "description": "Creates an R2 bucket in the account and selected jurisdiction, with an optional location hint and default storage class.",
         "parameters": [
           {
             "name": "account_id",
@@ -10219,8 +10195,7 @@
         "x-api-token-group": ["Workers R2 Storage Write"],
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "r2.buckets",
-        "x-fern-sdk-method-name": "create",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "create"
       }
     },
     "/accounts/{account_id}/r2/buckets/{bucket_name}": {
@@ -10294,8 +10269,7 @@
         },
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "r2.buckets",
-        "x-fern-sdk-method-name": "get",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "get"
       },
       "put": {
         "operationId": "r2-create-bucket-by-name",
@@ -10383,7 +10357,7 @@
       "delete": {
         "operationId": "r2-delete-bucket",
         "summary": "Delete Bucket",
-        "description": "Deletes an existing R2 bucket.",
+        "description": "Deletes an empty R2 bucket and its configuration. The bucket must have no objects, no in-progress multipart uploads, and no event notification rules; otherwise the request fails.",
         "parameters": [
           {
             "name": "bucket_name",
@@ -10437,7 +10411,7 @@
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "r2.buckets",
         "x-fern-sdk-method-name": "delete",
-        "x-forge-hidden": true
+        "x-forge-require-confirmation": "This permanently deletes the empty R2 bucket and its configuration."
       }
     },
     "/accounts/{account_id}/r2/buckets/{bucket_name}/objects/{object_key}": {
@@ -10562,9 +10536,8 @@
           "enum": ["com.cloudflare.edge.r2.bucket.read"]
         },
         "x-fern-availability": "generally-available",
-        "x-fern-sdk-group-name": "r2.buckets.objects",
-        "x-fern-sdk-method-name": "get",
-        "x-forge-hidden": true
+        "x-fern-sdk-group-name": "r2.objects",
+        "x-fern-sdk-method-name": "get"
       },
       "put": {
         "operationId": "r2-put-object",
@@ -10682,9 +10655,8 @@
           "enum": ["com.cloudflare.edge.r2.bucket.write"]
         },
         "x-fern-availability": "generally-available",
-        "x-fern-sdk-group-name": "r2.buckets.objects",
-        "x-fern-sdk-method-name": "upload",
-        "x-forge-hidden": true
+        "x-fern-sdk-group-name": "r2.objects",
+        "x-fern-sdk-method-name": "put"
       },
       "delete": {
         "operationId": "r2-delete-object",
@@ -10764,9 +10736,9 @@
         "tags": ["R2 Object"],
         "x-api-token-group": ["Workers R2 Storage Write"],
         "x-fern-availability": "generally-available",
-        "x-fern-sdk-group-name": "r2.buckets.objects",
+        "x-fern-sdk-group-name": "r2.objects",
         "x-fern-sdk-method-name": "delete",
-        "x-forge-hidden": true
+        "x-forge-require-confirmation": "This permanently deletes the specified object from the R2 bucket."
       }
     },
     "/accounts/{account_id}/r2/buckets/{bucket_name}/objects": {
@@ -10893,7 +10865,7 @@
           "enum": ["com.cloudflare.edge.r2.bucket.read"]
         },
         "x-fern-availability": "generally-available",
-        "x-fern-sdk-group-name": "r2.buckets.objects",
+        "x-fern-sdk-group-name": "r2.objects",
         "x-fern-sdk-method-name": "list",
         "x-forge-hidden": true
       }
@@ -24031,7 +24003,97 @@
             }
           },
           "429": {
-            "description": "Monthly storage quota exceeded.",
+            "description": "Item write rate limited; Monthly ingestion quota exceeded; Monthly storage quota exceeded; Ai search instance overloaded",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "description": "Seconds to wait before retrying.",
+                  "type": "string",
+                  "example": "10"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "code": {
+                                "type": "number",
+                                "enum": [7095]
+                              },
+                              "message": {
+                                "type": "string",
+                                "enum": ["item_write_rate_limited"]
+                              }
+                            },
+                            "required": ["code", "message"],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "code": {
+                                "type": "number",
+                                "enum": [7111]
+                              },
+                              "message": {
+                                "type": "string",
+                                "enum": ["monthly_ingestion_quota_exceeded"]
+                              }
+                            },
+                            "required": ["code", "message"],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "code": {
+                                "type": "number",
+                                "enum": [7112]
+                              },
+                              "message": {
+                                "type": "string",
+                                "enum": ["monthly_storage_quota_exceeded"]
+                              }
+                            },
+                            "required": ["code", "message"],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "code": {
+                                "type": "number",
+                                "enum": [7114]
+                              },
+                              "message": {
+                                "type": "string",
+                                "enum": ["ai_search_instance_overloaded"]
+                              }
+                            },
+                            "required": ["code", "message"],
+                            "type": "object"
+                          }
+                        ]
+                      }
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false]
+                    }
+                  },
+                  "required": ["success", "errors"]
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "Client disconnected during upload.",
             "content": {
               "application/json": {
                 "schema": {
@@ -24380,7 +24442,17 @@
             }
           },
           "429": {
-            "description": "Monthly storage quota exceeded.",
+            "description": "Monthly ingestion quota exceeded; Monthly storage quota exceeded; Ai search instance overloaded",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "description": "Seconds to wait before retrying.",
+                  "type": "string",
+                  "example": "10"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -24389,16 +24461,50 @@
                     "errors": {
                       "type": "array",
                       "items": {
-                        "properties": {
-                          "code": {
-                            "type": "number"
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "code": {
+                                "type": "number",
+                                "enum": [7111]
+                              },
+                              "message": {
+                                "type": "string",
+                                "enum": ["monthly_ingestion_quota_exceeded"]
+                              }
+                            },
+                            "required": ["code", "message"],
+                            "type": "object"
                           },
-                          "message": {
-                            "type": "string"
+                          {
+                            "properties": {
+                              "code": {
+                                "type": "number",
+                                "enum": [7112]
+                              },
+                              "message": {
+                                "type": "string",
+                                "enum": ["monthly_storage_quota_exceeded"]
+                              }
+                            },
+                            "required": ["code", "message"],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "code": {
+                                "type": "number",
+                                "enum": [7114]
+                              },
+                              "message": {
+                                "type": "string",
+                                "enum": ["ai_search_instance_overloaded"]
+                              }
+                            },
+                            "required": ["code", "message"],
+                            "type": "object"
                           }
-                        },
-                        "required": ["code", "message"],
-                        "type": "object"
+                        ]
                       }
                     },
                     "success": {
@@ -25017,7 +25123,17 @@
             }
           },
           "429": {
-            "description": "Monthly storage quota exceeded.",
+            "description": "Monthly ingestion quota exceeded; Monthly storage quota exceeded; Ai search instance overloaded",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "description": "Seconds to wait before retrying.",
+                  "type": "string",
+                  "example": "10"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -25026,16 +25142,50 @@
                     "errors": {
                       "type": "array",
                       "items": {
-                        "properties": {
-                          "code": {
-                            "type": "number"
+                        "anyOf": [
+                          {
+                            "properties": {
+                              "code": {
+                                "type": "number",
+                                "enum": [7111]
+                              },
+                              "message": {
+                                "type": "string",
+                                "enum": ["monthly_ingestion_quota_exceeded"]
+                              }
+                            },
+                            "required": ["code", "message"],
+                            "type": "object"
                           },
-                          "message": {
-                            "type": "string"
+                          {
+                            "properties": {
+                              "code": {
+                                "type": "number",
+                                "enum": [7112]
+                              },
+                              "message": {
+                                "type": "string",
+                                "enum": ["monthly_storage_quota_exceeded"]
+                              }
+                            },
+                            "required": ["code", "message"],
+                            "type": "object"
+                          },
+                          {
+                            "properties": {
+                              "code": {
+                                "type": "number",
+                                "enum": [7114]
+                              },
+                              "message": {
+                                "type": "string",
+                                "enum": ["ai_search_instance_overloaded"]
+                              }
+                            },
+                            "required": ["code", "message"],
+                            "type": "object"
                           }
-                        },
-                        "required": ["code", "message"],
-                        "type": "object"
+                        ]
                       }
                     },
                     "success": {
@@ -25126,7 +25276,7 @@
       "delete": {
         "operationId": "ai-search-namespace-instance-delete-item",
         "summary": "Delete Item.",
-        "description": "Deletes a file from a managed AI Search instance and triggers a reindex.",
+        "description": "Deletes a file from a managed AI Search instance and removes its indexed data.",
         "parameters": [
           {
             "name": "id",
@@ -25231,6 +25381,49 @@
           },
           "404": {
             "description": "Item not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "properties": {
+                          "code": {
+                            "type": "number"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["code", "message"],
+                        "type": "object"
+                      }
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false]
+                    }
+                  },
+                  "required": ["success", "errors"]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "AI Search instance overloaded. A retried DELETE may return 404 if the earlier attempt completed; treat that as deleted.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "required": true,
+                "schema": {
+                  "description": "Seconds to wait before retrying.",
+                  "type": "string",
+                  "example": "1"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -26451,9 +26644,9 @@
           "enum": ["com.cloudflare.edge.worker.queue.update"]
         },
         "x-fern-availability": "generally-available",
+        "x-fern-ignore": true,
         "x-fern-sdk-group-name": "queues",
-        "x-fern-sdk-method-name": "update",
-        "x-forge-hidden": true
+        "x-fern-sdk-method-name": "update"
       },
       "delete": {
         "operationId": "queues-delete",
@@ -31606,7 +31799,7 @@
         ]
       },
       "workers_script_name": {
-        "description": "Name of the script, used in URLs and route configuration.",
+        "description": "Name of the script.",
         "type": "string",
         "example": "this-is_my_script-01",
         "pattern": "^[a-z0-9_][a-z0-9-_]*$",
@@ -33468,7 +33661,7 @@
         ]
       },
       "workers-kv_identifier": {
-        "description": "Identifier.",
+        "description": "ID of the Cloudflare account that owns the Workers KV namespaces.",
         "type": "string",
         "example": "023e105f4ecef8ad9ca31a8372d0c353",
         "maxLength": 32,
@@ -33583,7 +33776,7 @@
         "required": ["success", "errors", "messages"]
       },
       "workers-kv_namespace_identifier": {
-        "description": "Namespace identifier tag.",
+        "description": "ID of the Workers KV namespace.",
         "type": "string",
         "example": "0f2ac74b498b48028cb68387c421e279",
         "maxLength": 32,
@@ -33672,7 +33865,7 @@
         "example": 1578435000
       },
       "workers-kv_expiration_ttl": {
-        "description": "Expires the key after a number of seconds. Must be at least 60.",
+        "description": "Number of seconds until the key expires. Must be at least 60. Takes precedence over `expiration` when both are specified.",
         "type": "number",
         "example": 300,
         "minimum": 60
@@ -33740,12 +33933,12 @@
         "type": "object",
         "properties": {
           "successful_key_count": {
-            "description": "Number of keys successfully updated.",
+            "description": "Number of keys successfully written or deleted by the bulk operation.",
             "type": "number",
             "example": 100
           },
           "unsuccessful_keys": {
-            "description": "Name of the keys that failed to be fully updated. They should be retried.",
+            "description": "Names of keys that failed to be written or deleted. Retry the operation for these keys.",
             "type": "array",
             "items": {
               "type": "string"
@@ -34216,7 +34409,7 @@
         }
       },
       "r2_account_identifier": {
-        "description": "Account ID.",
+        "description": "Cloudflare account ID that owns the R2 resource.",
         "type": "string",
         "example": "023e105f4ecef8ad9ca31a8372d0c353",
         "maxLength": 32
@@ -35103,7 +35296,6 @@
         "discriminator": {
           "mapping": {
             "http_pull": "#/components/schemas/mq_http-consumer-response",
-            "notification": "#/components/schemas/mq_notification-consumer-response",
             "worker": "#/components/schemas/mq_worker-consumer-response"
           },
           "propertyName": "type"
@@ -35114,9 +35306,6 @@
           },
           {
             "$ref": "#/components/schemas/mq_http-consumer-response"
-          },
-          {
-            "$ref": "#/components/schemas/mq_notification-consumer-response"
           }
         ]
       },
@@ -35126,7 +35315,6 @@
         "discriminator": {
           "mapping": {
             "http_pull": "#/components/schemas/mq_http-consumer-request",
-            "notification": "#/components/schemas/mq_notification-consumer-request",
             "worker": "#/components/schemas/mq_worker-consumer-request"
           },
           "propertyName": "type"
@@ -35137,9 +35325,6 @@
           },
           {
             "$ref": "#/components/schemas/mq_http-consumer-request"
-          },
-          {
-            "$ref": "#/components/schemas/mq_notification-consumer-request"
           }
         ]
       },
@@ -37706,7 +37891,7 @@
         "x-auditable": true
       },
       "workers-kv_namespace_title": {
-        "description": "A human-readable string name for a Namespace.",
+        "description": "Human-readable string name for a Workers KV namespace.",
         "type": "string",
         "example": "My Own Namespace",
         "maxLength": 512,
@@ -37731,7 +37916,7 @@
         "uniqueItems": true
       },
       "workers-kv_cursor": {
-        "description": "Opaque token indicating the position from which to continue when requesting the next set of records if the amount of list results was limited by the limit parameter. A valid value for the cursor can be obtained from the cursors object in the result_info structure.",
+        "description": "Opaque pagination token returned in `result_info.cursor`. Pass it unchanged as the `cursor` query parameter to request the next page of keys.",
         "type": "string",
         "example": "6Ck1la0VxJ0djhidm1MdX2FyDGxLKVeeHZZmORS_8XeSuhz9SjIJRaSa2lnsF01tQOHrfTGAP3R5X1Kv5iVUuMbNKhWNAXHOl6ePB0TUL8nw",
         "x-stainless-pagination-property": {
@@ -38159,35 +38344,6 @@
           }
         }
       },
-      "mq_notification-consumer-response": {
-        "type": "object",
-        "properties": {
-          "consumer_id": {
-            "$ref": "#/components/schemas/mq_identifier"
-          },
-          "created_on": {
-            "type": "string",
-            "format": "date-time",
-            "x-auditable": true
-          },
-          "dead_letter_queue": {
-            "description": "Name of the dead letter queue, or empty string if not configured.",
-            "type": "string",
-            "x-auditable": true
-          },
-          "queue_name": {
-            "$ref": "#/components/schemas/mq_queue-name"
-          },
-          "settings": {
-            "$ref": "#/components/schemas/mq_notification-consumer-settings"
-          },
-          "type": {
-            "type": "string",
-            "enum": ["notification"],
-            "x-auditable": true
-          }
-        }
-      },
       "mq_worker-consumer-request": {
         "type": "object",
         "properties": {
@@ -38255,44 +38411,6 @@
           }
         },
         "required": ["type"]
-      },
-      "mq_notification-consumer-request": {
-        "description": "Creates or updates the notification destinations for a Queue. Only one notification consumer may exist per Queue. Updates replace all previously configured destinations.",
-        "type": "object",
-        "properties": {
-          "dead_letter_queue": {
-            "$ref": "#/components/schemas/mq_queue-name"
-          },
-          "settings": {
-            "$ref": "#/components/schemas/mq_notification-consumer-settings"
-          },
-          "type": {
-            "type": "string",
-            "enum": ["notification"],
-            "x-auditable": true
-          }
-        },
-        "example": {
-          "settings": {
-            "email": [
-              {
-                "id": "user@example.com"
-              }
-            ],
-            "pagerduty": [
-              {
-                "id": "fedcba9876543210fedcba9876543210"
-              }
-            ],
-            "webhooks": [
-              {
-                "id": "0123456789abcdef0123456789abcdef"
-              }
-            ]
-          },
-          "type": "notification"
-        },
-        "required": ["type", "settings"]
       },
       "mq_queue-message-text": {
         "type": "object",
@@ -40464,75 +40582,6 @@
         "example": 6000,
         "x-auditable": true
       },
-      "mq_notification-consumer-settings": {
-        "description": "Notification destinations for a Queue. At least one email, webhook, or PagerDuty destination is required.",
-        "type": "object",
-        "properties": {
-          "email": {
-            "description": "Email notification destinations.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/mq_notification-email-mechanism"
-            }
-          },
-          "pagerduty": {
-            "description": "PagerDuty notification destinations.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/mq_notification-pagerduty-mechanism"
-            }
-          },
-          "webhooks": {
-            "description": "Webhook notification destinations.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/mq_notification-webhook-mechanism"
-            }
-          }
-        },
-        "anyOf": [
-          {
-            "properties": {
-              "email": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/mq_notification-email-mechanism"
-                },
-                "minItems": 1
-              }
-            },
-            "required": ["email"],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "webhooks": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/mq_notification-webhook-mechanism"
-                },
-                "minItems": 1
-              }
-            },
-            "required": ["webhooks"],
-            "type": "object"
-          },
-          {
-            "properties": {
-              "pagerduty": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/mq_notification-pagerduty-mechanism"
-                },
-                "minItems": 1
-              }
-            },
-            "required": ["pagerduty"],
-            "type": "object"
-          }
-        ],
-        "minProperties": 1
-      },
       "iam_grants": {
         "type": "object",
         "properties": {
@@ -40679,41 +40728,6 @@
           "cohere/embed-multilingual-v2.0"
         ],
         "x-auditable": true
-      },
-      "mq_notification-email-mechanism": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "description": "The email address.",
-            "type": "string",
-            "x-auditable": true
-          }
-        },
-        "required": ["id"]
-      },
-      "mq_notification-pagerduty-mechanism": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "description": "UUID.",
-            "type": "string",
-            "maxLength": 32,
-            "x-auditable": true
-          }
-        },
-        "required": ["id"]
-      },
-      "mq_notification-webhook-mechanism": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "description": "UUID.",
-            "type": "string",
-            "maxLength": 32,
-            "x-auditable": true
-          }
-        },
-        "required": ["id"]
       },
       "iam_permission_group": {
         "description": "A named group of permissions that map to a group of operations against resources.",

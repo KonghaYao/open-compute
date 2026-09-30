@@ -2,7 +2,9 @@ use super::*;
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode, header};
 use open_compute_core::{InstanceId, RequestId, SecretString, VersionId};
-use open_compute_storage::{NewVersion, NewVersionProducts, VersionContentKind, WorkerRepository};
+use open_compute_storage::worker_repository::{
+    NewVersion, NewVersionProducts, VersionContentKind, WorkerRepository,
+};
 use std::net::{IpAddr, Ipv4Addr};
 use tower::ServiceExt as _;
 
@@ -22,8 +24,9 @@ fn post(uri: &str, token: &str, body: &serde_json::Value) -> Request<Body> {
 
 #[test]
 fn wire_filters_normalize_all_supported_script_tail_shapes() {
-    let wrangler: TailCreateBody = serde_json::from_value(serde_json::json!([])).unwrap();
-    assert!(wrangler.filters().is_empty());
+    let wrangler: CreateTailBody =
+        serde_json::from_value(serde_json::json!({"filters":[]})).unwrap();
+    assert!(wrangler.filters.is_empty());
     let version = VersionId::generate();
     let values: Vec<TailFilterWire> = serde_json::from_value(serde_json::json!([
         {"sampling_rate":0.5},
@@ -296,7 +299,7 @@ async fn cursor_and_ingest_envelopes_are_cryptographically_bound_and_bounded() {
     let (_temp, _mock, state, account, _storage) =
         crate::tests::initialized_worker_http_fixture().await;
     let observability = state.worker_api().unwrap().observability().unwrap();
-    let cursor = open_compute_storage::ObservabilityEventCursor {
+    let cursor = open_compute_storage::observability::ObservabilityEventCursor {
         timestamp_ms: 123,
         event_id: "event".to_owned(),
     };
@@ -379,7 +382,7 @@ async fn authorized_ingest_fans_out_persists_and_enforces_the_session_limit() {
                 worker_code_sha256: [2; 32],
                 compatibility_date: "2026-09-08".to_owned(),
                 compatibility_flags: Vec::new(),
-                resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+                resource_limits: open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
                 vars: Default::default(),
                 secrets: Default::default(),
                 request_id: RequestId::generate(),

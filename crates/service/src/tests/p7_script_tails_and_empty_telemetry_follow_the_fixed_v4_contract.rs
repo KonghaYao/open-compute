@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn p7_script_tails_and_empty_telemetry_follow_the_fixed_v4_contract() {
     let (_dir, _mock, state, account, storage) = initialized_worker_http_fixture().await;
-    let repo = open_compute_storage::WorkerRepository::new(storage.db());
+    let repo = open_compute_storage::worker_repository::WorkerRepository::new(storage.db());
     repo.create_worker(
         account,
         "tail-worker",

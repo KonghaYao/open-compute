@@ -24,7 +24,8 @@ use open_compute_service::runtime_bridge::{
     DispatchTarget, WorkerdTransport, bind_runtime_source, serve_runtime_source,
 };
 use open_compute_service::{SqliteKvBindingExecutor, bind_binding_backend, serve_binding_backend};
-use open_compute_storage::{PlatformStorage, VersionRecord, WorkerRepository};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::worker_repository::{VersionRecord, WorkerRepository};
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateResourceOutcome, CreateResourceRequest,
     CreateVersionOutcome, CreateVersionRequest, KvResourceDriver, ModuleInput, ModuleType,
@@ -610,10 +611,15 @@ fn version_request(
         secrets: BTreeMap::new(),
         bindings,
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: Some(
+            open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+        ),
         observability: None,
         request_id: RequestId::generate(),
         now_ms: 20,

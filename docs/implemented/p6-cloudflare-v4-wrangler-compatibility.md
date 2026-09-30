@@ -1,7 +1,6 @@
 # P6：Cloudflare v4 API 与 Wrangler
 
-状态：**implemented（2026-09-03）**。本地核心和 scoped Gate 完成；完整 hosted differential 见
-[P6 资格](../acceptance/p6-cloudflare-v4-differential-acceptance.md)。
+状态：**implemented（2026-09-03）**。
 
 ## 用户结果
 
@@ -36,5 +35,4 @@
 Build、generated contracts、format、no-default-features、MSRV、metadata、dependency boundaries 和 P6 scoped real-runtime Gate 成功；
 最终受影响集合为 15/15 cases。`cf-compatibility-check` 复核无剩余 in-scope finding。
 
-当次 canonical Clippy 仍有 99 个既有 service diagnostics，workspace Gate、coverage 和 hosted differential 未在 P6 冻结点闭环，
-因此不把 scoped PASS 写成完整仓库或 hosted PASS。后续阶段的历史 workspace 通过不改写这次证据边界。
+当次 canonical Clippy 仍有 99 个既有 service diagnostics；后续阶段的历史 workspace 通过不改写这次证据边界。

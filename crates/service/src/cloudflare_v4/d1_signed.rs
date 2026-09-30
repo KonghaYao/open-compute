@@ -4,7 +4,7 @@ use super::*;
 use axum::body::Body;
 use axum::routing::put;
 use md5::Digest as _;
-use open_compute_storage::D1_MAX_TRANSFER_SQL_BYTES;
+use open_compute_storage::d1::D1_MAX_TRANSFER_SQL_BYTES;
 
 pub(super) fn router() -> Router<HttpState> {
     Router::new()

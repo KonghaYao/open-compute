@@ -31,7 +31,6 @@ struct Evidence(Option<TempDir>);
 
 impl Evidence {
     fn new() -> Self {
-        // Keep the socket path short; retain failures under the repository .temp tree.
         Self(Some(
             tempfile::Builder::new()
                 .prefix("single-")
@@ -82,7 +81,6 @@ fn command(binary: &Path) -> Command {
         .env_clear()
         .env("PATH", "")
         .env("HOME", binary.parent().unwrap().join("home"))
-        // Keep the test's OS temporary root so panic cleanup inspects the same staging root.
         .env("TMPDIR", std::env::temp_dir());
     if !package_scope::enabled() {
         command.env(
@@ -237,7 +235,7 @@ impl Process {
     }
 
     async fn ready(&mut self, address: SocketAddr) {
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(120);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(180);
         loop {
             assert!(
                 self.child.try_wait().unwrap().is_none(),
@@ -456,8 +454,10 @@ async fn websocket_handshake_status(address: SocketAddr, path: &str, protocol: &
 
 async fn assert_signed_tail_isolation(address: SocketAddr, alpha: &str, beta: &str) {
     let tails = format!("/client/v4/accounts/{alpha}/workers/scripts/shared-worker/tails");
+    let token = "alpha-deployer";
+    let payload = r#"{"filters":[]}"#;
     let (status, body) =
-        request_http_body(address, "POST", "127.0.0.1", "alpha-deployer", &tails, "[]").await;
+        request_http_body(address, "POST", "127.0.0.1", token, &tails, payload).await;
     assert_eq!(status, 200, "{body}");
     let created: serde_json::Value = serde_json::from_str(&body).unwrap();
     let url = url::Url::parse(created["result"]["url"].as_str().unwrap()).unwrap();

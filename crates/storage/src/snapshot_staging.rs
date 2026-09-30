@@ -1,6 +1,6 @@
 //! Exact-layout cleanup for crash-retained local platform snapshot staging.
 
-use crate::DataDir;
+use crate::data_dir::DataDir;
 use open_compute_core::{ErrorCode, PlatformError};
 use std::time::SystemTime;
 

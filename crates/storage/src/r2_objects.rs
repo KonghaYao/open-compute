@@ -1,7 +1,9 @@
 //! Durable R2 object metadata authority and external-mutation intents.
 
-use crate::workers::require_instance;
-use crate::{ControlDb, SecretEnvelope, r2::valid_ssec_key_md5};
+use crate::control_db::ControlDb;
+use crate::crypto::SecretEnvelope;
+use crate::r2::valid_ssec_key_md5;
+use crate::worker_repository::require_instance;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, ResourceId};
 use rusqlite::{OptionalExtension, params};
 use std::str::FromStr as _;

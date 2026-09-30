@@ -134,6 +134,27 @@ pub(super) async fn run() {
         scheduler.clone(),
         validator,
     ));
+    assert_compatibility_matrix(&controller, account, worker.id).await;
+
+    let (compatibility, system_workers) =
+        open_compute_runtime::embedded_runtime_compatibility().unwrap();
+    let paired = compatibility
+        .features
+        .iter()
+        .find(|feature| {
+            !feature.experimental && feature.enable_flag.is_some() && feature.disable_flag.is_some()
+        })
+        .unwrap();
+    let a_runtime_features = VersionRuntimeFeatures {
+        compatibility_date: system_workers.compatibility_date.clone(),
+        compatibility_flags: vec![paired.enable_flag.clone().unwrap()],
+        ..VersionRuntimeFeatures::default()
+    };
+    let b_runtime_features = VersionRuntimeFeatures {
+        compatibility_date: system_workers.compatibility_date,
+        compatibility_flags: vec![paired.disable_flag.clone().unwrap()],
+        ..VersionRuntimeFeatures::default()
+    };
 
     let a = deploy(
         &controller,
@@ -141,8 +162,7 @@ pub(super) async fn run() {
         worker.id,
         "deploy-a",
         "A",
-        true,
-        false,
+        Some(a_runtime_features.clone()),
     )
     .await;
     assert_eq!(
@@ -436,11 +456,20 @@ pub(super) async fn run() {
         worker.id,
         "deploy-b",
         "B",
-        true,
-        false,
+        Some(b_runtime_features.clone()),
     )
     .await;
     assert_ne!(a.id, b.id);
+    assert_eq!(a.compatibility_date, a_runtime_features.compatibility_date);
+    assert_eq!(
+        a.compatibility_flags,
+        a_runtime_features.compatibility_flags
+    );
+    assert_eq!(b.compatibility_date, b_runtime_features.compatibility_date);
+    assert_eq!(
+        b.compatibility_flags,
+        b_runtime_features.compatibility_flags
+    );
     assert_eq!(
         repo.get_worker(account, worker.id)
             .unwrap()
@@ -453,18 +482,17 @@ pub(super) async fn run() {
         run_tls_fixture(&workerd, &root, fixture).await;
     }
     let egress = deploy_egress(&controller, account, worker.id, egress_fixture.as_ref()).await;
-    let denied = dispatch(&storage, &transport, account, worker.id, &egress, None, "").await;
+    let response = dispatch(&storage, &transport, account, worker.id, &egress, None, "").await;
     assert_eq!(
-        denied.status,
+        response.status,
         200,
-        "egress response: {denied:?}; diagnostics: {:?}",
+        "egress response: {response:?}; diagnostics: {:?}",
         supervisor.last_diagnostics()
     );
-    let egress_result: serde_json::Value = serde_json::from_str(&denied.body).unwrap();
-    let expected_denied = if egress_fixture.is_some() { 11 } else { 9 };
-    assert_eq!(egress_result["denied"], expected_denied);
+    let egress_result: serde_json::Value = serde_json::from_str(&response.body).unwrap();
+    assert_eq!(egress_result["unreachable"], 9);
     let allowed = egress_result["allowed"].as_array().unwrap();
-    assert_eq!(allowed.len(), egress_fixture.as_ref().map_or(0, |_| 3));
+    assert_eq!(allowed.len(), egress_fixture.as_ref().map_or(0, |_| 5));
     assert!(allowed.iter().all(|value| value == "fixture-ok"));
     assert_eq!(
         egress_result["ctxExports"]["ok"], true,
@@ -528,6 +556,23 @@ pub(super) async fn run() {
     } else {
         assert_eq!(egress_result["rawTcp"], serde_json::Value::Null);
     }
+    let postgres_fixture = postgres::spawn().await;
+    let postgres = deploy_postgres(&controller, account, worker.id, postgres_fixture.address).await;
+    let postgres_response = dispatch(
+        &storage, &transport, account, worker.id, &postgres, None, "",
+    )
+    .await;
+    assert_eq!(
+        postgres_response.status,
+        200,
+        "PostgreSQL driver response: {postgres_response:?}; diagnostics: {:?}",
+        supervisor.last_diagnostics()
+    );
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&postgres_response.body).unwrap(),
+        serde_json::json!({ "committed": 41, "rolledBack": 42 })
+    );
+    postgres_fixture.finish().await;
     let node = deploy_node(&controller, account, worker.id).await;
     let node_response = dispatch(&storage, &transport, account, worker.id, &node, None, "").await;
     assert_eq!(node_response.status, 200);
@@ -586,6 +631,24 @@ pub(super) async fn run() {
     // Restart rotates credentials and forces a new workerd process/cold cache.
     supervisor.force_restart_for_test();
     wait_pid_change(&supervisor, first_pid, Duration::from_secs(30)).await;
+    let persisted_a = repo.get_version(account, worker.id, a.id).unwrap();
+    let persisted_b = repo.get_version(account, worker.id, b.id).unwrap();
+    assert_eq!(
+        persisted_a.compatibility_date,
+        a_runtime_features.compatibility_date
+    );
+    assert_eq!(
+        persisted_a.compatibility_flags,
+        a_runtime_features.compatibility_flags
+    );
+    assert_eq!(
+        persisted_b.compatibility_date,
+        b_runtime_features.compatibility_date
+    );
+    assert_eq!(
+        persisted_b.compatibility_flags,
+        b_runtime_features.compatibility_flags
+    );
     assert_ne!(
         auth.credential().unwrap().expose(),
         first_credential.expose(),

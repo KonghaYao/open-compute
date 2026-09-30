@@ -6,7 +6,8 @@ use open_compute_core::{MetricsConfig, SchedulerConfig, WorkflowsConfig};
 use open_compute_service::{
     metrics::MetricsRegistry, scheduler::SchedulerService, workflow_http::WorkflowApiState,
 };
-use open_compute_storage::{SchedulerStore, WorkflowRepository};
+use open_compute_storage::scheduler::SchedulerStore;
+use open_compute_storage::workflows::WorkflowRepository;
 use open_compute_workers::{WorkflowController, WorkflowCreateInput, WorkflowEventInput};
 use serde_json::json;
 use std::{

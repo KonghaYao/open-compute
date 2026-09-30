@@ -5,9 +5,9 @@ use open_compute_core::{
     CacheConfig, DataConfig, InstanceId, PlatformConfig, RequestId, StartupId, SystemClock,
     VersionId, WorkerId,
 };
-use open_compute_storage::{
-    BuiltinBindingKind, PlatformStorage, WorkerRepository, version_runtime_features,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::runtime_features::{BuiltinBindingKind, version_runtime_features};
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateVersionOutcome, CreateVersionRequest, ModuleInput,
     ModuleType, RuntimeValidator, ValidationCandidate, VersionContent, VersionController,
@@ -87,7 +87,9 @@ impl RuntimeFeatureFixture {
             runtime_features: features,
             queue_consumers: Vec::new(),
             crons: Vec::new(),
-            deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+            deployment_source: Some(
+                open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+            ),
             observability: None,
             request_id: RequestId::generate(),
             now_ms: 1_000,

@@ -26,28 +26,28 @@ fn lock_validation_rejects_every_malformed_authority_field() {
             "\"expectedVersionOutput\": \"workerd 2026-08-30 \"",
         ),
         (
-            "\"effectiveCompatibilityDate\": \"2026-09-08\"",
-            "\"effectiveCompatibilityDate\": \"20260830\"",
+            "\"systemCompatibilityDate\": \"2026-09-08\"",
+            "\"systemCompatibilityDate\": \"20260830\"",
         ),
         (
-            "\"effectiveCompatibilityDate\": \"2026-09-08\"",
-            "\"effectiveCompatibilityDate\": \"1969-01-01\"",
+            "\"systemCompatibilityDate\": \"2026-09-08\"",
+            "\"systemCompatibilityDate\": \"1969-01-01\"",
         ),
         (
-            "\"effectiveCompatibilityDate\": \"2026-09-08\"",
-            "\"effectiveCompatibilityDate\": \"2026-00-01\"",
+            "\"systemCompatibilityDate\": \"2026-09-08\"",
+            "\"systemCompatibilityDate\": \"2026-00-01\"",
         ),
         (
-            "\"effectiveCompatibilityDate\": \"2026-09-08\"",
-            "\"effectiveCompatibilityDate\": \"2026-13-01\"",
+            "\"systemCompatibilityDate\": \"2026-09-08\"",
+            "\"systemCompatibilityDate\": \"2026-13-01\"",
         ),
         (
-            "\"effectiveCompatibilityDate\": \"2026-09-08\"",
-            "\"effectiveCompatibilityDate\": \"2026-01-00\"",
+            "\"systemCompatibilityDate\": \"2026-09-08\"",
+            "\"systemCompatibilityDate\": \"2026-01-00\"",
         ),
         (
-            "\"effectiveCompatibilityDate\": \"2026-09-08\"",
-            "\"effectiveCompatibilityDate\": \"2100-02-29\"",
+            "\"systemCompatibilityDate\": \"2026-09-08\"",
+            "\"systemCompatibilityDate\": \"2100-02-29\"",
         ),
         (
             "\"processFlags\": [\"--experimental\"]",
@@ -98,15 +98,15 @@ fn lock_validation_rejects_every_malformed_authority_field() {
             "\"systemCompatibilityFlags\": [\"experimental\", \"experimental\"]",
         ),
         (
-            "\"requiredCompatibilityFlags\": []",
-            "\"requiredCompatibilityFlags\": [\"experimental\"]",
+            "\"schemaVersion\": 1,\n    \"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"",
+            "\"schemaVersion\": 2,\n    \"sha256\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"",
         ),
         (
             "\"workersTypes\": {\n    \"version\": \"5.20260830.1\",\n    \"gitHead\": \"e9dda5963aba7ee4323960db795690ec78fec118\",\n    \"packageSha256\": \"d3d7a80d3b27e53116e34736ec1945eb359f53a1000df37b205c4cb59ce29a8e\",\n    \"astSha256\": \"a00b4783854c9028158f776d605790d9a3e17e6a97f4d255beb70035c59c40dd\"\n  }",
             "\"workersTypes\": {\n    \"version\": \"5.20260830.1\",\n    \"gitHead\": \"invalid-upstream-revision\",\n    \"packageSha256\": \"d3d7a80d3b27e53116e34736ec1945eb359f53a1000df37b205c4cb59ce29a8e\",\n    \"astSha256\": \"a00b4783854c9028158f776d605790d9a3e17e6a97f4d255beb70035c59c40dd\"\n  }",
         ),
         (
-            "\"wranglerVersion\": \"4.138.0\"",
+            "\"wranglerVersion\": \"4.143.0\"",
             "\"wranglerVersion\": \"\"",
         ),
         (

@@ -22,6 +22,7 @@ import {
 import { openConfirmDeleteDialog } from "../../../../components/resource-dialog";
 import { useAuth } from "../../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../../lib/query-options";
 
 type Tab = "overview" | "playground" | "items" | "jobs" | "settings";
 
@@ -49,7 +50,7 @@ function AISearchDetailPage() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
 
   const instance = useQuery({
-    queryKey: ["ai-search", selectedInstanceId, namespaceName, instanceId],
+    queryKey: queryKeys.aiSearch(selectedInstanceId, namespaceName, instanceId),
     queryFn: ({ signal }) =>
       Promise.all([
         client!.aiSearch.namespaces.instances.read(
@@ -71,13 +72,12 @@ function AISearchDetailPage() {
     enabled: client !== null && selectedInstanceId !== null,
   });
   const jobs = useQuery({
-    queryKey: [
-      "ai-search",
+    queryKey: queryKeys.aiSearch(
       selectedInstanceId,
       namespaceName,
       instanceId,
       "jobs",
-    ],
+    ),
     queryFn: async ({ signal }) =>
       (
         await client!.aiSearch.namespaces.instances.jobs.list(
@@ -95,14 +95,13 @@ function AISearchDetailPage() {
   const lastJob = jobs.data?.[0];
   const activeJobId = selectedJobId ?? lastJob?.id;
   const jobLogs = useQuery({
-    queryKey: [
-      "ai-search",
+    queryKey: queryKeys.aiSearch(
       selectedInstanceId,
       namespaceName,
       instanceId,
       "job-logs",
       activeJobId,
-    ],
+    ),
     queryFn: ({ signal }) =>
       client!.aiSearch.namespaces.instances.jobs.logs(
         activeJobId!,
@@ -148,7 +147,7 @@ function AISearchDetailPage() {
           throw error;
         }
         await queryClient.invalidateQueries({
-          queryKey: ["ai-search", selectedInstanceId],
+          queryKey: queryKeys.aiSearch(selectedInstanceId),
         });
         feedback.success("AI Search instance deleted.");
         await navigate({ to: "/ai-search" });

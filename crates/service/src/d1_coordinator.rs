@@ -5,10 +5,12 @@ use md5::Md5;
 use open_compute_core::{
     D1Config, ErrorCode, InstanceId, PlatformError, ResourceAvailability, ResourceId,
 };
-use open_compute_storage::{
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::d1::{
     D1DatabaseRecord, D1DatabaseRepository, D1Engine, D1Paths, D1QueryLimits, D1SnapshotRecord,
-    D1SnapshotRepository, D1TransferState, PlatformStorage, ResourceRepository,
+    D1SnapshotRepository, D1TransferState,
 };
+use open_compute_storage::resources::ResourceRepository;
 use open_compute_workers::{ResourcePin, ResourcePins};
 use sha2::{Digest as _, Sha256};
 use std::io::Read as _;
@@ -472,7 +474,7 @@ fn complete_ingest(
 }
 
 fn verify_transfer_bytes(
-    transfer: &open_compute_storage::D1TransferRecord,
+    transfer: &open_compute_storage::d1::D1TransferRecord,
     bytes: &[u8],
 ) -> Result<(), PlatformError> {
     let size = u64::try_from(bytes.len()).map_err(|_| invariant())?;

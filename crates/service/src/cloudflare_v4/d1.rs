@@ -14,7 +14,7 @@ use axum::extract::{Path, Request, State};
 use axum::response::Response;
 use axum::routing::{get, post};
 use open_compute_core::BindingKind;
-use open_compute_storage::{
+use open_compute_storage::d1::{
     D1_DATABASE_SCHEMA_VERSION, D1DatabaseRecord, D1DatabaseRepository, D1Statement,
     D1StatementResult, D1Value,
 };
@@ -498,14 +498,14 @@ async fn run_query(
 struct ObjectResult {
     success: bool,
     results: Vec<Map<String, Value>>,
-    meta: open_compute_storage::D1Meta,
+    meta: open_compute_storage::d1::D1Meta,
 }
 
 #[derive(Serialize)]
 struct RawResult {
     success: bool,
     results: RawRows,
-    meta: open_compute_storage::D1Meta,
+    meta: open_compute_storage::d1::D1Meta,
 }
 
 #[derive(Serialize)]
@@ -695,7 +695,7 @@ fn database_with_context(
 #[cfg(test)]
 mod tests {
     use super::{QueryBody, valid_database_name, value};
-    use open_compute_storage::D1Value;
+    use open_compute_storage::d1::D1Value;
 
     #[test]
     fn database_names_and_non_finite_values_fail_closed() {

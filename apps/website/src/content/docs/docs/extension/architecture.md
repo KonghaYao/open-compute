@@ -47,7 +47,7 @@ workerd  <--------- session Cap'n Proto ----------->  Provider
 | `OCH1` | workerd generation broker (fd 4) | workerd → `ocd`  | Prove a validated session identity and receive a data FD      |
 | `OCP2` | Provider control (stdin, fd 0)   | `ocd` → Provider | Attach one session FD and nonce; Provider echoes nonce in ACK |
 
-Both transfers use `SCM_RIGHTS` with exactly one FD. Extra FDs, wrong magic, truncated identity, or a missing ACK fail closed. Formal FD passing uses workerd `--//:io_backend=cxx`.
+Both transfers use `SCM_RIGHTS` with exactly one FD. Extra FDs, wrong magic, truncated identity, or a missing ACK fail closed.
 
 ## Session authority
 

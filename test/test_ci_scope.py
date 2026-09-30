@@ -18,6 +18,8 @@ class CiScopeTests(unittest.TestCase):
                 [
                     ".github/workflows/release.yml",
                     "scripts/assemble-release.ts",
+                    "scripts/release-dry-run.sh",
+                    "test/release-dry-run/Dockerfile",
                     "test/release-tools.test.mjs",
                     "docs/references/releasing.md",
                 ]

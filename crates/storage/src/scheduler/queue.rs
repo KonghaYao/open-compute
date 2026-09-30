@@ -1,7 +1,7 @@
 //! Durable Queue producer authority and bounded retention maintenance.
 
 use super::{SchedulerStore, map_sql_error};
-use crate::QueueConfig;
+use crate::queues::QueueConfig;
 use open_compute_core::{
     ErrorCode, InstanceId, PlatformError, QueueId, QueueMessageId, WorkloadSummary,
 };

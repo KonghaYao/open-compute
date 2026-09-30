@@ -10,6 +10,7 @@ use open_compute_workers::{
 
 async fn fixture(config: ImagesConfig) -> (RuntimeFeatureFixture, ImageBindingService, Vec<u8>) {
     let fixture = RuntimeFeatureFixture::create(VersionRuntimeFeatures {
+        compatibility_date: "2026-09-08".to_owned(),
         cache: Default::default(),
         images: Some(VersionImagesInput {
             binding: "IMAGES".to_owned(),

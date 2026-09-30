@@ -11,9 +11,9 @@ use axum::http::header::CONTENT_TYPE;
 use axum::response::Response;
 use axum::routing::{get, post};
 use open_compute_core::{BindingKind, ErrorCode, PlatformError, ResourceId};
-use open_compute_storage::{
-    D1BackupRecord, D1DatabaseRepository, KvBackupRecord, KvNamespaceRepository, ResourceRepository,
-};
+use open_compute_storage::d1::{D1BackupRecord, D1DatabaseRepository};
+use open_compute_storage::kv::{KvBackupRecord, KvNamespaceRepository};
+use open_compute_storage::resources::ResourceRepository;
 use serde::{Deserialize, Serialize};
 
 const MAX_RESTORE_BODY: usize = 4096;

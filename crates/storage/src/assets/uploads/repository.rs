@@ -17,7 +17,7 @@ impl<'a> VersionUploadRepository<'a> {
         validate_new(input, max_open_per_worker, max_open_per_instance)?;
         self.db.with_immediate(|tx| {
             expire_open(tx, input.now_ms)?;
-            crate::workers::require_instance(tx, input.instance_id).map_err(|error| {
+            crate::worker_repository::require_instance(tx, input.instance_id).map_err(|error| {
                 if error.code() == ErrorCode::InstanceNotFound {
                     not_found()
                 } else {

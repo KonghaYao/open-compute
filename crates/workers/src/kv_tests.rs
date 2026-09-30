@@ -2,7 +2,9 @@ use super::*;
 use crate::{CreateResourceOutcome, CreateResourceRequest, ResourceController, ResourcePins};
 use open_compute_core::config::DataConfig;
 use open_compute_core::{BindingKind, RequestId, SystemClock};
-use open_compute_storage::{KvNamespaceRepository, PlatformStorage, ResourceRepository};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::kv::KvNamespaceRepository;
+use open_compute_storage::resources::ResourceRepository;
 use std::time::Duration;
 
 fn storage() -> (tempfile::TempDir, PlatformStorage) {

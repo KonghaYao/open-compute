@@ -1,7 +1,9 @@
 use super::*;
 use crate::PlatformStorage;
-use crate::workers::EffectiveResourceLimits;
-use crate::{NewVersion, NewVersionProducts, VersionContentKind, WorkerRepository};
+use crate::worker_repository::EffectiveResourceLimits;
+use crate::worker_repository::{
+    NewVersion, NewVersionProducts, VersionContentKind, WorkerRepository,
+};
 use open_compute_core::clock::SystemClock;
 use open_compute_core::config::DataConfig;
 use open_compute_core::{BindingId, CanonicalPermissions, RequestId, VersionId};

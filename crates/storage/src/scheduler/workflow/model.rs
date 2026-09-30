@@ -1,4 +1,4 @@
-use crate::{WorkflowInstanceIdentity, WorkflowTarget};
+use crate::workflows::{WorkflowInstanceIdentity, WorkflowTarget};
 use open_compute_core::{WorkflowFence, WorkflowInstanceId, WorkflowToken};
 use serde::{Deserialize, Serialize};
 

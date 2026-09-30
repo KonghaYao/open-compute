@@ -29,10 +29,12 @@ use open_compute_service::runtime_bridge::{
 use open_compute_service::{
     R2BindingService, SqliteKvBindingExecutor, bind_binding_backend, serve_binding_backend,
 };
-use open_compute_storage::{
-    PlatformStorage, R2_SCHEMA_VERSION, ReserveResourceCreate, ResourceCreateReservation,
-    ResourceRepository, VersionRecord, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::r2::R2_SCHEMA_VERSION;
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
 };
+use open_compute_storage::worker_repository::{VersionRecord, WorkerRepository};
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateVersionOutcome, CreateVersionRequest, ModuleInput,
     ModuleType, R2ResourceDriver, ResourcePins, RuntimeSource, RuntimeValidator,
@@ -384,10 +386,15 @@ fn request(
         secrets: BTreeMap::new(),
         bindings,
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: Some(
+            open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+        ),
         observability: None,
         request_id: RequestId::generate(),
         now_ms,

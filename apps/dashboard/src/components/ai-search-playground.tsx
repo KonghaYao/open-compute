@@ -16,11 +16,11 @@ import {
 } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import type {
   InstanceChatCompletionsResponse,
   InstanceSearchResponse,
-} from "cloudflare/resources/aisearch/namespaces/instances/instances";
-import { useEffect, useRef, useState } from "react";
+} from "@open-compute/sdk";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
 import { EmptyState } from "./dashboard-page";
@@ -650,7 +650,7 @@ export function AISearchPlayground({
                 <span className="text-kumo-subtle text-sm">
                   {generationModel
                     ? "Reorder results by relevance."
-                    : "Configure a generation model to enable reranking."}
+                    : "Configure a reranking model to enable reranking."}
                 </span>
               </div>
               <Switch

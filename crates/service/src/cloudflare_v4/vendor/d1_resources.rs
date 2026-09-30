@@ -2,7 +2,7 @@
 
 use super::*;
 use axum::routing::{get, patch};
-use open_compute_storage::D1SnapshotRepository;
+use open_compute_storage::d1::D1SnapshotRepository;
 use open_compute_workers::{D1ResourceDriver, ResourceController};
 use serde::{Deserialize, Serialize};
 

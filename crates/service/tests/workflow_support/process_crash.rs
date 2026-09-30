@@ -3,7 +3,7 @@
 pub(super) use super::platform_process::Evidence;
 use super::platform_process::{Client, address, config, ready, spawn, tenant_json};
 use super::*;
-use open_compute_storage::WorkerRepository;
+use open_compute_storage::worker_repository::WorkerRepository;
 use std::fs;
 use std::process::Command;
 use std::time::Instant;

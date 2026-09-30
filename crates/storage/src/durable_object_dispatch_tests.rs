@@ -1,5 +1,5 @@
 use super::*;
-use crate::workers::EffectiveResourceLimits;
+use crate::worker_repository::EffectiveResourceLimits;
 
 #[test]
 fn authority_checks_active_version_and_resolves_current_route_epoch() {
@@ -51,7 +51,7 @@ fn authority_checks_active_version_and_resolves_current_route_epoch() {
                 id: replacement,
                 instance_id: fixture.account,
                 worker_id: fixture.worker,
-                content_kind: crate::VersionContentKind::Worker,
+                content_kind: crate::worker_repository::VersionContentKind::Worker,
                 artifact_sha256: Some([1; 32]),
                 artifact_size: Some(1),
                 artifact_schema_version: Some(1),
@@ -65,7 +65,7 @@ fn authority_checks_active_version_and_resolves_current_route_epoch() {
                 request_id: RequestId::generate(),
                 now_ms: 23,
             },
-            &crate::NewVersionProducts::default(),
+            &crate::worker_repository::NewVersionProducts::default(),
             1_000_000,
         )
         .unwrap();

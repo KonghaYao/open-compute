@@ -1,9 +1,9 @@
 use super::*;
-use crate::workers::EffectiveResourceLimits;
-use crate::{
-    CatalogDirection, CatalogSort, NewVersion, NewVersionBinding, ReserveResourceCreate,
-    ResourceCreateReservation, WorkerRepository, decode_catalog_cursor,
-};
+use crate::bindings::NewVersionBinding;
+use crate::catalog_page::{CatalogDirection, CatalogSort, decode_catalog_cursor};
+use crate::resources::{ReserveResourceCreate, ResourceCreateReservation};
+use crate::worker_repository::EffectiveResourceLimits;
+use crate::worker_repository::{NewVersion, WorkerRepository};
 use open_compute_core::config::DataConfig;
 use open_compute_core::{
     BindingKind, CanonicalBindingConfig, CanonicalPermissions, RequestId, SystemClock,
@@ -121,7 +121,7 @@ fn ready_fixture(storage: &PlatformStorage) -> Fixture {
                 id: version,
                 instance_id: account,
                 worker_id: worker.id,
-                content_kind: crate::VersionContentKind::Worker,
+                content_kind: crate::worker_repository::VersionContentKind::Worker,
                 artifact_sha256: Some([1; 32]),
                 artifact_size: Some(1),
                 artifact_schema_version: Some(1),
@@ -135,7 +135,7 @@ fn ready_fixture(storage: &PlatformStorage) -> Fixture {
                 request_id: RequestId::generate(),
                 now_ms: 13,
             },
-            &crate::NewVersionProducts {
+            &crate::worker_repository::NewVersionProducts {
                 bindings: &[NewVersionBinding {
                     id: binding,
                     name: "COUNTERS".to_owned(),
@@ -558,7 +558,7 @@ fn namespace_owner_kind_and_existing_product_fail_closed() {
                 id: version,
                 instance_id: account,
                 worker_id: worker.id,
-                content_kind: crate::VersionContentKind::Worker,
+                content_kind: crate::worker_repository::VersionContentKind::Worker,
                 artifact_sha256: Some([1; 32]),
                 artifact_size: Some(1),
                 artifact_schema_version: Some(1),
@@ -572,7 +572,7 @@ fn namespace_owner_kind_and_existing_product_fail_closed() {
                 request_id: RequestId::generate(),
                 now_ms: 48,
             },
-            &crate::NewVersionProducts {
+            &crate::worker_repository::NewVersionProducts {
                 bindings: &[NewVersionBinding {
                     id: binding,
                     name: "WRONG_KIND".to_owned(),

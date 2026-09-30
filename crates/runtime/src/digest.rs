@@ -7,18 +7,18 @@ use crate::fsutil::{
 use crate::verify::VerifiedRuntime;
 use open_compute_core::{DurableObjectsConfig, ErrorCode, PlatformError, SecretString};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 const DIGEST_TAG: &[u8] = b"open-compute-static-config-v1\0";
 pub(crate) const TOKEN_PLACEHOLDER: &str = "__OPEN_COMPUTE_INTERNAL_TOKEN__";
 pub(crate) const BINDING_TOKEN_PLACEHOLDER: &str = "__OPEN_COMPUTE_BINDING_TOKEN__";
 pub(crate) const OBSERVABILITY_TOKEN_PLACEHOLDER: &str = "__OPEN_COMPUTE_OBSERVABILITY_TOKEN__";
-pub(crate) const COMPATIBILITY_DATE_PLACEHOLDER: &str = "__OPEN_COMPUTE_COMPATIBILITY_DATE__";
+pub(crate) const SYSTEM_COMPATIBILITY_DATE_PLACEHOLDER: &str =
+    "__OPEN_COMPUTE_SYSTEM_COMPATIBILITY_DATE__";
 pub(crate) const SYSTEM_COMPATIBILITY_FLAGS_PLACEHOLDER: &str =
     "__OPEN_COMPUTE_SYSTEM_COMPATIBILITY_FLAGS__";
-pub(crate) const REQUIRED_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER: &str =
-    "__OPEN_COMPUTE_REQUIRED_COMPATIBILITY_FLAGS_JSON__";
+pub(crate) const SYSTEM_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER: &str =
+    "__OPEN_COMPUTE_SYSTEM_COMPATIBILITY_FLAGS_JSON__";
 pub(crate) const TOKEN_HEX_LEN: usize = 64;
 type DurableObjectPolicyPlaceholder = (&'static str, fn(&DurableObjectsConfig) -> String);
 const DO_POLICY_PLACEHOLDERS: [DurableObjectPolicyPlaceholder; 5] = [
@@ -282,9 +282,9 @@ pub(crate) fn render_lock_compatibility(
     lock: &crate::lock::RuntimeLock,
 ) -> Result<String, PlatformError> {
     for (placeholder, expected) in [
-        (COMPATIBILITY_DATE_PLACEHOLDER, 1_usize),
+        (SYSTEM_COMPATIBILITY_DATE_PLACEHOLDER, 1_usize),
         (SYSTEM_COMPATIBILITY_FLAGS_PLACEHOLDER, 3),
-        (REQUIRED_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER, 1),
+        (SYSTEM_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER, 1),
     ] {
         if rendered.matches(placeholder).count() != expected {
             return Err(PlatformError::new(
@@ -293,27 +293,24 @@ pub(crate) fn render_lock_compatibility(
             ));
         }
     }
-    let date = lock.effective_compatibility_date.as_str();
+    let date = lock.system_compatibility_date.as_str();
     if date.bytes().any(|b| !b.is_ascii_digit() && b != b'-') {
         return Err(PlatformError::new(
             ErrorCode::RuntimeInvalid,
             "compatibility date is not safe to render into Cap'n Proto",
         ));
     }
-    let system_flags = canonical_system_flags(lock);
-    let required_json = capnp_escaped_json(&lock.required_compatibility_flags)?;
-    rendered = rendered.replace(COMPATIBILITY_DATE_PLACEHOLDER, date);
+    let system_flags = &lock.system_compatibility_flags;
+    let system_json = capnp_escaped_json(system_flags)?;
+    rendered = rendered.replace(SYSTEM_COMPATIBILITY_DATE_PLACEHOLDER, date);
     rendered = rendered.replace(
         SYSTEM_COMPATIBILITY_FLAGS_PLACEHOLDER,
-        &capnp_text_list(&system_flags)?,
+        &capnp_text_list(system_flags)?,
     );
-    rendered = rendered.replace(
-        REQUIRED_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER,
-        &required_json,
-    );
-    if rendered.contains(COMPATIBILITY_DATE_PLACEHOLDER)
+    rendered = rendered.replace(SYSTEM_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER, &system_json);
+    if rendered.contains(SYSTEM_COMPATIBILITY_DATE_PLACEHOLDER)
         || rendered.contains(SYSTEM_COMPATIBILITY_FLAGS_PLACEHOLDER)
-        || rendered.contains(REQUIRED_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER)
+        || rendered.contains(SYSTEM_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER)
     {
         return Err(PlatformError::new(
             ErrorCode::ConfigCompileFailed,
@@ -321,16 +318,6 @@ pub(crate) fn render_lock_compatibility(
         ));
     }
     Ok(rendered)
-}
-
-fn canonical_system_flags(lock: &crate::lock::RuntimeLock) -> Vec<String> {
-    lock.required_compatibility_flags
-        .iter()
-        .chain(lock.system_compatibility_flags.iter())
-        .cloned()
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
 }
 
 fn capnp_text_list(flags: &[String]) -> Result<String, PlatformError> {
@@ -391,9 +378,9 @@ mod tests {
 
     const TEMPLATE: &str = include_str!("../../../packages/runtime/config.capnp");
 
-    fn lock(required: &[&str], system: &[&str]) -> RuntimeLock {
+    fn lock(system: &[&str]) -> RuntimeLock {
         RuntimeLock {
-            schema_version: 3,
+            schema_version: 4,
             release: "v1.20260830.1".to_owned(),
             revision: "e9dda5963aba7ee4323960db795690ec78fec118".to_owned(),
             source: crate::lock::RuntimeSourcePin {
@@ -406,9 +393,13 @@ mod tests {
                 ]),
             },
             expected_version_output: "workerd 2026-08-30".to_owned(),
-            effective_compatibility_date: "2026-09-08".to_owned(),
-            required_compatibility_flags: required.iter().map(|flag| (*flag).to_owned()).collect(),
+            system_compatibility_date: "2026-09-08".to_owned(),
             system_compatibility_flags: system.iter().map(|flag| (*flag).to_owned()).collect(),
+            binary_maximum_compatibility_date: "2026-09-25".to_owned(),
+            compatibility_catalog: crate::lock::CompatibilityCatalogPin {
+                schema_version: 1,
+                sha256: "ee".repeat(32),
+            },
             process_flags: vec!["--experimental".to_owned()],
             pyodide_bundle: PyodideBundlePin {
                 version: "314.0.6_2026-08-17_2".to_owned(),
@@ -425,14 +416,14 @@ mod tests {
             },
             workers_sdk: WorkersSdkPin {
                 revision: "f8085545bcaa2c639f171c25e4424685036a0e10".to_owned(),
-                wrangler_version: "4.138.0".to_owned(),
+                wrangler_version: "4.143.0".to_owned(),
                 vite_plugin_version: "1.54.2".to_owned(),
             },
             targets: BTreeMap::from([(
                 "darwin-arm64".to_owned(),
                 RuntimeTarget {
                     archive_name: "workerd-darwin-arm64.gz".to_owned(),
-                    archive_url: Some("https://github.com/elliothux/workerd/releases/download/v1.20260830.1/workerd-darwin-arm64.gz".to_owned()),
+                    archive_url: "https://github.com/elliothux/workerd/releases/download/v1.20260830.1/workerd-darwin-arm64.gz".to_owned(),
                     archive_sha256: "aa".repeat(32),
                     binary_sha256: "bb".repeat(32),
                 },
@@ -441,8 +432,13 @@ mod tests {
     }
 
     #[test]
-    fn packaged_template_has_one_lock_authority_and_separates_tenant_system_flags() {
-        assert_eq!(TEMPLATE.matches(COMPATIBILITY_DATE_PLACEHOLDER).count(), 1);
+    fn packaged_template_has_one_system_worker_compatibility_authority() {
+        assert_eq!(
+            TEMPLATE
+                .matches(SYSTEM_COMPATIBILITY_DATE_PLACEHOLDER)
+                .count(),
+            1
+        );
         assert_eq!(
             TEMPLATE
                 .matches(SYSTEM_COMPATIBILITY_FLAGS_PLACEHOLDER)
@@ -451,38 +447,41 @@ mod tests {
         );
         assert_eq!(
             TEMPLATE
-                .matches(REQUIRED_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER)
+                .matches(SYSTEM_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER)
                 .count(),
             1
         );
-        let lock = lock(
-            &["nodejs_compat"],
-            &["experimental", "service_binding_extra_handlers"],
-        );
+        let lock = lock(&["experimental", "service_binding_extra_handlers"]);
         let first = render_lock_compatibility(TEMPLATE.to_owned(), &lock).unwrap();
         let second = render_lock_compatibility(TEMPLATE.to_owned(), &lock).unwrap();
         assert_eq!(first, second);
-        assert!(first.contains("compatibilityDate = .compatibilityDate"));
         assert_eq!(
-            first.matches(
-                r#"compatibilityFlags = ["experimental", "nodejs_compat", "service_binding_extra_handlers"]"#
-            )
-            .count(),
+            first
+                .matches("compatibilityDate = .systemCompatibilityDate")
+                .count(),
             3
         );
-        assert!(first.contains(r#"const compatibilityDate :Text = "2026-09-08";"#));
+        assert_eq!(
+            first
+                .matches(
+                    r#"compatibilityFlags = ["experimental", "service_binding_extra_handlers"]"#
+                )
+                .count(),
+            3
+        );
+        assert!(first.contains(r#"const systemCompatibilityDate :Text = "2026-09-08";"#));
         assert!(
             first
-                .contains(r#"const requiredCompatibilityFlagsJson :Text = "[\"nodejs_compat\"]";"#)
+                .contains(r#"const systemCompatibilityFlagsJson :Text = "[\"experimental\",\"service_binding_extra_handlers\"]";"#)
         );
-        assert!(!first.contains(COMPATIBILITY_DATE_PLACEHOLDER));
+        assert!(!first.contains(SYSTEM_COMPATIBILITY_DATE_PLACEHOLDER));
         assert!(!first.contains(SYSTEM_COMPATIBILITY_FLAGS_PLACEHOLDER));
-        assert!(!first.contains(REQUIRED_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER));
+        assert!(!first.contains(SYSTEM_COMPATIBILITY_FLAGS_JSON_PLACEHOLDER));
     }
 
     #[test]
     fn lock_rendering_is_fail_closed_for_missing_duplicate_and_unsafe_placeholders() {
-        let lock = lock(&[], &["experimental"]);
+        let lock = lock(&["experimental"]);
         assert_eq!(
             render_lock_compatibility("no placeholders".to_owned(), &lock)
                 .unwrap_err()
@@ -490,8 +489,10 @@ mod tests {
             ErrorCode::ConfigCompileFailed
         );
         let duplicated = TEMPLATE.replacen(
-            COMPATIBILITY_DATE_PLACEHOLDER,
-            &format!("{COMPATIBILITY_DATE_PLACEHOLDER}{COMPATIBILITY_DATE_PLACEHOLDER}"),
+            SYSTEM_COMPATIBILITY_DATE_PLACEHOLDER,
+            &format!(
+                "{SYSTEM_COMPATIBILITY_DATE_PLACEHOLDER}{SYSTEM_COMPATIBILITY_DATE_PLACEHOLDER}"
+            ),
             1,
         );
         assert_eq!(
@@ -501,7 +502,7 @@ mod tests {
             ErrorCode::ConfigCompileFailed
         );
         let mut unsafe_lock = lock.clone();
-        unsafe_lock.required_compatibility_flags = vec!["bad-flag".to_owned()];
+        unsafe_lock.system_compatibility_flags = vec!["bad-flag".to_owned()];
         assert_eq!(
             render_lock_compatibility(TEMPLATE.to_owned(), &unsafe_lock)
                 .unwrap_err()
@@ -511,27 +512,26 @@ mod tests {
     }
 
     #[test]
-    fn system_compatibility_flags_are_a_sorted_union_independent_of_input_order() {
-        let first = lock(
-            &["nodejs_compat", "rpc"],
-            &["service_binding_extra_handlers", "experimental"],
-        );
-        let second = lock(
-            &["rpc", "nodejs_compat"],
-            &["experimental", "service_binding_extra_handlers"],
-        );
+    fn system_compatibility_flags_preserve_the_formal_lock_order() {
+        let first = lock(&["service_binding_extra_handlers", "experimental"]);
+        let second = lock(&["experimental", "service_binding_extra_handlers"]);
         let rendered_first = render_lock_compatibility(TEMPLATE.to_owned(), &first).unwrap();
         let rendered_second = render_lock_compatibility(TEMPLATE.to_owned(), &second).unwrap();
-        let expected = r#"compatibilityFlags = ["experimental", "nodejs_compat", "rpc", "service_binding_extra_handlers"]"#;
-        assert_eq!(rendered_first.matches(expected).count(), 3);
-        assert_eq!(rendered_second.matches(expected).count(), 3);
-        assert!(rendered_first.contains(
-            r#"const requiredCompatibilityFlagsJson :Text = "[\"nodejs_compat\",\"rpc\"]";"#
-        ));
-        assert!(rendered_second.contains(
-            r#"const requiredCompatibilityFlagsJson :Text = "[\"rpc\",\"nodejs_compat\"]";"#
-        ));
-        assert!(!rendered_first.contains(r#"\"experimental\""#));
-        assert!(!rendered_second.contains(r#"\"service_binding_extra_handlers\""#));
+        assert_eq!(
+            rendered_first
+                .matches(
+                    r#"compatibilityFlags = ["service_binding_extra_handlers", "experimental"]"#
+                )
+                .count(),
+            3
+        );
+        assert_eq!(
+            rendered_second
+                .matches(
+                    r#"compatibilityFlags = ["experimental", "service_binding_extra_handlers"]"#
+                )
+                .count(),
+            3
+        );
     }
 }

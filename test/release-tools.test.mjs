@@ -22,6 +22,7 @@ import {
   stableVersionFromTag,
   workspaceVersion,
 } from "../scripts/assemble-release.ts";
+import { loadCaddyPin, prepareCaddy } from "../scripts/caddy-archive.ts";
 import { verifyReleaseExecutable } from "../scripts/verify-release-executable.ts";
 import {
   absoluteDestination,
@@ -48,6 +49,15 @@ const ciWorkflowPath = fileURLToPath(
 );
 const dryRunWorkflowPath = fileURLToPath(
   new URL("../.github/workflows/release-dry-run.yml", import.meta.url),
+);
+const localDryRunPath = fileURLToPath(
+  new URL("../scripts/release-dry-run.sh", import.meta.url),
+);
+const localDryRunDockerfilePath = fileURLToPath(
+  new URL("./release-dry-run/Dockerfile", import.meta.url),
+);
+const cargoConfigPath = fileURLToPath(
+  new URL("../.cargo/config.toml", import.meta.url),
 );
 
 async function writeTestCommand(directory, name, source) {
@@ -84,7 +94,7 @@ esac
   await writeTestCommand(directory, "sync", "#!/bin/sh\nexit 0\n");
 }
 
-test("build inputs default to bundled binaries and require a pinned supported host", async () => {
+test("build inputs require an explicit release asset source and a pinned supported host", async () => {
   assert.equal(
     sourceArguments(["--dest", "/tmp/new", "--archive", "/tmp/pin.gz"]).archive,
     "/tmp/pin.gz",
@@ -106,22 +116,23 @@ test("build inputs default to bundled binaries and require a pinned supported ho
   const pin = await loadPin();
   assert.equal(pin.target, hostTarget());
   assert.match(pin.archiveSha256, /^[a-f0-9]{64}$/);
-  if (pin.archiveUrl !== undefined) {
-    assert.match(
-      pin.archiveUrl,
-      /^https:\/\/github\.com\/elliothux\/workerd\/releases\/download\//,
+  assert.match(
+    pin.archiveUrl,
+    /^https:\/\/github\.com\/elliothux\/workerd\/releases\/download\//,
+  );
+  assert.match(
+    (await loadCaddyPin()).archiveUrl,
+    /^https:\/\/github\.com\/elliothux\/open-compute-caddy\/releases\/download\//,
+  );
+  const directory = await mkdtemp(join(tmpdir(), "oc-explicit-runtime-"));
+  try {
+    await assert.rejects(
+      prepareWorkerd(directory, undefined, false),
+      /explicitly use --download/,
     );
-  } else {
-    const directory = await mkdtemp(join(tmpdir(), "oc-unpublished-runtime-"));
-    try {
-      await assert.rejects(
-        prepareWorkerd(directory, undefined, true),
-        /unpublished.*--archive/,
-      );
-      assert.deepEqual(await readdir(directory), []);
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
+    assert.deepEqual(await readdir(directory), []);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
 
@@ -167,7 +178,10 @@ test("wrong archives fail without download, execution, or publication", async ()
     await writeFile(archive, "not a formal archive");
     await assert.rejects(prepareWorkerd(root, archive, false), /SHA-256/);
     await assert.rejects(prepareWorkerd(root, archive, true), /at most one/);
+    await assert.rejects(prepareCaddy(root, archive, false), /SHA-256/);
+    await assert.rejects(prepareCaddy(root, archive, true), /at most one/);
     await assert.rejects(readFile(join(root, "workerd")));
+    await assert.rejects(readFile(join(root, "caddy")));
     assert.equal(
       sha256(Buffer.from("abc")),
       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
@@ -196,11 +210,22 @@ test("release tags are stable SemVer and match the workspace version", () => {
   }
 });
 
-test("release qualification runs long checks in parallel without a second Linux workspace Gate", async () => {
+test("release qualification and local Docker diagnostic keep their exact boundaries", async () => {
   const workflow = await readFile(releaseWorkflowPath, "utf8");
   const recovery = await readFile(recoveryWorkflowPath, "utf8");
   const ci = await readFile(ciWorkflowPath, "utf8");
-  const dryRun = await readFile(dryRunWorkflowPath, "utf8");
+  const localDryRun = await readFile(localDryRunPath, "utf8");
+  const localDryRunDockerfile = await readFile(
+    localDryRunDockerfilePath,
+    "utf8",
+  );
+  const cargoConfig = await readFile(cargoConfigPath, "utf8");
+  await assert.rejects(stat(dryRunWorkflowPath), { code: "ENOENT" });
+  await execFileAsync("bash", ["-n", localDryRunPath]);
+  assert.equal(
+    cargoConfig,
+    '[env]\nTESSERACT_RS_CACHE_DIR = { value = "share/xberg-tesseract-cache", relative = true, force = true }\n',
+  );
   assert.match(
     workflow,
     /  failfast:\n    runs-on: ubuntu-24\.04\n    environment: release[\s\S]*?bun test\/conformance\/check\.ts --case baseline-identity[\s\S]*?node --test test\/release-tools\.test\.mjs[\s\S]*?npm whoami/,
@@ -210,8 +235,21 @@ test("release qualification runs long checks in parallel without a second Linux 
     /release_head="\$\(git rev-parse refs\/remotes\/origin\/release\)"[\s\S]*?if \[ "\$GITHUB_SHA" != "\$release_head" \]/,
   );
   assert.doesNotMatch(workflow, /merge-base --is-ancestor "\$GITHUB_SHA"/);
+  assert.match(workflow, /^cache-mode: read$/m);
   assert.match(workflow, /  coverage:\n    needs: failfast\n/);
+  assert.match(
+    workflow,
+    /rust-cache-key: llvm-cov-[^\n]+\n\s+rust-cache-save: "false"/,
+  );
+  assert.match(
+    workflow,
+    /name: Enforce 90 percent Rust line coverage\n\s+env:\n\s+CARGO_BUILD_JOBS: "2"\n\s+OPEN_COMPUTE_COVERAGE_HTML: "0"\n\s+run: \.\/test\/coverage\.sh --jobs 2/,
+  );
   assert.match(workflow, /  integration:\n    needs: failfast\n/);
+  assert.match(
+    workflow,
+    /rust-cache-key: default-[^\n]+\n\s+rust-cache-save: "false"/,
+  );
   assert.match(
     workflow,
     /  sdk-package:\n    # Build the SDK tarball once[\s\S]*?needs: failfast\n/,
@@ -232,49 +270,34 @@ test("release qualification runs long checks in parallel without a second Linux 
     assert.equal(ci.split(command).length - 1, 1);
   }
   assert.match(
-    dryRun,
-    /  failfast:\n    runs-on: ubuntu-24\.04[\s\S]*?bun test\/conformance\/check\.ts --case baseline-identity[\s\S]*?  package:\n    needs: failfast/,
+    ci,
+    /  s3-provider-qualification:\n[\s\S]*?environment: s3-provider-qualification[\s\S]*?OPEN_COMPUTE_TEST_R2_S3_ACCESS_KEY_ID: \$\{\{ secrets\.OPEN_COMPUTE_TEST_R2_S3_ACCESS_KEY_ID \}\}[\s\S]*?\.\/test\/gate\.py s3-provider-qualification --jobs 1/,
   );
   assert.match(
-    dryRun,
-    /package_matrix:[\s\S]*?matrix: \$\{\{ fromJSON\(needs\.failfast\.outputs\.package_matrix\) \}\}/,
+    ci,
+    /test "\$\{\{ needs\.s3-provider-qualification\.result \}\}" = success/,
   );
   assert.match(
-    dryRun,
-    /rust-cache-key: default-\$\{\{ hashFiles\('crates\/storage\/refinery-migrations\/\*\*\/\*\.sql'\) \}\}/,
+    workflow,
+    /Fetch locked crates for offline packaged-binary tests\n\s+run: cargo fetch --locked/,
   );
-  for (const source of [workflow, dryRun]) {
-    assert.match(
-      source,
-      /Fetch locked crates for offline packaged-binary tests\n\s+run: cargo fetch --locked/,
-    );
-    assert.match(
-      source,
-      /shared-key: v3-release-\$\{\{ matrix\.target \}\}-\$\{\{ hashFiles\('crates\/storage\/refinery-migrations\/\*\*\/\*\.sql'\) \}\}/,
-    );
-    assert.match(source, /workspaces: "\. -> \.temp\/release-target"/);
-    assert.match(
-      source,
-      /unset CARGO_TARGET_DIR RUSTC_WRAPPER SCCACHE_DIR SCCACHE_CACHE_SIZE[\s\S]*?OPEN_COMPUTE_TEST_OCD="\$destination"[\s\S]*?OPEN_COMPUTE_PACKAGE_GATE_USER_ROOT=1[\s\S]*?\.\/test\/gate\.py single-binary --jobs 1/,
-    );
-    assert.match(source, /path: \.temp\/release-target\/cargo-timings\//);
-  }
+  assert.doesNotMatch(workflow, /v3-release-|actions\/cache\/save@/);
   assert.match(
-    dryRun,
-    /uses: actions\/upload-artifact@v7\n\s+if: always\(\)[\s\S]*?name: dry-run-\$\{\{ matrix\.target \}\}/,
+    workflow,
+    /unset CARGO_TARGET_DIR RUSTC_WRAPPER SCCACHE_DIR SCCACHE_CACHE_SIZE[\s\S]*?OPEN_COMPUTE_TEST_OCD="\$destination"[\s\S]*?OPEN_COMPUTE_PACKAGE_GATE_USER_ROOT=1[\s\S]*?\.\/test\/gate\.py single-binary --jobs 1/,
   );
+  assert.match(workflow, /path: \.temp\/release-target\/cargo-timings\//);
   assert.match(
     workflow,
     /name: unverified-native-build-\$\{\{ matrix\.target \}\}[\s\S]*?\.temp\/dashboard-e2e[\s\S]*?\.temp\/dashboard-server[\s\S]*?apps\/dashboard\/test-results/,
   );
-  assert.doesNotMatch(dryRun, /Skip unselected target/);
   assert.equal(
     workflow.match(/\.\/test\/gate\.py --workspace --jobs 2/g)?.length,
     1,
   );
   assert.match(workflow, /test-p0-2-egress-linux\.sh p0-2 --jobs 2/);
   assert.doesNotMatch(workflow, /test-p0-2-egress-linux\.sh --workspace/);
-  for (const source of [workflow, dryRun]) {
+  for (const source of [workflow]) {
     assert.match(
       source,
       /uid_home="\$\(getent passwd "\$\(id -u\)" \| cut -d: -f6\)"[\s\S]*?OPEN_COMPUTE_OCD_BIN="\$candidate"[\s\S]*?OPEN_COMPUTE_DEV_PRODUCTION_SCOPE=1[\s\S]*?OPEN_COMPUTE_DEV_OCD_ROOT="\$uid_home\/\.open-compute"[\s\S]*?\.\/scripts\/dev-test\.sh run/,
@@ -290,6 +313,86 @@ test("release qualification runs long checks in parallel without a second Linux 
     );
     assert.match(source, /OPEN_COMPUTE_DEV_STATE_DIR="\$server_evidence"/);
   }
+
+  assert.equal(
+    localDryRun.match(/\.\/scripts\/package-release\.sh/g)?.length,
+    1,
+  );
+  assert.equal(
+    localDryRun.match(/\.\/test\/gate\.py single-binary --jobs 1/g)?.length,
+    1,
+  );
+  assert.match(
+    localDryRun,
+    /OPEN_COMPUTE_CAFFEINATED=1[\s\S]*?exec \/usr\/bin\/caffeinate -is "\$0"/,
+  );
+  assert.match(
+    localDryRun,
+    /export RUSTFLAGS='-D warnings'[\s\S]*?export CARGO_NET_OFFLINE=true[\s\S]*?cargo fetch --locked --offline[\s\S]*?bun test\/conformance\/check\.ts --case baseline-identity[\s\S]*?node --test test\/release-tools\.test\.mjs/,
+  );
+  assert.match(
+    localDryRun,
+    /--archive "\$OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE"[\s\S]*?report\.target !== "linux-arm64"[\s\S]*?report\.sha256 !== process\.env\.SHA256/,
+  );
+  assert.match(
+    localDryRun,
+    /OPEN_COMPUTE_TEST_OCD="\$destination"[\s\S]*?OPEN_COMPUTE_PACKAGE_GATE_USER_ROOT=1[\s\S]*?\.\/test\/gate\.py single-binary --jobs 1/,
+  );
+  assert.match(
+    localDryRun,
+    /OPEN_COMPUTE_OCD_BIN="\$destination"[\s\S]*?OPEN_COMPUTE_DEV_PRODUCTION_SCOPE=1[\s\S]*?OPEN_COMPUTE_DEV_OCD_ROOT="\$HOME\/\.open-compute"[\s\S]*?\.\/scripts\/dev-test\.sh run/,
+  );
+  assert.match(
+    localDryRun,
+    /apps\/dashboard\/scripts\/run-e2e\.sh \\\n+\s+dashboard\.spec\.ts lifecycle\.spec\.ts \\\n+\s+--grep 'sign in survives page reload within the same tab\|Worker create, detail, and deletion use the browser SDK'/,
+  );
+  assert.match(
+    localDryRun,
+    /docker run "\$\{container_args\[@\]\}" \\\n+\s+--network bridge[\s\S]*?--inside hydrate[\s\S]*?docker run "\$\{container_args\[@\]\}" \\\n+\s+--network none[\s\S]*?--inside qualify/,
+  );
+  assert.match(
+    localDryRun,
+    /--mount "type=bind,src=\$host_output,dst=\$container_output"[\s\S]*?OPEN_COMPUTE_RELEASE_DRY_RUN_OUTPUT=\$container_output/,
+  );
+  assert.match(
+    localDryRun,
+    /--iidfile "\$iid_file"[\s\S]*?grep -Eq '\^sha256:\[0-9a-f\]\{64\}\$' "\$iid_file"[\s\S]*?image_id=\$\(<"\$iid_file"\)/,
+  );
+  assert.equal(localDryRun.match(/"\$image_id"/g)?.length, 3);
+  assert.match(
+    localDryRun,
+    /host_uid=\$\(id -u\)[\s\S]*?host_gid=\$\(id -g\)[\s\S]*?--user "\$host_uid:\$host_gid"[\s\S]*?src=\$passwd_file,dst=\/etc\/passwd,readonly[\s\S]*?uid=\$host_uid,gid=\$host_gid/,
+  );
+  assert.doesNotMatch(localDryRun, /CARGO_BUILD_JOBS|--user 1001:1001/);
+  for (const option of [
+    "--pull=never",
+    "--read-only",
+    "--cap-drop ALL",
+    "--security-opt no-new-privileges",
+  ]) {
+    assert.match(localDryRun, new RegExp(option));
+  }
+  assert.doesNotMatch(
+    localDryRun,
+    /playwright install|docker\.sock|--privileged|--network host|npm publish|git (?:push|tag)/,
+  );
+  assert.match(
+    localDryRun,
+    /if \[ "\$phase" = hydrate \]; then[\s\S]*?prepare-workerd\.ts[^\n]*--download[\s\S]*?prepare-caddy\.ts[^\n]*--download[\s\S]*?return[\s\S]*?\[ "\$phase" = qualify \]/,
+  );
+  assert.doesNotMatch(localDryRun, /test -[nz] "\$\(git status/);
+  assert.deepEqual(localDryRunDockerfile.match(/^FROM .*$/gm), [
+    "FROM rust:1.98.0-bookworm@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922 AS rust",
+    "FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun",
+    "FROM node:26.8.1-bookworm-slim@sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e AS node",
+    "FROM mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27",
+  ]);
+  assert.match(localDryRunDockerfile, /^USER pwuser$/m);
+  assert.doesNotMatch(
+    localDryRunDockerfile,
+    /package-release|gate\.py|release-dry-run\.sh/,
+  );
+
   assert.doesNotMatch(workflow, /\n  (?:msrv|lint-test):\n/);
   // npm publication is token-authenticated and never receives the GitHub
   // token; the tarball is published from the verified artifact only.
@@ -333,7 +436,7 @@ test("release assembly requires and describes the exact three native executables
     tarballIntegrity: "sha512-cdkovenkZmV2ZGVk",
     surfaceDigest: "c".repeat(64),
     openapiRevision: "d".repeat(40),
-    cloudflareSdkVersion: "7.1.0",
+    cloudflareSdkVersion: "7.2.0",
     files: ["package/package.json"],
   };
   assert.deepEqual(parseSdkPackageReport(sdkReport), sdkReport);
@@ -391,7 +494,7 @@ test("release assembly requires and describes the exact three native executables
       tarballIntegrity: "sha512-cdkovenkZmV2ZGVk",
       surfaceDigest: "c".repeat(64),
       openapiRevision: "d".repeat(40),
-      cloudflareSdkVersion: "7.1.0",
+      cloudflareSdkVersion: "7.2.0",
     });
     assert.deepEqual(
       manifest.artifacts.map((artifact) => artifact.target),

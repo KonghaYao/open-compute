@@ -1,6 +1,6 @@
 //! Immutable Queue consumer declarations and live control attachments.
 
-use crate::ControlDb;
+use crate::control_db::ControlDb;
 use open_compute_core::{
     ErrorCode, InstanceId, PlatformError, QueueConsumerId, QueueId, RequestId, VersionId, WorkerId,
 };

@@ -2,7 +2,7 @@ use super::*;
 use open_compute_core::SystemClock;
 use open_compute_core::config::DataConfig;
 use open_compute_core::{BindingKind, RequestId};
-use open_compute_storage::{D1ExportOptions, D1Migration, D1TransferState};
+use open_compute_storage::d1::{D1ExportOptions, D1Migration, D1TransferState};
 use open_compute_workers::{
     CreateResourceOutcome, CreateResourceRequest, D1ResourceDriver, ResourceController,
 };
@@ -402,7 +402,7 @@ fn create_database(
         kind: BindingKind::D1Database,
         name: name.to_owned(),
         idempotency_key: name.to_owned(),
-        driver_schema_version: open_compute_storage::D1_DATABASE_SCHEMA_VERSION,
+        driver_schema_version: open_compute_storage::d1::D1_DATABASE_SCHEMA_VERSION,
         request_id: RequestId::generate(),
         now_ms,
     })

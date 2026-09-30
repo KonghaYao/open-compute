@@ -4,7 +4,8 @@ use crate::backup_cli::{assert_runtime_quiescent, verified_snapshot};
 use crate::capabilities::platform_capabilities;
 use crate::config_load::LoadedConfig;
 use open_compute_core::{ErrorCode, PlatformError, PlatformReleaseIdentityV1};
-use open_compute_storage::{DataDir, inspect_control_db};
+use open_compute_storage::data_dir::DataDir;
+use open_compute_storage::inspect::inspect_control_db;
 use serde::{Deserialize, Serialize};
 
 /// Result of recording an operator's completed post-restore smoke rehearsal.

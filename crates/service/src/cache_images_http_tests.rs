@@ -6,9 +6,9 @@ use open_compute_core::{
     BindingKind, ImagesConfig, MetricsConfig, PlatformConfig, RequestId, ResourceId,
     ResponseCacheConfig, SecretString,
 };
-use open_compute_storage::{
-    DO_NAMESPACE_SCHEMA_VERSION, DurableObjectRepository, ReserveResourceCreate,
-    ResourceCreateReservation, ResourceRepository,
+use open_compute_storage::durable_objects::{DO_NAMESPACE_SCHEMA_VERSION, DurableObjectRepository};
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
 };
 use tower::ServiceExt as _;
 
@@ -16,7 +16,7 @@ use tower::ServiceExt as _;
 async fn composed_cache_images_authority_reports_capacity_and_collects_empty_store() {
     let (_temp, mock, state, account, storage) =
         crate::tests::initialized_worker_http_fixture().await;
-    let worker = open_compute_storage::WorkerRepository::new(storage.db())
+    let worker = open_compute_storage::worker_repository::WorkerRepository::new(storage.db())
         .create_worker(account, "cache-worker", RequestId::generate(), 1, 100)
         .unwrap()
         .0;

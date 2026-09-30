@@ -7,7 +7,7 @@ use open_compute_core::{
     BindingId, BindingKind, CanonicalBindingConfig, CanonicalPermissions, ErrorCode, InstanceId,
     PlatformError, ResourceId, VersionId, WorkerId,
 };
-use open_compute_storage::ServiceTarget;
+use open_compute_storage::services::ServiceTarget;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -479,12 +479,12 @@ pub struct WorkerCodeDescriptorV1 {
     pub created_at_ms: i64,
     /// Immutable compatibility date used to compile the tenant isolate.
     pub compatibility_date: String,
-    /// Immutable sorted compatibility flags used to compile the tenant isolate.
+    /// Immutable compatibility flags in submitted order used to compile the tenant isolate.
     pub compatibility_flags: Vec<String>,
     /// Immutable Standard resource limits materialized with the Version.
-    pub resource_limits: open_compute_storage::EffectiveResourceLimits,
+    pub resource_limits: open_compute_storage::worker_repository::EffectiveResourceLimits,
     /// Explicit version content union discriminator.
-    pub content_kind: open_compute_storage::VersionContentKind,
+    pub content_kind: open_compute_storage::worker_repository::VersionContentKind,
     /// Canonical artifact digest.
     pub artifact_sha256: Option<String>,
     /// Artifact schema.
@@ -504,7 +504,8 @@ pub struct WorkerCodeDescriptorV1 {
     /// Canonically sorted immutable Queue producer binding descriptors.
     pub queue_binding_descriptors: Vec<QueueProducerBindingDescriptorV1>,
     /// Canonically sorted immutable Workflow binding descriptors.
-    pub workflow_binding_descriptors: Vec<open_compute_storage::WorkflowBindingDescriptor>,
+    pub workflow_binding_descriptors:
+        Vec<open_compute_storage::workflows::WorkflowBindingDescriptor>,
     /// Canonically sorted dynamic Service declarations.
     pub service_descriptors: Vec<ServiceDescriptor>,
     /// Immutable automatic response-cache policy.
@@ -530,28 +531,28 @@ impl WorkerCodeDescriptorV1 {
         created_at_ms: i64,
         compatibility_date: String,
         compatibility_flags: Vec<String>,
-        resource_limits: open_compute_storage::EffectiveResourceLimits,
+        resource_limits: open_compute_storage::worker_repository::EffectiveResourceLimits,
         artifact: Option<([u8; 32], &WorkerBundleManifest)>,
         assets: Option<(&AssetManifestV1, &AssetRoutingConfigV1)>,
         canonical_vars: BTreeMap<String, serde_json::Value>,
         mut secret_revisions: Vec<SecretDescriptor>,
         mut binding_descriptors: Vec<BindingDescriptorV1>,
         mut queue_binding_descriptors: Vec<QueueProducerBindingDescriptorV1>,
-        mut workflow_binding_descriptors: Vec<open_compute_storage::WorkflowBindingDescriptor>,
+        mut workflow_binding_descriptors: Vec<
+            open_compute_storage::workflows::WorkflowBindingDescriptor,
+        >,
         mut service_descriptors: Vec<ServiceDescriptor>,
         cache_policy: CachePolicyDescriptorV1,
         mut builtin_binding_descriptors: Vec<BuiltinBindingDescriptorV1>,
         loader_schema_version: u32,
     ) -> Result<Self, PlatformError> {
-        if created_at_ms < 0
-            || !crate::supports_worker_compatibility(&compatibility_date, &compatibility_flags)
-        {
+        if created_at_ms < 0 {
             return Err(binding_invariant());
         }
         let content_kind = if artifact.is_some() {
-            open_compute_storage::VersionContentKind::Worker
+            open_compute_storage::worker_repository::VersionContentKind::Worker
         } else {
-            open_compute_storage::VersionContentKind::AssetsOnly
+            open_compute_storage::worker_repository::VersionContentKind::AssetsOnly
         };
         if artifact.is_none() && assets.is_none() {
             return Err(binding_invariant());
@@ -662,7 +663,7 @@ impl WorkerCodeDescriptorV1 {
                 ));
             }
         }
-        if content_kind == open_compute_storage::VersionContentKind::AssetsOnly
+        if content_kind == open_compute_storage::worker_repository::VersionContentKind::AssetsOnly
             && (!canonical_vars.is_empty()
                 || !secret_revisions.is_empty()
                 || !binding_descriptors.is_empty()

@@ -16,9 +16,17 @@ fn state(deployer: &str) -> HttpState {
         false,
         Some(SecretString::new("global-admin")),
     );
-    state.deployer_secret = Some(Arc::new(SecretString::new(deployer)));
-    state.read_only_secret = Some(Arc::new(SecretString::new(format!("{deployer}-read"))));
+    state.auth.deployer_secret = Some(Arc::new(SecretString::new(deployer)));
+    state.auth.read_only_secret = Some(Arc::new(SecretString::new(format!("{deployer}-read"))));
     state
+}
+
+#[test]
+fn incomplete_composition_fails_before_listener_registration() {
+    assert_eq!(
+        state("deployer").validate_composed().unwrap_err().code(),
+        ErrorCode::ConfigInvalid
+    );
 }
 
 #[test]
@@ -187,9 +195,9 @@ async fn metric_series_are_instance_labelled_and_share_one_capacity() {
     let second_id = InstanceId::generate();
     let routes = SharedRoutes::new(None, crate::metrics::REQUIRED_SERIES);
     let mut first_state = state("first");
-    first_state.metrics_enabled = true;
+    first_state.platform.metrics_enabled = true;
     let mut second_state = state("second");
-    second_state.metrics_enabled = true;
+    second_state.platform.metrics_enabled = true;
     let first = routes.insert(first_id, first_state, None).unwrap();
     let _second = routes.insert(second_id, second_state, None).unwrap();
     let router = routes.router(true, 9100);

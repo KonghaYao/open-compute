@@ -23,8 +23,11 @@ pub(crate) fn write_managed(
         upstream_socket,
         provider_socket,
     )?;
-    open_compute_storage::atomic_write(&gateway_dir.join("managed.caddyfile"), managed.as_bytes())?;
-    open_compute_storage::atomic_write(&gateway_dir.join("Caddyfile"), entrypoint.as_bytes())
+    open_compute_storage::fs::atomic_write(
+        &gateway_dir.join("managed.caddyfile"),
+        managed.as_bytes(),
+    )?;
+    open_compute_storage::fs::atomic_write(&gateway_dir.join("Caddyfile"), entrypoint.as_bytes())
 }
 
 /// Render the platform Caddyfile and the ordered import entrypoint.
@@ -239,7 +242,7 @@ mod tests {
         );
         let temp = tempfile::tempdir().unwrap();
         let gateway = temp.path().join("gateway");
-        open_compute_storage::ensure_dir_secure(&gateway).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway).unwrap();
         let (expected_managed, expected_entrypoint) = render(
             &config.shared,
             std::slice::from_ref(&config.base_domain),

@@ -3,7 +3,8 @@
 use super::*;
 use open_compute_core::QueueId;
 use open_compute_service::queue_backend::QueueEnqueueHold;
-use open_compute_storage::{QueueConfig, SchedulerStore};
+use open_compute_storage::queues::QueueConfig;
+use open_compute_storage::scheduler::SchedulerStore;
 use open_compute_workers::{CreateQueueOutcome, CreateQueueRequest, QueueController};
 
 pub(super) fn open_scheduler(storage: &PlatformStorage) -> Arc<SchedulerStore> {

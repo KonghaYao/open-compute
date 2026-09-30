@@ -87,7 +87,7 @@ pub(super) async fn cron_generation_cycle(
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
 ) {
-    let crons = open_compute_storage::CronRepository::new(storage.db());
+    let crons = open_compute_storage::cron::CronRepository::new(storage.db());
     let previous = crons.maximum_generation(worker).unwrap();
     assert!(previous > 0);
     let mut empty = create_request(account, worker, "cron-off", "C", true, false);
@@ -95,12 +95,12 @@ pub(super) async fn cron_generation_cycle(
     controller.create_version(empty).await.unwrap();
     assert!(crons.live_for_worker(worker).unwrap().is_empty());
     assert_eq!(crons.maximum_generation(worker).unwrap(), previous);
-    let restored = deploy(controller, account, worker, "cron-on", "D", true, false).await;
+    let restored = deploy(controller, account, worker, "cron-on", "D", None).await;
     let live = crons.live_for_worker(worker).unwrap();
     assert_eq!(live.len(), 3);
     assert!(live.iter().all(|activation| {
         activation.activation_generation == previous + 1
-            && activation.state == open_compute_storage::CronActivationState::Active
+            && activation.state == open_compute_storage::cron::CronActivationState::Active
     }));
     let activation = live
         .iter()

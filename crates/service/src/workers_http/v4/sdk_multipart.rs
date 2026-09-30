@@ -1,4 +1,4 @@
-//! Exact multipart normalization for the pinned `cloudflare@7.1.0` SDK.
+//! Exact multipart normalization for the pinned `cloudflare@7.2.0` SDK.
 
 use super::model::WorkerUploadBinding;
 use super::multipart::{

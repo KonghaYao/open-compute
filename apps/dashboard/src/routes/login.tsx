@@ -6,8 +6,8 @@ import {
   IconWorld,
 } from "@tabler/icons-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { APIError } from "cloudflare/error";
 import { useEffect, useState } from "react";
+import { APIError } from "@open-compute/sdk";
 import { BrandLogo } from "../components/brand-logo";
 import { CompatibilityMarquee } from "../components/compatibility-marquee";
 import { openAlert } from "../components/dialog-manager";
@@ -16,7 +16,7 @@ import {
   mintSessionFromAdmin,
   writeAuthSession,
 } from "../features/auth/auth-session";
-import { createManagementClient } from "../lib/cloudflare";
+import { createManagementClient } from "../lib/management-client";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,

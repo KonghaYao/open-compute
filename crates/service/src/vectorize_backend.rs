@@ -8,9 +8,11 @@ use open_compute_core::{BindingId, BindingKind, ErrorCode, PlatformError, Resour
 use open_compute_search::{
     ExactCandidate, ExactTopK, MAX_TOP_K, MAX_TOP_K_WITH_VALUES, compile_filter, validate_metadata,
 };
-use open_compute_storage::{
-    AuthorizedBinding, BindingRepository, PlatformStorage, VectorMutationInput, VectorMutationKind,
-    VectorRecord, VectorizeEngine, VectorizeIndexRepository, VectorizePaths,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::bindings::{AuthorizedBinding, BindingRepository};
+use open_compute_storage::vectorize::{
+    VectorMutationInput, VectorMutationKind, VectorRecord, VectorizeEngine,
+    VectorizeIndexRepository, VectorizePaths,
 };
 use open_compute_workers::{ResourcePin, ResourcePins};
 use serde::{Deserialize, Serialize};

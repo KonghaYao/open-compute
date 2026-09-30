@@ -1,7 +1,6 @@
 # P11：`ocd` 安装、实例与本机运维
 
-状态：**implemented / Implementation GO（2026-09-08）**。正式 Release 和真实 OS service 资格见
-[P11 验收](../acceptance/p11-operator-experience-acceptance.md)。
+状态：**implemented / Implementation GO（2026-09-08）**。
 
 ## 用户结果
 
@@ -22,5 +21,4 @@ Worker 项目与 Wrangler target workflow 属于 [P12](p12-wrangler-project-work
 update-check 和 uninstall 均通过。Coverage 为 90.0047%；最终 workspace Gate 为 49 targets，报告位于
 `.temp/gate-run/20260908T042240-09ec8be2/report.json`。
 
-尚未验证三个正式目标的 Release 安装、真实 systemd／launchd、全新主机 daemon readiness 和双真实实例并行。
 Windows service、自动后台更新和跨机器 registry 是非目标。

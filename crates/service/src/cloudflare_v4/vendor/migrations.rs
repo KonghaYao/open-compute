@@ -2,7 +2,7 @@
 
 use super::*;
 use axum::routing::get;
-use open_compute_storage::{D1Migration, D1MigrationRecord};
+use open_compute_storage::d1::{D1Migration, D1MigrationRecord};
 use serde::{Deserialize, Serialize};
 
 pub(super) fn router() -> Router<HttpState> {

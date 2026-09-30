@@ -10,7 +10,7 @@ fn queue_producer_persists_v8_content_type() {
         instance_id: store.instance_id(),
         lifecycle_generation: 1,
         config_generation: 1,
-        config: crate::QueueConfig::default(),
+        config: crate::queues::QueueConfig::default(),
         created_at_ms: 1,
         updated_at_ms: 1,
     };

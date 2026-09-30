@@ -17,8 +17,9 @@ use axum::extract::{Path, Request, State};
 use axum::response::Response;
 use axum::routing::{get, post};
 use open_compute_core::{InstanceId, ResourceState, WorkflowId};
+use open_compute_storage::catalog_page::{CatalogDirection, CatalogSort};
 use open_compute_storage::scheduler::WorkflowState;
-use open_compute_storage::{CatalogDirection, CatalogSort, WorkflowDefinition, WorkflowRepository};
+use open_compute_storage::workflows::{WorkflowDefinition, WorkflowRepository};
 use serde::Serialize;
 use std::sync::Arc;
 

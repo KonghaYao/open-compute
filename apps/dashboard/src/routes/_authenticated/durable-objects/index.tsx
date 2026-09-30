@@ -14,6 +14,7 @@ import {
   ResourceRow,
 } from "../../../components/dashboard-page";
 import { useAuth } from "../../../features/auth/auth-atoms";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/durable-objects/")({
   component: DurableObjectsPage,
@@ -23,7 +24,7 @@ function DurableObjectsPage() {
   const { client, instanceId: selectedInstanceId } = useAuth();
   const [filter, setFilter] = useState("");
   const namespaces = useQuery({
-    queryKey: ["durable-objects", selectedInstanceId],
+    queryKey: queryKeys.durableObjects(selectedInstanceId),
     queryFn: ({ signal }) =>
       client!.openCompute.durableObjects.list(selectedInstanceId!, {
         signal,

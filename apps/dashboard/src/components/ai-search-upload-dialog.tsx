@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 
 const maxFiles = 100;
 const maxFileBytes = 4 * 1024 * 1024;
@@ -172,13 +173,12 @@ export function AISearchUploadDialog({
       setError(failure instanceof Error ? failure.message : "Upload failed."),
     onSettled: async () => {
       await queryClient.invalidateQueries({
-        queryKey: [
-          "ai-search",
+        queryKey: queryKeys.aiSearch(
           selectedInstanceId,
           namespaceName,
           instanceId,
           "items",
-        ],
+        ),
       });
     },
   });

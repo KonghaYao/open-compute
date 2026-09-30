@@ -1,7 +1,7 @@
 //! Durable sequential Workflow runs and immutable step history.
 
 use super::SchedulerStore;
-use crate::{WorkflowInstanceIdentity, WorkflowTarget};
+use crate::workflows::{WorkflowInstanceIdentity, WorkflowTarget};
 use open_compute_core::{
     ErrorCode, PlatformError, WorkflowFence, WorkflowInstanceId, WorkflowOperationId,
     WorkflowToken, WorkflowsConfig,

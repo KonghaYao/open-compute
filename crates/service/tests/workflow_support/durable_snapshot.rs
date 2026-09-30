@@ -4,7 +4,7 @@ use super::*;
 use open_compute_core::workflow::{WorkflowRetention, WorkflowStepDeclaration, WorkflowStepKind};
 use open_compute_core::{VersionId, WorkflowOperationId};
 use open_compute_storage::scheduler::{WorkflowInstanceAction, WorkflowState};
-use open_compute_storage::{
+use open_compute_storage::workflows::{
     WorkflowInstanceIdentity, WorkflowOperationKind, WorkflowOperationResult,
 };
 

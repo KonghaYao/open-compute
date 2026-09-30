@@ -4,7 +4,7 @@ use crate::instance_registry::{InstanceRegistry, ServiceScope};
 use open_compute_core::{
     ErrorCode, InstanceId, PlatformError, SecretString, TargetApiBaseUrl, TargetName,
 };
-use open_compute_storage::atomic_write;
+use open_compute_storage::fs::atomic_write;
 use rustix::fs::{FlockOperation, Mode, OFlags, flock};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};

@@ -3,11 +3,15 @@ use open_compute_core::{
     AiEmbeddingMetric, AiTokenizer, BindingKind, RequestId, ResolvedEmbeddingModelContract,
     ResourceId,
 };
-use open_compute_storage::{
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::ai_search::{
     AI_SEARCH_NAMESPACE_SCHEMA_VERSION, AI_SEARCH_SCHEMA_VERSION, AiSearchCatalog,
     AiSearchInstanceStorageContract, AiSearchPaths, AiSearchStore, NewAiSearchItemGeneration,
-    PlatformStorage, StagedAiSearchChunk, VECTORIZE_SCHEMA_VERSION, VectorMutationInput,
-    VectorMutationKind, VectorizeEngine, VectorizeIndexRepository, VectorizePaths,
+    StagedAiSearchChunk,
+};
+use open_compute_storage::vectorize::{
+    VECTORIZE_SCHEMA_VERSION, VectorMutationInput, VectorMutationKind, VectorizeEngine,
+    VectorizeIndexRepository, VectorizePaths,
 };
 use open_compute_workers::{
     AiSearchInstanceResourceDriver, AiSearchInstanceSpec, AiSearchNamespaceResourceDriver,
@@ -230,7 +234,7 @@ pub(super) fn assert_restored(storage: &PlatformStorage, fixture: &P5SnapshotFix
         .expect("restored AI Search paths")
         .resolve_storage_key(&record.storage_key, account, fixture.ai_search_id)
         .expect("restored AI Search path");
-    let authority = open_compute_storage::inspect_ai_search_instance(
+    let authority = open_compute_storage::ai_search::inspect_ai_search_instance(
         &path,
         &fixture.ai_search_id.to_string(),
         record.model_contract_sha256,

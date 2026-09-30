@@ -28,17 +28,6 @@ import {
   type WorkerProject,
   type WorkerService,
 } from "../project.ts";
-import {
-  loadFormalRuntimeLock,
-  type FormalRuntimeLock,
-} from "../runtime-lock.ts";
-
-const CURRENT_DEFAULT_FLAGS = new Set([
-  "nodejs_compat",
-  "nodejs_compat_v2",
-  "rpc",
-  "enable_ctx_exports",
-]);
 
 const MAX_CONFIG_BYTES = 256 * 1024;
 const MAX_MODULES = 128;
@@ -122,43 +111,18 @@ export interface FrameworkOutput {
   readonly limits: EffectiveResourceLimits;
 }
 
-function assertImportedCompatibility(
-  date: unknown,
-  flags: unknown,
-  lock: FormalRuntimeLock,
-): void {
-  if (date !== lock.effectiveCompatibilityDate) {
-    throw new Error(
-      "generated framework compatibility date does not match the pinned runtime lock",
-    );
-  }
+function assertImportedCompatibility(date: unknown, flags: unknown): void {
+  if (typeof date !== "string" || date.length > 32)
+    throw new Error("generated framework compatibility date is invalid");
   const generated = flags === undefined ? [] : flags;
   if (
     !Array.isArray(generated) ||
-    !generated.every((item): item is string => typeof item === "string")
+    generated.length > 64 ||
+    !generated.every(
+      (item): item is string => typeof item === "string" && item.length <= 128,
+    )
   ) {
     throw new Error("generated framework compatibility flags are invalid");
-  }
-  const seen = new Set<string>();
-  for (const flag of generated) {
-    if (seen.has(flag))
-      throw new Error("generated framework compatibility flags are duplicated");
-    seen.add(flag);
-    if (
-      flag.startsWith("no_") ||
-      flag === "experimental" ||
-      lock.systemCompatibilityFlags.includes(flag)
-    ) {
-      throw new Error(
-        "generated framework compatibility flag is not part of the pinned baseline",
-      );
-    }
-    if (CURRENT_DEFAULT_FLAGS.has(flag)) continue;
-    if (!lock.requiredCompatibilityFlags.includes(flag)) {
-      throw new Error(
-        "generated framework compatibility flag is not part of the pinned baseline",
-      );
-    }
   }
 }
 
@@ -927,7 +891,6 @@ export async function importFrameworkOutput(
   assertImportedCompatibility(
     config.compatibility_date,
     config.compatibility_flags,
-    await loadFormalRuntimeLock(),
   );
   const generatedLimits = effectiveResourceLimits(config.limits);
   if (

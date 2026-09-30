@@ -8,7 +8,9 @@ use axum::extract::{Path, Request, State};
 use axum::response::Response;
 use axum::routing::get;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError};
-use open_compute_storage::{RouteRecord, WorkerOriginExposure, WorkerOwnership, WorkerRepository};
+use open_compute_storage::worker_repository::{
+    RouteRecord, WorkerOriginExposure, WorkerOwnership, WorkerRepository,
+};
 use serde::{Deserialize, Serialize};
 
 pub(super) fn router() -> Router<HttpState> {

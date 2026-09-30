@@ -12,7 +12,7 @@ use std::fmt::{Debug, Formatter};
 use std::path::Path;
 use url::Url;
 
-const SCHEMA_VERSION: u32 = 3;
+const SCHEMA_VERSION: u32 = 4;
 const TOKEN_PLACEHOLDER: &str = "__OPEN_COMPUTE_INTERNAL_TOKEN__";
 
 /// Pinned workerd release lock.
@@ -31,15 +31,18 @@ pub struct RuntimeLock {
     /// Exact `workerd --version` stdout, trimmed.
     #[serde(rename = "expectedVersionOutput")]
     pub expected_version_output: String,
-    /// Internal tenant compatibility date mixed into every isolate.
-    #[serde(rename = "effectiveCompatibilityDate")]
-    pub effective_compatibility_date: String,
-    /// Platform-internal flags required to enable the pinned tenant surface.
-    #[serde(rename = "requiredCompatibilityFlags")]
-    pub required_compatibility_flags: Vec<String>,
+    /// Compatibility date used only by platform-owned system Workers.
+    #[serde(rename = "systemCompatibilityDate")]
+    pub system_compatibility_date: String,
     /// System-Worker-only flags. Never tenant configuration or capabilities.
     #[serde(rename = "systemCompatibilityFlags")]
     pub system_compatibility_flags: Vec<String>,
+    /// Maximum compatibility date compiled into this exact binary.
+    #[serde(rename = "binaryMaximumCompatibilityDate")]
+    pub binary_maximum_compatibility_date: String,
+    /// Deterministic compatibility catalog identity emitted by this exact binary.
+    #[serde(rename = "compatibilityCatalog")]
+    pub compatibility_catalog: CompatibilityCatalogPin,
     /// Required process flags, each starting with `--`.
     #[serde(rename = "processFlags")]
     pub process_flags: Vec<String>,
@@ -66,6 +69,16 @@ pub struct RuntimeSourcePin {
     pub upstream_base: String,
     /// Explicit compiler, SDK, container, Bazel, and build-option identities.
     pub build_inputs: BTreeMap<String, String>,
+}
+
+/// Immutable compatibility catalog identity.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CompatibilityCatalogPin {
+    /// Catalog JSON schema version.
+    pub schema_version: u32,
+    /// SHA-256 of the exact deterministic catalog bytes.
+    pub sha256: String,
 }
 
 /// Immutable `@cloudflare/workers-types` pin.
@@ -126,9 +139,9 @@ pub struct RuntimeTarget {
     /// Archive file name.
     #[serde(rename = "archiveName")]
     pub archive_name: String,
-    /// Published fork archive URL, absent until publication. Local builds use an explicit archive.
+    /// Published fork archive URL.
     #[serde(rename = "archiveUrl")]
-    pub archive_url: Option<String>,
+    pub archive_url: String,
     /// SHA-256 of the compressed archive.
     #[serde(rename = "archiveSha256")]
     pub archive_sha256: String,
@@ -190,7 +203,15 @@ impl RuntimeLock {
         require_git_sha(&self.revision)?;
         self.source.validate()?;
         require_nonempty(&self.expected_version_output, "expectedVersionOutput")?;
-        require_compat_date(&self.effective_compatibility_date)?;
+        require_compat_date(&self.system_compatibility_date)?;
+        require_compat_date(&self.binary_maximum_compatibility_date)?;
+        if self.compatibility_catalog.schema_version != 1 {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "unsupported compatibility catalog schema version",
+            ));
+        }
+        parse_sha256_hex(&self.compatibility_catalog.sha256)?;
         if self.process_flags.is_empty() {
             return Err(PlatformError::new(
                 ErrorCode::RuntimeInvalid,
@@ -216,14 +237,7 @@ impl RuntimeLock {
             }
         }
         self.pyodide_bundle.validate()?;
-        let required = require_compat_flags(&self.required_compatibility_flags)?;
-        let system = require_compat_flags(&self.system_compatibility_flags)?;
-        if !required.is_disjoint(&system) {
-            return Err(PlatformError::new(
-                ErrorCode::RuntimeInvalid,
-                "required and system compatibility flags must be disjoint",
-            ));
-        }
+        require_compat_flags(&self.system_compatibility_flags)?;
         self.workers_types.validate()?;
         self.workers_sdk.validate()?;
         if self.targets.is_empty() {
@@ -302,44 +316,42 @@ impl RuntimeTarget {
                 "archive name must be a file name",
             ));
         }
-        if let Some(archive_url) = &self.archive_url {
-            let url = Url::parse(archive_url).map_err(|_| {
-                PlatformError::new(ErrorCode::RuntimeInvalid, "archive URL is malformed")
-            })?;
-            if url.scheme() != "https" {
-                return Err(PlatformError::new(
-                    ErrorCode::RuntimeInvalid,
-                    "archive URL must be https",
-                ));
-            }
-            if url.username() != "" || url.password().is_some() {
-                return Err(PlatformError::new(
-                    ErrorCode::RuntimeInvalid,
-                    "archive URL must not contain credentials",
-                ));
-            }
-            if url.host_str() != Some("github.com") {
-                return Err(PlatformError::new(
-                    ErrorCode::RuntimeInvalid,
-                    "archive URL must be the pinned GitHub release host",
-                ));
-            }
-            if url.query().is_some() || url.fragment().is_some() {
-                return Err(PlatformError::new(
-                    ErrorCode::RuntimeInvalid,
-                    "archive URL must not contain a query or fragment",
-                ));
-            }
-            let expected_url = format!(
-                "{repository}/releases/download/{release}/{}",
-                self.archive_name
-            );
-            if archive_url != &expected_url {
-                return Err(PlatformError::new(
-                    ErrorCode::RuntimeInvalid,
-                    "archive URL path must match the release and archive name",
-                ));
-            }
+        let url = Url::parse(&self.archive_url).map_err(|_| {
+            PlatformError::new(ErrorCode::RuntimeInvalid, "archive URL is malformed")
+        })?;
+        if url.scheme() != "https" {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "archive URL must be https",
+            ));
+        }
+        if url.username() != "" || url.password().is_some() {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "archive URL must not contain credentials",
+            ));
+        }
+        if url.host_str() != Some("github.com") {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "archive URL must be the pinned GitHub release host",
+            ));
+        }
+        if url.query().is_some() || url.fragment().is_some() {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "archive URL must not contain a query or fragment",
+            ));
+        }
+        let expected_url = format!(
+            "{repository}/releases/download/{release}/{}",
+            self.archive_name
+        );
+        if self.archive_url != expected_url {
+            return Err(PlatformError::new(
+                ErrorCode::RuntimeInvalid,
+                "archive URL path must match the release and archive name",
+            ));
         }
         let expected_archive = match target_name {
             "darwin-arm64" => "workerd-darwin-arm64.gz",
@@ -379,14 +391,7 @@ impl RuntimeSourcePin {
             ));
         }
         require_git_sha(&self.upstream_base)?;
-        for name in [
-            "bazel",
-            "target",
-            "mode",
-            "ioBackend",
-            "strip",
-            "macosExecRustStrip",
-        ] {
+        for name in ["bazel", "target", "mode", "strip", "macosExecRustStrip"] {
             let value = self.build_inputs.get(name).ok_or_else(|| {
                 PlatformError::new(
                     ErrorCode::RuntimeInvalid,
@@ -397,13 +402,12 @@ impl RuntimeSourcePin {
         }
         if self.build_inputs["target"] != "//src/workerd/server:workerd"
             || self.build_inputs["mode"] != "opt"
-            || self.build_inputs["ioBackend"] != "cxx"
             || self.build_inputs["strip"] != "always"
             || self.build_inputs["macosExecRustStrip"] != "none"
         {
             return Err(PlatformError::new(
                 ErrorCode::RuntimeInvalid,
-                "workerd pin must describe the optimized C++ I/O server build",
+                "workerd pin must describe the optimized server build",
             ));
         }
         if self.build_inputs.len() > 64

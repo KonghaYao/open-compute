@@ -12,7 +12,7 @@ async fn version_products_validate_ready_queue_dlq_entrypoint_counts_and_crons()
     let (worker, _) = workers
         .create_worker(account, "products", RequestId::generate(), 1, 1_000_000)
         .unwrap();
-    let queues = open_compute_storage::QueueRepository::new(storage.db());
+    let queues = open_compute_storage::queues::QueueRepository::new(storage.db());
     let source = open_compute_core::QueueId::generate();
     let dlq = open_compute_core::QueueId::generate();
     let pending = open_compute_core::QueueId::generate();
@@ -26,7 +26,7 @@ async fn version_products_validate_ready_queue_dlq_entrypoint_counts_and_crons()
                 account,
                 id,
                 name,
-                open_compute_storage::QueueConfig::default(),
+                open_compute_storage::queues::QueueConfig::default(),
                 2,
             )
             .unwrap();
@@ -46,9 +46,9 @@ async fn version_products_validate_ready_queue_dlq_entrypoint_counts_and_crons()
     let consumer = QueueConsumerInput {
         queue: source,
         entrypoint: Some("Named_$1".to_owned()),
-        config: open_compute_storage::QueueConsumerConfig {
+        config: open_compute_storage::queue_consumers::QueueConsumerConfig {
             max_concurrency: 2,
-            ..open_compute_storage::QueueConsumerConfig::default()
+            ..open_compute_storage::queue_consumers::QueueConsumerConfig::default()
         },
         dead_letter_queue: Some(dlq),
     };
@@ -60,13 +60,14 @@ async fn version_products_validate_ready_queue_dlq_entrypoint_counts_and_crons()
         CreateVersionOutcome::Applied(result) => result.version,
         CreateVersionOutcome::Replay(_) => panic!("product version replayed"),
     };
-    let declarations = open_compute_storage::QueueConsumerRepository::new(storage.db())
-        .version_declarations(version.id)
-        .unwrap();
+    let declarations =
+        open_compute_storage::queue_consumers::QueueConsumerRepository::new(storage.db())
+            .version_declarations(version.id)
+            .unwrap();
     assert_eq!(declarations.len(), 1);
     assert_eq!(declarations[0].dlq_queue_id, Some(dlq));
     assert_eq!(declarations[0].dlq_lifecycle_generation, Some(1));
-    let cron = open_compute_storage::CronRepository::new(storage.db())
+    let cron = open_compute_storage::cron::CronRepository::new(storage.db())
         .version_config(version.id)
         .unwrap();
     assert_eq!(cron.declarations.len(), 1);
@@ -114,7 +115,7 @@ async fn version_products_validate_ready_queue_dlq_entrypoint_counts_and_crons()
     let mut invalid_config = version_request(account, worker.id, "products-config", "secret");
     invalid_config.deployment_source = None;
     invalid_config.queue_consumers = vec![QueueConsumerInput {
-        config: open_compute_storage::QueueConsumerConfig {
+        config: open_compute_storage::queue_consumers::QueueConsumerConfig {
             max_concurrency: 3,
             ..consumer.config
         },

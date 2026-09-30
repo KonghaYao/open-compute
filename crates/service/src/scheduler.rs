@@ -31,10 +31,11 @@ use open_compute_core::{
     PlatformError, QueueConsumerId, QueueId, ReadinessReason, ResourceId, SchedulerClock,
     SchedulerConfig, SchedulerKind, SchedulerPoolState, VersionId, WorkerId,
 };
-use open_compute_storage::{
-    CronActivationState, DurableObjectRecord, PlatformStorage, QueueConsumerState, SchedulerStore,
-    SchedulerSummary,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::cron::CronActivationState;
+use open_compute_storage::durable_objects::DurableObjectRecord;
+use open_compute_storage::queue_consumers::QueueConsumerState;
+use open_compute_storage::scheduler::{SchedulerStore, SchedulerSummary};
 use serde::Serialize;
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, AtomicUsize, Ordering};
@@ -355,6 +356,7 @@ impl SchedulerService {
     }
 
     /// Pause one registered fixed workload without affecting other pools.
+    #[cfg(any(test, feature = "test-support"))]
     pub fn pause_kind(&self, kind: SchedulerKind) -> Result<(), PlatformError> {
         self.ensure_kind_enabled(kind)?;
         match kind {
@@ -380,6 +382,7 @@ impl SchedulerService {
     }
 
     /// Resume one registered fixed workload.
+    #[cfg(any(test, feature = "test-support"))]
     pub fn resume_kind(&self, kind: SchedulerKind) -> Result<(), PlatformError> {
         self.ensure_kind_enabled(kind)?;
         match kind {

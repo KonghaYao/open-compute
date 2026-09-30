@@ -1,7 +1,7 @@
 //! Immutable Cron declarations and live activation authority.
 
-use crate::ControlDb;
-use crate::workers::require_instance;
+use crate::control_db::ControlDb;
+use crate::worker_repository::require_instance;
 use open_compute_core::{
     CronActivationId, ErrorCode, InstanceId, PlatformError, VersionId, WorkerId,
 };

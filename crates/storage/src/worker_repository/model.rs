@@ -1,0 +1,714 @@
+use super::*;
+
+pub use super::version_create::NewVersionProducts;
+
+/// Current immutable loader descriptor schema.
+pub const LOADER_SCHEMA_VERSION: i64 = 1;
+
+/// Stable system Worker name for the operator dashboard.
+pub const SYSTEM_DASHBOARD_WORKER_NAME: &str = "open-compute-dashboard";
+
+/// Worker ownership boundary between tenant-managed and platform-owned Workers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerOwnership {
+    /// Tenant-managed Worker visible through the control API.
+    Tenant,
+    /// Platform-owned Worker excluded from tenant catalog and mutation APIs.
+    System,
+}
+
+/// Crash-recoverable authority for an admitted force deletion.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkerDeleteIntent {
+    /// Worker being deleted.
+    pub worker_id: WorkerId,
+    /// Original management request identifier.
+    pub request_id: RequestId,
+}
+
+impl WorkerOwnership {
+    /// Stable database token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Tenant => "tenant",
+            Self::System => "system",
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> Result<Self, PlatformError> {
+        match value {
+            "tenant" => Ok(Self::Tenant),
+            "system" => Ok(Self::System),
+            _ => Err(invariant()),
+        }
+    }
+}
+
+/// Persisted Worker lifecycle row.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkerRecord {
+    /// Opaque Worker identity.
+    pub id: WorkerId,
+    /// Owning instance.
+    pub instance_id: InstanceId,
+    /// Lowercase display slug.
+    pub name: String,
+    /// Current immutable traffic-assignment identity.
+    pub active_deployment_id: Option<DeploymentId>,
+    /// Version selected by the current Deployment, derived at read time.
+    pub active_version_id: Option<VersionId>,
+    /// Stable future Durable Object storage identity.
+    pub do_storage_id: String,
+    /// Route/promotion generation.
+    pub route_generation: u64,
+    /// Creation timestamp.
+    pub created_at_ms: i64,
+    /// Last mutation timestamp.
+    pub updated_at_ms: i64,
+    /// Tombstone timestamp.
+    pub deleted_at_ms: Option<i64>,
+    /// Tenant or platform ownership boundary.
+    pub ownership: WorkerOwnership,
+}
+
+/// Secret-free deployment runtime-assessment aggregate.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct DeploymentRuntimeAssessmentSummary {
+    /// Deployments admitted by a real runtime generation.
+    pub dispatchable: u64,
+    /// Deployments permanently excluded from activation.
+    pub quarantined: u64,
+    /// Whether every active pointer references a dispatchable assessment.
+    pub active_runtime_dispatchable: bool,
+    /// Most recent stable quarantine reason, if any.
+    pub last_quarantine_reason: Option<String>,
+}
+
+/// Mutable Script-level Workers Logs policy frozen into each runtime snapshot.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkerObservabilitySettings {
+    /// Monotonic Script setting generation.
+    pub generation: u64,
+    /// Master observability persistence switch.
+    pub enabled: bool,
+    /// Optional top-level head sampling rate.
+    pub head_sampling_rate: Option<f64>,
+    /// Workers Logs collection switch.
+    pub logs_enabled: bool,
+    /// Optional logs-specific head sampling rate.
+    pub logs_head_sampling_rate: Option<f64>,
+    /// Whether invocation summary events are persisted.
+    pub invocation_logs: bool,
+    /// Whether sampled events are persisted locally.
+    pub persist: bool,
+    /// Last settings mutation time.
+    pub updated_at_ms: i64,
+}
+
+impl WorkerObservabilitySettings {
+    /// Effective deterministic head sampling rate.
+    #[must_use]
+    pub fn effective_head_sampling_rate(&self) -> f64 {
+        self.logs_head_sampling_rate
+            .or(self.head_sampling_rate)
+            .unwrap_or(1.0)
+    }
+}
+
+/// Complete replacement value for one Script observability policy.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UpdateWorkerObservabilitySettings {
+    /// Master observability persistence switch.
+    pub enabled: bool,
+    /// Optional top-level head sampling rate.
+    pub head_sampling_rate: Option<f64>,
+    /// Workers Logs collection switch.
+    pub logs_enabled: bool,
+    /// Optional logs-specific head sampling rate.
+    pub logs_head_sampling_rate: Option<f64>,
+    /// Whether invocation summary events are persisted.
+    pub invocation_logs: bool,
+    /// Whether sampled events are persisted locally.
+    pub persist: bool,
+}
+
+/// Fields explicitly supplied by a Script upload for its final publish transaction.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkerObservabilityPatch {
+    /// Optional master observability persistence switch.
+    pub enabled: Option<bool>,
+    /// Optional top-level head sampling rate.
+    pub head_sampling_rate: Option<f64>,
+    /// Optional Workers Logs collection switch.
+    pub logs_enabled: Option<bool>,
+    /// Optional logs-specific head sampling rate.
+    pub logs_head_sampling_rate: Option<f64>,
+    /// Optional invocation-summary persistence switch.
+    pub invocation_logs: Option<bool>,
+    /// Optional sampled-event persistence switch.
+    pub persist: Option<bool>,
+}
+
+/// Content-free management audit for Workers Logs and realtime tail operations.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ObservabilityAudit {
+    /// One process-local Script Tail was created.
+    TailCreate {
+        /// Script authority.
+        worker_id: WorkerId,
+    },
+    /// One process-local Script Tail was deleted or revoked.
+    TailDelete {
+        /// Script authority.
+        worker_id: WorkerId,
+    },
+    /// One bounded telemetry query completed.
+    Query {
+        /// `events` or `invocations`.
+        view: String,
+        /// Inclusive query start in Unix milliseconds.
+        from_ms: i64,
+        /// Exclusive query end in Unix milliseconds.
+        to_ms: i64,
+        /// Public result count.
+        result_count: usize,
+        /// Normalized filter keys only; values are deliberately absent.
+        filter_keys: Vec<String>,
+    },
+}
+
+/// Immutable single-Version traffic assignment.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeploymentRecord {
+    /// Opaque Deployment identity.
+    pub id: DeploymentId,
+    /// Parent Script/Worker.
+    pub worker_id: WorkerId,
+    /// Ready immutable Version receiving 100 percent of traffic.
+    pub version_id: VersionId,
+    /// Stable creation source.
+    pub source: DeploymentSource,
+    /// Closed Cloudflare deployment annotations.
+    pub annotations: BTreeMap<String, String>,
+    /// Creation time.
+    pub created_at_ms: i64,
+    /// Tombstone time for a non-current Deployment.
+    pub deleted_at_ms: Option<i64>,
+}
+
+/// Stable reason a Deployment was created.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeploymentSource {
+    /// Script upload combined Version creation and activation.
+    ScriptUpload,
+    /// Explicit Versions/Deployments API activation.
+    VersionsApi,
+    /// Explicit rollback to a historical Version.
+    Rollback,
+    /// Platform-owned system Worker activation.
+    System,
+}
+
+impl DeploymentSource {
+    /// Stable database token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ScriptUpload => "script_upload",
+            Self::VersionsApi => "versions_api",
+            Self::Rollback => "rollback",
+            Self::System => "system",
+        }
+    }
+
+    pub(super) fn parse(value: &str) -> Result<Self, PlatformError> {
+        match value {
+            "script_upload" => Ok(Self::ScriptUpload),
+            "versions_api" => Ok(Self::VersionsApi),
+            "rollback" => Ok(Self::Rollback),
+            "system" => Ok(Self::System),
+            _ => Err(invariant()),
+        }
+    }
+}
+
+/// System-owned version slot tracked outside tenant Worker catalog.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SystemOwnedVersionKind {
+    /// Release-owned operator dashboard assets version.
+    Dashboard,
+}
+
+impl SystemOwnedVersionKind {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Dashboard => "dashboard",
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> Result<Self, PlatformError> {
+        match value {
+            "dashboard" => Ok(Self::Dashboard),
+            _ => Err(invariant()),
+        }
+    }
+}
+
+/// Persisted system-owned version pin.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SystemOwnedVersionRecord {
+    /// Version slot identity.
+    pub kind: SystemOwnedVersionKind,
+    /// Reserved system Worker identity.
+    pub worker_id: WorkerId,
+    /// Current active immutable version, when installed.
+    pub active_version_id: Option<VersionId>,
+    /// Embedded dashboard asset tree digest pinned by this slot.
+    pub assets_sha256: [u8; 32],
+    /// Last pin update timestamp.
+    pub updated_at_ms: i64,
+}
+
+/// Version lifecycle state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VersionState {
+    /// Metadata and env are being inserted.
+    Staging,
+    /// Real workerd validation is in progress.
+    Validating,
+    /// Immutable version may be dispatched or promoted.
+    Ready,
+    /// Validation deterministically failed.
+    Rejected,
+    /// New pins are fenced while references drain.
+    Deleting,
+    /// Metadata is no longer dispatchable.
+    Tombstoned,
+}
+
+/// Executable or static-only content carried by an immutable version.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VersionContentKind {
+    /// Tenant Worker code, with optional static assets.
+    Worker,
+    /// Static assets without a fabricated tenant Worker.
+    AssetsOnly,
+}
+
+impl VersionContentKind {
+    /// Stable current-schema token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Worker => "worker",
+            Self::AssetsOnly => "assets_only",
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> Result<Self, PlatformError> {
+        match value {
+            "worker" => Ok(Self::Worker),
+            "assets_only" => Ok(Self::AssetsOnly),
+            _ => Err(invariant()),
+        }
+    }
+}
+
+impl VersionState {
+    /// Stable database token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Staging => "staging",
+            Self::Validating => "validating",
+            Self::Ready => "ready",
+            Self::Rejected => "rejected",
+            Self::Deleting => "deleting",
+            Self::Tombstoned => "tombstoned",
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> Result<Self, PlatformError> {
+        match value {
+            "staging" => Ok(Self::Staging),
+            "validating" => Ok(Self::Validating),
+            "ready" => Ok(Self::Ready),
+            "rejected" => Ok(Self::Rejected),
+            "deleting" => Ok(Self::Deleting),
+            "tombstoned" => Ok(Self::Tombstoned),
+            _ => Err(invariant()),
+        }
+    }
+}
+
+/// Standard resource limits enforced natively by the pinned runtime for one immutable
+/// Version. Values are materialized at Version creation (Standard defaults when the upload
+/// omitted a dimension) and are the single authority for the runtime, loader, and workerd
+/// enforcers; no later stage re-applies defaults.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectiveResourceLimits {
+    /// Invocation CPU budget in milliseconds.
+    pub cpu_ms: u32,
+    /// Invocation subrequest budget.
+    pub sub_requests: u32,
+}
+
+impl EffectiveResourceLimits {
+    /// Standard default invocation CPU budget.
+    pub const STANDARD_DEFAULT_CPU_MS: u32 = 30_000;
+    /// Standard configurability ceiling for the invocation CPU budget.
+    pub const STANDARD_MAX_CPU_MS: u32 = 300_000;
+    /// Standard default invocation subrequest budget.
+    pub const STANDARD_DEFAULT_SUBREQUESTS: u32 = 10_000;
+    /// Standard configurability ceiling for the subrequest budget.
+    pub const STANDARD_MAX_SUBREQUESTS: u32 = 10_000_000;
+
+    /// Standard profile defaults, materialized at Version creation.
+    #[must_use]
+    pub fn standard_defaults() -> Self {
+        Self {
+            cpu_ms: Self::STANDARD_DEFAULT_CPU_MS,
+            sub_requests: Self::STANDARD_DEFAULT_SUBREQUESTS,
+        }
+    }
+
+    /// Builds the limits and validates the Standard configurability ceilings.
+    pub fn new(cpu_ms: u32, sub_requests: u32) -> Result<Self, PlatformError> {
+        if cpu_ms == 0 || cpu_ms > Self::STANDARD_MAX_CPU_MS {
+            return Err(limits_invalid());
+        }
+        if sub_requests == 0 || sub_requests > Self::STANDARD_MAX_SUBREQUESTS {
+            return Err(limits_invalid());
+        }
+        Ok(Self {
+            cpu_ms,
+            sub_requests,
+        })
+    }
+
+    /// Materializes the upload-time limits: declared values are validated, omitted
+    /// dimensions take the Standard defaults.
+    pub fn materialize(
+        cpu_ms: Option<u32>,
+        sub_requests: Option<u32>,
+    ) -> Result<Self, PlatformError> {
+        Self::new(
+            cpu_ms.unwrap_or(Self::STANDARD_DEFAULT_CPU_MS),
+            sub_requests.unwrap_or(Self::STANDARD_DEFAULT_SUBREQUESTS),
+        )
+    }
+
+    /// Canonical JSON bytes stored in the version row; unknown shapes fail closed on read.
+    pub fn to_stored_json(&self) -> Vec<u8> {
+        serde_json::to_vec(self).unwrap_or_default()
+    }
+
+    /// Strictly decodes the stored canonical bytes. Anything but the exact canonical encoding
+    /// of in-range values is corrupt state.
+    pub fn from_stored_json(bytes: &[u8]) -> Result<Self, PlatformError> {
+        let value: serde_json::Value =
+            serde_json::from_slice(bytes).map_err(|_| limits_invalid())?;
+        let map = value.as_object().ok_or_else(limits_invalid)?;
+        if map.len() != 2 {
+            return Err(limits_invalid());
+        }
+        let cpu_ms = map
+            .get("cpuMs")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(limits_invalid)?;
+        let sub_requests = map
+            .get("subRequests")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(limits_invalid)?;
+        let cpu_ms = u32::try_from(cpu_ms).map_err(|_| limits_invalid())?;
+        let sub_requests = u32::try_from(sub_requests).map_err(|_| limits_invalid())?;
+        let limits = Self::new(cpu_ms, sub_requests)?;
+        if limits.to_stored_json() != bytes {
+            return Err(limits_invalid());
+        }
+        Ok(limits)
+    }
+}
+
+fn limits_invalid() -> PlatformError {
+    PlatformError::new(
+        ErrorCode::LimitInvalid,
+        "Worker resource limits violate the Standard configurability ceilings",
+    )
+}
+
+/// Persisted immutable version metadata.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionRecord {
+    /// Version identity.
+    pub id: VersionId,
+    /// Parent Worker.
+    pub worker_id: WorkerId,
+    /// Monotonic Worker-local version.
+    pub version_number: u64,
+    /// Version content union discriminator.
+    pub content_kind: VersionContentKind,
+    /// Lifecycle state.
+    pub state: VersionState,
+    /// Canonical bundle digest.
+    pub artifact_sha256: Option<[u8; 32]>,
+    /// Canonical bundle size.
+    pub artifact_size: Option<u64>,
+    /// Artifact framing schema.
+    pub artifact_schema_version: Option<u32>,
+    /// Main ES module.
+    pub main_module: Option<String>,
+    /// Hash of every runtime-effective input.
+    pub worker_code_sha256: [u8; 32],
+    /// Loader contract schema.
+    pub loader_schema_version: u32,
+    /// Immutable Worker compatibility date.
+    pub compatibility_date: String,
+    /// Immutable sorted Worker compatibility flags.
+    pub compatibility_flags: Vec<String>,
+    /// Immutable Standard resource limits materialized at creation.
+    pub resource_limits: EffectiveResourceLimits,
+    /// Creation time.
+    pub created_at_ms: i64,
+    /// Ready time.
+    pub ready_at_ms: Option<i64>,
+    /// Rejection time.
+    pub rejected_at_ms: Option<i64>,
+    /// Stable rejection code.
+    pub rejection_code: Option<String>,
+    /// Tombstone time.
+    pub deleted_at_ms: Option<i64>,
+}
+
+impl VersionRecord {
+    /// Operator API JSON projection with hex digests.
+    #[must_use]
+    pub fn to_api_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "id": self.id,
+            "workerId": self.worker_id,
+            "versionNumber": self.version_number,
+            "contentKind": self.content_kind,
+            "state": self.state,
+            "artifactSha256": self.artifact_sha256.map(hex::encode),
+            "artifactSize": self.artifact_size,
+            "artifactSchemaVersion": self.artifact_schema_version,
+            "mainModule": self.main_module,
+            "workerCodeSha256": hex::encode(self.worker_code_sha256),
+            "loaderSchemaVersion": self.loader_schema_version,
+            "compatibilityDate": self.compatibility_date,
+            "compatibilityFlags": self.compatibility_flags,
+            "resourceLimits": serde_json::json!({
+                "cpuMs": self.resource_limits.cpu_ms,
+                "subRequests": self.resource_limits.sub_requests,
+            }),
+            "createdAtMs": self.created_at_ms,
+            "readyAtMs": self.ready_at_ms,
+            "rejectedAtMs": self.rejected_at_ms,
+            "rejectionCode": self.rejection_code,
+            "deletedAtMs": self.deleted_at_ms,
+        })
+    }
+}
+
+/// Secret ciphertext stored for one immutable version.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StoredVersionSecret {
+    /// Environment name.
+    pub name: String,
+    /// Immutable random revision.
+    pub revision_id: String,
+    /// AEAD envelope.
+    pub envelope: SecretEnvelope,
+}
+
+/// Consistent immutable source snapshot used by `RuntimeSource`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VersionSnapshot {
+    /// Instance identity.
+    pub instance_id: InstanceId,
+    /// Worker row.
+    pub worker: WorkerRecord,
+    /// Version row.
+    pub version: VersionRecord,
+    /// Immutable closed Cloudflare Version annotations.
+    pub annotations: BTreeMap<String, String>,
+    /// Static-asset authority when the version declares assets.
+    pub assets: Option<crate::assets::VersionAssetsRecord>,
+    /// Canonical JSON vars keyed by env name.
+    pub vars: BTreeMap<String, Vec<u8>>,
+    /// Encrypted secrets keyed by env name.
+    pub secrets: BTreeMap<String, StoredVersionSecret>,
+    /// Immutable typed resource bindings ordered by env name.
+    pub bindings: Vec<crate::bindings::VersionBindingRecord>,
+    /// Immutable Queue producer bindings ordered by env name.
+    pub queue_bindings: Vec<crate::queues::QueueProducerBindingRecord>,
+    /// Immutable Workflow caller bindings ordered by env name.
+    pub workflow_bindings: Vec<crate::workflows::WorkflowBindingRecord>,
+    /// Immutable cross-Worker Service declarations ordered by env name.
+    pub services: Vec<crate::services::VersionServiceRecord>,
+    /// Immutable default and named-entrypoint automatic-cache policies.
+    pub cache_policies: Vec<crate::runtime_features::VersionCachePolicyRecord>,
+    /// Immutable platform-provided environment bindings.
+    pub builtin_bindings: Vec<crate::runtime_features::VersionBuiltinBindingRecord>,
+}
+
+/// Trusted listener selected for a Worker origin.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerOriginExposure {
+    /// Loopback HTTP origin.
+    Local,
+    /// Gateway HTTPS origin.
+    Public,
+}
+
+impl WorkerOriginExposure {
+    /// Persisted exposure token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Public => "public",
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> rusqlite::Result<Self> {
+        match value {
+            "local" => Ok(Self::Local),
+            "public" => Ok(Self::Public),
+            _ => Err(rusqlite::Error::InvalidQuery),
+        }
+    }
+}
+
+/// Active canonical-hostname route metadata.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RouteRecord {
+    /// Opaque route identity.
+    pub id: String,
+    /// Owning instance.
+    pub instance_id: InstanceId,
+    /// Target Worker.
+    pub worker_id: WorkerId,
+    /// Canonical exact hostname.
+    pub hostname_ascii: String,
+    /// Listener authority for this route.
+    pub exposure: WorkerOriginExposure,
+    /// Canonical path prefix.
+    pub path_prefix: String,
+    /// Optional named entrypoint.
+    pub entrypoint: Option<String>,
+    /// Route generation at creation/update.
+    pub generation: u64,
+    /// Route creation time.
+    pub created_at_ms: i64,
+}
+
+/// Frozen route and active version identity for one request.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RouteSnapshot {
+    /// Matched route.
+    pub route: RouteRecord,
+    /// Matched Worker.
+    pub worker: WorkerRecord,
+    /// Active immutable Deployment.
+    pub deployment: DeploymentRecord,
+    /// Active ready version.
+    pub version: VersionRecord,
+    /// Static-asset authority frozen with the same active version.
+    pub assets: Option<crate::assets::VersionAssetsRecord>,
+}
+
+/// Registered reason a version must remain reachable.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionReferrer {
+    /// Immutable version identity.
+    pub version_id: VersionId,
+    /// Owning subsystem token such as `control_idempotency`.
+    pub kind: String,
+    /// Stable subsystem-local reference identity.
+    pub ref_id: String,
+    /// Registration timestamp.
+    pub created_at_ms: i64,
+}
+
+/// One non-active, unreferenced version eligible for automatic retention.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RetentionCandidate {
+    /// Instance boundary.
+    pub instance_id: InstanceId,
+    /// Parent Worker.
+    pub worker_id: WorkerId,
+    /// Candidate version.
+    pub version_id: VersionId,
+}
+
+/// Input for an immutable staging version transaction.
+#[derive(Clone, Debug)]
+pub struct NewVersion {
+    /// Platform-generated identity.
+    pub id: VersionId,
+    /// Owning instance.
+    pub instance_id: InstanceId,
+    /// Parent Worker.
+    pub worker_id: WorkerId,
+    /// Version content union discriminator.
+    pub content_kind: VersionContentKind,
+    /// Artifact digest.
+    pub artifact_sha256: Option<[u8; 32]>,
+    /// Artifact size.
+    pub artifact_size: Option<u64>,
+    /// Artifact schema.
+    pub artifact_schema_version: Option<u32>,
+    /// Main module.
+    pub main_module: Option<String>,
+    /// Descriptor digest.
+    pub worker_code_sha256: [u8; 32],
+    /// Immutable validated compatibility date.
+    pub compatibility_date: String,
+    /// Immutable validated compatibility flags in submitted order.
+    pub compatibility_flags: Vec<String>,
+    /// Immutable Standard resource limits materialized at creation.
+    pub resource_limits: EffectiveResourceLimits,
+    /// Canonical JSON vars.
+    pub vars: BTreeMap<String, Vec<u8>>,
+    /// Encrypted secret rows.
+    pub secrets: BTreeMap<String, StoredVersionSecret>,
+    /// Audit request identity.
+    pub request_id: RequestId,
+    /// Transaction timestamp.
+    pub now_ms: i64,
+}
+
+/// Idempotency reservation result.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum IdempotencyReservation {
+    /// Caller owns a newly inserted running row.
+    Reserved,
+    /// Same canonical request has already completed.
+    Complete(Vec<u8>),
+    /// Same canonical request is already running.
+    Running,
+    /// Same canonical request previously failed; value is the stable response envelope.
+    Failed(Vec<u8>),
+}
+
+/// Central typed repository. The raw `SQLite` connection remains private.
+#[derive(Clone, Copy, Debug)]
+pub struct WorkerRepository<'a> {
+    pub(super) db: &'a ControlDb,
+}

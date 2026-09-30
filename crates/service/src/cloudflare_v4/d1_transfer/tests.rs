@@ -339,7 +339,7 @@ fn create_database(
         kind: BindingKind::D1Database,
         name: name.to_owned(),
         idempotency_key: name.to_owned(),
-        driver_schema_version: open_compute_storage::D1_DATABASE_SCHEMA_VERSION,
+        driver_schema_version: open_compute_storage::d1::D1_DATABASE_SCHEMA_VERSION,
         request_id: RequestId::generate(),
         now_ms,
     })
@@ -477,7 +477,7 @@ async fn transfer_routes_round_trip_export_import_and_time_travel() {
         .apply_migrations(
             account,
             source,
-            vec![open_compute_storage::D1Migration {
+            vec![open_compute_storage::d1::D1Migration {
                 id: 1,
                 name: "0001_notes.sql".to_owned(),
                 sql: sql.to_owned(),

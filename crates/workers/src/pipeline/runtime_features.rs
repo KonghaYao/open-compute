@@ -117,19 +117,16 @@ pub(super) fn prepare_runtime_features(
 pub(super) fn validate_compatibility(
     input: &VersionRuntimeFeatures,
 ) -> Result<Vec<String>, PlatformError> {
-    // P6 intentionally certifies only the formal pin's latest date. Supporting an older date
-    // requires separate stock-workerd evidence and an explicit capability-range update.
-    if input.compatibility_date != crate::WORKER_COMPATIBILITY_DATE {
-        return Err(PlatformError::new(
-            ErrorCode::CompatibilityUnsupported,
-            "compatibility date is outside the certified pinned-workerd range",
-        ));
-    }
-    if !crate::supports_worker_compatibility(&input.compatibility_date, &input.compatibility_flags)
+    if input.compatibility_date.len() > 32
+        || input.compatibility_flags.len() > 64
+        || input
+            .compatibility_flags
+            .iter()
+            .any(|flag| flag.len() > 128)
     {
         return Err(PlatformError::new(
             ErrorCode::CompatibilityUnsupported,
-            "compatibility flags are outside the fixed pinned-runtime contract",
+            "compatibility metadata exceeds the runtime validation bounds",
         ));
     }
     Ok(input.compatibility_flags.clone())
@@ -189,15 +186,4 @@ pub(super) fn map_asset_store_error(error: &PlatformError) -> PlatformError {
             "static asset provider is unavailable",
         ),
     }
-}
-
-pub(crate) fn idempotency_ref_id(instance_id: InstanceId, scope: &str, key: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(b"open-compute/version-referrer/v1\0");
-    hasher.update(instance_id.to_string().as_bytes());
-    hasher.update([0]);
-    hasher.update(scope.as_bytes());
-    hasher.update([0]);
-    hasher.update(key.as_bytes());
-    hex::encode(hasher.finalize())
 }

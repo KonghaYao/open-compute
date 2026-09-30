@@ -23,6 +23,7 @@ pub(super) async fn run() {
         .expect("workerd child");
     let staged_executable = staged_executable(workerd_pid);
     note_tree(&mut round, platform_pid);
+    stop_process(workerd_pid);
 
     let mut platform = round.child.take().unwrap();
     let _ = kill_process(Pid::from_raw(platform_pid).unwrap(), Signal::KILL);

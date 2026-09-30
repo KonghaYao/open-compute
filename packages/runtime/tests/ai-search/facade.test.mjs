@@ -57,6 +57,7 @@ function transport(calls) {
       if (operation.endsWith(".search"))
         return {
           search_query: "cache",
+          query_kind: "text",
           chunks: [
             {
               id: "018ff000-0000-8000-8000-000000000002",
@@ -77,6 +78,8 @@ function transport(calls) {
         return {
           choices: [{ message: { role: "assistant", content: "answer" } }],
           chunks: [],
+          query_kind: "text",
+          search_query: "cache",
         };
       if (operation === "instance.stats") return { completed: 1 };
       if (operation === "items.list")
@@ -278,10 +281,58 @@ test("AI Search rejects unknown options, limits, unsupported first tranche, and 
   );
   await assert.rejects(
     direct.search({
-      query: "x",
-      ai_search_options: { retrieval: { boost_by: [{ field: "x" }] } },
+      messages: [
+        { role: "user", content: [{ type: "image_url", image_url: "x" }] },
+      ],
     }),
-    /AI_SEARCH_OPTION_UNSUPPORTED/,
+    /AI_SEARCH_INPUT_INVALID/,
+  );
+  assert.throws(
+    () =>
+      direct.chatCompletions({
+        messages: [{ role: "user", content: [{ type: "text", text: "x" }] }],
+      }),
+    /AI_SEARCH_INPUT_INVALID/,
+  );
+  assert.equal(
+    (
+      await direct.search({
+        query: "x",
+        ai_search_options: {
+          retrieval: { boost_by: [{ field: "x", direction: "exists" }] },
+        },
+      })
+    ).query_kind,
+    "text",
+  );
+  for (const boost_by of [
+    [{ field: "" }],
+    [{ field: "x", direction: "sideways" }],
+    [{ field: "x" }, { field: "X" }],
+  ]) {
+    await assert.rejects(
+      direct.search({
+        query: "x",
+        ai_search_options: { retrieval: { boost_by } },
+      }),
+      /AI_SEARCH_INPUT_INVALID/,
+    );
+  }
+  await assert.rejects(
+    direct.search({
+      query: "x",
+      ai_search_options: {
+        retrieval: {
+          boost_by: [
+            { field: "a" },
+            { field: "b" },
+            { field: "c" },
+            { field: "d" },
+          ],
+        },
+      },
+    }),
+    /AI_SEARCH_LIMIT_EXCEEDED/,
   );
   await assert.rejects(
     direct.update({ chunk_overlap: 31 }),

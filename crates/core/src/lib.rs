@@ -30,28 +30,30 @@ pub use admission::{
     AdmissionReservation, AdmissionReservations, AdmissionSnapshotV1, OperationClass, PlatformMode,
 };
 pub use capability::{
-    CapabilityInventoryV1, CapabilityMemberV1, CapabilityStatus, InterfaceCapabilityStatus,
-    LegacyManagementRouteV1, ManagementApiCapabilitiesV1, ManagementApiMethod,
-    ManagementApiRequestMediaType, ManagementApiRouteV1, ObservabilityCapabilityItemV1,
-    PlatformCapabilitiesV1, ProductCapabilityV1, ProductKind, RuntimeCapabilityV1,
-    TypeSourceIdentityV1, WorkersObservabilityCapabilitiesV1, WranglerCapabilitiesV1,
-    WranglerCapabilityItemV1,
+    CapabilityInventoryV1, CapabilityMemberV1, CapabilityStatus, CompatibilityFeatureV1,
+    CompatibilityImplicationV1, InterfaceCapabilityStatus, LegacyManagementRouteV1,
+    ManagementApiCapabilitiesV1, ManagementApiMethod, ManagementApiRequestMediaType,
+    ManagementApiRouteV1, ObservabilityCapabilityItemV1, PlatformCapabilitiesV1,
+    ProductCapabilityV1, ProductKind, RuntimeCapabilityV1, RuntimeCompatibilityV1,
+    SystemWorkerCompatibilityV1, TypeSourceIdentityV1, WorkersObservabilityCapabilitiesV1,
+    WranglerCapabilitiesV1, WranglerCapabilityItemV1,
 };
 pub use clock::{Clock, SystemClock};
 pub use config::{
     AiAuthConfig, AiBackendConfig, AiBackendProtocol, AiConfig, AiEmbeddingMetric,
     AiEmbeddingModelConfig, AiEmbeddingProfileConfig, AiGenerationCapability,
-    AiGenerationModelConfig, AiSourceProviderConfig, AiTokenizer, AiTokenizerArtifactConfig,
-    AiTokenizerConfig, AiVlmModelConfig, ArtifactsConfig, CacheConfig, CaddyFileConfig, D1Config,
-    DaemonGatewayConfig, DaemonServerConfig, DataConfig, DocumentParserConfig,
-    DurableObjectsConfig, GatewayDnsRecord, GatewayDnsRecordKind, HardeningConfig, ImagesConfig,
-    InstanceAuthConfig, InstanceMetadataConfig, KvConfig, LocalExtensionConfig,
-    LocalObjectStorageConfig, MetricsConfig, ObjectStorageConfig, ObjectStorageKind,
-    PlatformConfig, PrivateHttpGrant, PrivateHttpServiceConfig, PublicDomainConfig,
-    PublicGatewayConfig, QueuesConfig, R2Config, ResolvedEmbeddingModelContract,
-    ResolvedTokenizerContract, ResolvedVlmModelContract, ResponseCacheConfig, RuntimeConfig,
-    S3Config, SchedulerConfig, SchedulerPoolConfig, SchedulerPoolsConfig, SecretReference,
-    WorkersConfig, validate_bootstrap_config_path, validate_local_extension_name,
+    AiGenerationModelConfig, AiRerankingModelConfig, AiSourceProviderConfig, AiTokenizer,
+    AiTokenizerArtifactConfig, AiTokenizerConfig, AiVlmModelConfig, ArtifactsConfig, CacheConfig,
+    CaddyFileConfig, D1Config, DaemonGatewayConfig, DaemonServerConfig, DataConfig,
+    DocumentParserConfig, DurableObjectsConfig, GatewayDnsRecord, GatewayDnsRecordKind,
+    HardeningConfig, ImagesConfig, InstanceAuthConfig, InstanceMetadataConfig, KvConfig,
+    LocalExtensionConfig, LocalObjectStorageConfig, MetricsConfig, ObjectStorageConfig,
+    ObjectStorageKind, PlatformConfig, PrivateHttpGrant, PrivateHttpServiceConfig,
+    PublicDomainConfig, PublicGatewayConfig, QueuesConfig, R2Config,
+    ResolvedEmbeddingModelContract, ResolvedTokenizerContract, ResolvedVlmModelContract,
+    ResponseCacheConfig, RuntimeConfig, S3Config, SchedulerConfig, SchedulerPoolConfig,
+    SchedulerPoolsConfig, SecretReference, WorkersConfig, validate_bootstrap_config_path,
+    validate_local_extension_name,
 };
 pub use cron::CronSchedule;
 pub use durable_objects::{

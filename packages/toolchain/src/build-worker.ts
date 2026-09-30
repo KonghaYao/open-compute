@@ -1,8 +1,16 @@
 import { execFile } from "node:child_process";
 import { realpath, stat } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { builtinModules, createRequire } from "node:module";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { build } from "rolldown";
+import { esmExternalRequirePlugin } from "rolldown/plugins";
+
+const nodeBuiltinModules = new Set(
+  builtinModules.flatMap((name) => {
+    const bare = name.replace(/^node:/, "");
+    return [bare, `node:${bare}`];
+  }),
+);
 
 /** Module representation accepted by the canonical Rust bundle encoder. */
 export type CompiledModuleType =
@@ -130,6 +138,7 @@ export async function compileWorker(
     input: { worker: entry },
     tsconfig: config,
     platform: "browser",
+    plugins: [esmExternalRequirePlugin({ external: [...nodeBuiltinModules] })],
     preserveEntrySignatures: "strict",
     resolve: { conditionNames: ["workerd", "worker", "browser"] },
     external(id) {
@@ -141,7 +150,6 @@ export async function compileWorker(
         return true;
       if (id.startsWith("cloudflare:"))
         throw new Error("unsupported Cloudflare module");
-      if (id.startsWith("node:")) return true;
       if (/^https?:/.test(id))
         throw new Error("remote module imports are unsupported");
       return false;
@@ -153,6 +161,11 @@ export async function compileWorker(
       format: "esm",
       entryFileNames: "worker.js",
       chunkFileNames: "modules/[name]-[hash].js",
+      paths(id) {
+        return !id.startsWith("node:") && nodeBuiltinModules.has(id)
+          ? `node:${id}`
+          : id;
+      },
       sourcemap: false,
     },
     write: false,

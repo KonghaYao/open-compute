@@ -11,10 +11,11 @@ use open_compute_core::{
     WorkflowInstanceId, WorkflowOperationId, WorkflowsConfig,
 };
 use open_compute_runtime::GenerationAuthRegistry;
+use open_compute_storage::PlatformStorage;
 use open_compute_storage::scheduler::{
-    WorkflowStepAttempt, WorkflowStepGrant, WorkflowStepOutcome,
+    SchedulerStore, WorkflowStepAttempt, WorkflowStepGrant, WorkflowStepOutcome,
 };
-use open_compute_storage::{PlatformStorage, SchedulerStore, WorkflowRepository};
+use open_compute_storage::workflows::WorkflowRepository;
 use open_compute_workers::{WorkflowController, WorkflowEventInput};
 use serde::Deserialize;
 use serde_json::Value;

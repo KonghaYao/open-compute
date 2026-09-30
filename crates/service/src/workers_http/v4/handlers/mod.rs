@@ -10,9 +10,11 @@ use axum::Router;
 use axum::extract::{DefaultBodyLimit, FromRequest, Multipart, Path, Request, State};
 use axum::routing::{get, patch};
 use open_compute_core::{DeploymentId, PlatformError, RequestId, VersionId};
-use open_compute_storage::{
-    DeploymentRecord, DeploymentSource, QueueConsumerRepository, QueueRepository, VersionRecord,
-    VersionSnapshot, WorkerRecord, WorkerRepository,
+use open_compute_storage::queue_consumers::QueueConsumerRepository;
+use open_compute_storage::queues::QueueRepository;
+use open_compute_storage::worker_repository::{
+    DeploymentRecord, DeploymentSource, VersionRecord, VersionSnapshot, WorkerRecord,
+    WorkerRepository,
 };
 use open_compute_workers::{CreateVersionOutcome, ProductPromotionRequest};
 use serde::{Deserialize, Serialize};
@@ -226,7 +228,10 @@ async fn get_service_metadata(
                     tag: authority.public_worker_tag(worker.id),
                     tags: Vec::new(),
                     last_deployed_from: "wrangler",
-                    migration_tag: open_compute_storage::DurableObjectRepository::new(&api.storage)
+                    migration_tag:
+                        open_compute_storage::durable_objects::DurableObjectRepository::new(
+                            &api.storage,
+                        )
                         .current_worker_migration(worker.id)
                         .map_err(|error| V4Error::from(&error))?
                         .map(|head| head.tag),

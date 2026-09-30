@@ -20,6 +20,7 @@ import {
 } from "../../../components/resource-dialog";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/kv/")({
   validateSearch: (search: Record<string, unknown>): { q?: string } =>
@@ -36,7 +37,7 @@ function KvPage() {
   const feedback = useMutationFeedback();
   const enabled = client !== null && selectedInstanceId !== null;
   const namespaces = useQuery({
-    queryKey: ["cloudflare-v4", "kv", selectedInstanceId, "namespaces"],
+    queryKey: queryKeys.kv(selectedInstanceId, "namespaces"),
     queryFn: async ({ signal }) => {
       const result: Namespace[] = [];
       for await (const namespace of client!.kv.namespaces.list(

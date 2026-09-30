@@ -4,7 +4,7 @@ use super::*;
 fn control_db_operations_fail_closed_when_foreign_keys_are_disabled() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join("control.sqlite");
-    let db = crate::ControlDb::open(&path, 100).unwrap();
+    let db = crate::control_db::ControlDb::open(&path, 100).unwrap();
     db.migrate(&SystemClock).unwrap();
     db.with_read(|conn| {
         conn.pragma_update(None, "foreign_keys", "OFF")

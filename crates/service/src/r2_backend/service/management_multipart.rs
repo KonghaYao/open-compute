@@ -95,7 +95,7 @@ impl R2BindingService {
     ) -> Result<
         (
             AuthorizedBinding,
-            open_compute_storage::R2BucketRecord,
+            open_compute_storage::r2::R2BucketRecord,
             open_compute_artifacts::R2BucketLocator,
             Duration,
         ),

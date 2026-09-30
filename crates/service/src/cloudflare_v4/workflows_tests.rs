@@ -8,10 +8,12 @@ use axum::http::{Request, StatusCode, header};
 use open_compute_core::config::MetricsConfig;
 use open_compute_core::{DataConfig, InstanceId, RequestId, SecretString, SystemClock, VersionId};
 use open_compute_runtime::GenerationAuthRegistry;
-use open_compute_storage::{
-    NewVersion, NewVersionProducts, PlatformStorage, SchedulerStore, VersionContentKind,
-    WorkerRepository, WorkflowRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::scheduler::SchedulerStore;
+use open_compute_storage::worker_repository::{
+    NewVersion, NewVersionProducts, VersionContentKind, WorkerRepository,
 };
+use open_compute_storage::workflows::WorkflowRepository;
 use open_compute_workers::{WorkflowController, WorkflowCreateInput};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
@@ -74,7 +76,7 @@ fn fixture() -> Fixture {
                 worker_code_sha256: [2; 32],
                 compatibility_date: "2026-09-08".into(),
                 compatibility_flags: Vec::new(),
-                resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+                resource_limits: open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
                 vars: Default::default(),
                 secrets: Default::default(),
                 request_id: RequestId::generate(),
@@ -248,7 +250,7 @@ async fn pending_upload_delete_conflict_does_not_mutate_a_live_instance() {
             .unwrap()
             .unwrap()
             .state,
-        open_compute_storage::WorkflowRefState::Live
+        open_compute_storage::workflows::WorkflowRefState::Live
     );
     assert_eq!(
         repository

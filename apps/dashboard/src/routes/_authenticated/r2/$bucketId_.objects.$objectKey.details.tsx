@@ -8,6 +8,7 @@ import { openConfirmDeleteDialog } from "../../../components/resource-dialog";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
 import { formatBytes } from "../../../lib/format";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute(
   "/_authenticated/r2/$bucketId_/objects/$objectKey/details",
@@ -20,14 +21,7 @@ function R2ObjectDetailPage() {
   const feedback = useMutationFeedback();
   const enabled = client !== null && selectedInstanceId !== null;
   const detail = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "r2",
-      selectedInstanceId,
-      bucketId,
-      "object",
-      objectKey,
-    ],
+    queryKey: queryKeys.r2(selectedInstanceId, bucketId, "object", objectKey),
     queryFn: async ({ signal }) => {
       const page = await client!.r2.buckets.objects.list(
         bucketId,

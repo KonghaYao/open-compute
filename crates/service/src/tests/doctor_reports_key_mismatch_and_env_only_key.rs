@@ -13,10 +13,13 @@ async fn doctor_reports_key_mismatch_and_env_only_key() {
         Some("MASTER_KEY_MISMATCH")
     );
 
-    open_compute_storage::set_test_env("OC_TEST_MASTER_KEY_ONLY", &encode_master_key(&[9u8; 32]));
+    open_compute_storage::master_key::set_test_env(
+        "OC_TEST_MASTER_KEY_ONLY",
+        &encode_master_key(&[9u8; 32]),
+    );
     let mut cfg = loaded.config.data.clone();
     cfg.master_key_env = Some("OC_TEST_MASTER_KEY_ONLY".into());
     cfg.master_key_file = dir.path().join("missing-master.key");
-    open_compute_storage::inspect_master_key(&cfg).expect("env-only key is readable");
-    open_compute_storage::clear_test_env();
+    open_compute_storage::inspect::inspect_master_key(&cfg).expect("env-only key is readable");
+    open_compute_storage::master_key::clear_test_env();
 }

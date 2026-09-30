@@ -76,7 +76,7 @@ fn p0_2_delete_referrer_recovery_and_worker_identity_are_fenced() {
         repo.resolve_route(
             &route.hostname_ascii,
             "/x",
-            crate::WorkerOriginExposure::Local
+            crate::worker_repository::WorkerOriginExposure::Local
         )
         .unwrap_err()
         .code(),

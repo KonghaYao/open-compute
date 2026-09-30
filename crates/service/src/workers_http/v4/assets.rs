@@ -22,7 +22,9 @@ use base64::Engine as _;
 use bytes::Bytes;
 use futures::stream;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError};
-use open_compute_storage::{AssetUploadRepository, AssetUploadSession, NewAssetUploadEntry};
+use open_compute_storage::assets::{
+    AssetUploadRepository, AssetUploadSession, NewAssetUploadEntry,
+};
 use open_compute_workers::{
     AssetEntryV1, AssetManifestV1, AssetRoutingConfigV1, HtmlHandling, NotFoundHandling,
     RunWorkerFirst, VersionAssets, validate_asset_path,

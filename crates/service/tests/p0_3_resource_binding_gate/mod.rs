@@ -30,10 +30,10 @@ use open_compute_service::{
     KvBindingExecutor, KvCommand, KvCommandResult, KvStreamPart, bind_binding_backend,
     serve_binding_backend,
 };
-use open_compute_storage::{
-    AuthorizedBinding, BindingRepository, PlatformStorage, ResourceRecord, ResourceRepository,
-    VersionRecord, WorkerRepository,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::bindings::{AuthorizedBinding, BindingRepository};
+use open_compute_storage::resources::{ResourceRecord, ResourceRepository};
+use open_compute_storage::worker_repository::{VersionRecord, WorkerRepository};
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateResourceOutcome, CreateResourceRequest,
     CreateVersionOutcome, CreateVersionRequest, ModuleInput, ModuleType, ReconcileOutcome,
@@ -128,11 +128,13 @@ impl KvBindingExecutor for FakeExecutor {
             KvCommand::Get { keys, .. } => Ok(KvCommandResult::Entries(
                 keys.iter()
                     .map(|key| {
-                        values.get(key).map(|value| open_compute_storage::KvEntry {
-                            value: value.clone(),
-                            metadata_json: None,
-                            expires_at_ms: None,
-                        })
+                        values
+                            .get(key)
+                            .map(|value| open_compute_storage::kv::KvEntry {
+                                value: value.clone(),
+                                metadata_json: None,
+                                expires_at_ms: None,
+                            })
                     })
                     .collect(),
             )),
@@ -170,7 +172,7 @@ impl KvBindingExecutor for FakeExecutor {
             .get(&binding.resource.id)
             .and_then(|values| values.get(key).cloned());
         sink(KvStreamPart::Entry(value.as_ref().map(|value| {
-            open_compute_storage::KvEntryInfo {
+            open_compute_storage::kv::KvEntryInfo {
                 value_length: value.len(),
                 metadata_json: None,
                 expires_at_ms: None,
@@ -307,10 +309,14 @@ fn version_request(
         secrets: BTreeMap::new(),
         bindings,
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: promote.then_some(open_compute_storage::DeploymentSource::ScriptUpload),
+        deployment_source: promote
+            .then_some(open_compute_storage::worker_repository::DeploymentSource::ScriptUpload),
         observability: None,
         request_id: RequestId::generate(),
         now_ms,

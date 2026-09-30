@@ -11,7 +11,7 @@ pub(crate) struct DaemonLock(File);
 
 impl DaemonLock {
     pub(crate) fn acquire(root: &Path) -> Result<Self, PlatformError> {
-        open_compute_storage::ensure_dir_secure(root)?;
+        open_compute_storage::fs::ensure_dir_secure(root)?;
         let fd = rustix::fs::open(
             root.join("ocd.lock"),
             OFlags::RDWR | OFlags::CREATE | OFlags::NOFOLLOW | OFlags::CLOEXEC,
@@ -101,7 +101,7 @@ mod tests {
     fn rejects_symlinked_or_group_readable_lock() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("ocd");
-        open_compute_storage::ensure_dir_secure(&root).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&root).unwrap();
         let lock = root.join("ocd.lock");
         std::os::unix::fs::symlink(root.join("other"), &lock).unwrap();
         assert!(DaemonLock::acquire(&root).is_err());
@@ -132,7 +132,7 @@ mod tests {
         let root = temp.path().join("ocd");
         assert!(DaemonLock::acquire_restored(&root).is_err());
         assert!(!root.exists());
-        open_compute_storage::ensure_dir_secure(&root).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&root).unwrap();
         let live = DaemonLock::acquire_restored(&root).unwrap();
         assert!(root.join("ocd.lock").is_file());
         assert!(DaemonLock::acquire_restored(&root).is_err());

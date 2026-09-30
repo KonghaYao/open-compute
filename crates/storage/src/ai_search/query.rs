@@ -62,21 +62,23 @@ impl AiSearchStore {
         Ok(chunks)
     }
 
-    /// Stream ranked FTS rows from one active generation without materializing
-    /// the whole candidate set. Returning `false` stops the scan early.
+    /// Stream ranked FTS rows and their positive raw BM25 scores from one active
+    /// generation without materializing the whole candidate set. Returning
+    /// `false` stops the scan early.
     pub fn scan_keyword_chunks_at(
         &self,
         index_generation: u64,
         fts_query: &str,
         trigram: bool,
-        mut visit: impl FnMut(AiSearchChunkRecord) -> Result<bool, PlatformError>,
+        mut visit: impl FnMut(AiSearchChunkRecord, f32) -> Result<bool, PlatformError>,
     ) -> Result<(), PlatformError> {
         if fts_query.is_empty() || fts_query.len() > 8_192 {
             return Err(limit_error());
         }
         let sql = if trigram {
             "SELECT c.id, c.item_id, c.ordinal, c.start_byte, c.end_byte, c.text,
-                    c.embedding_f32le, c.metadata_json, i.key, i.created_at_ms
+                    c.embedding_f32le, c.metadata_json, i.key, i.created_at_ms,
+                    -bm25(chunks_fts_trigram)
                FROM chunks_fts_trigram f JOIN chunks c ON c.id=f.chunk_id
                JOIN items i ON i.id=c.item_id
               WHERE chunks_fts_trigram MATCH ?1 AND c.index_generation=?2
@@ -84,7 +86,8 @@ impl AiSearchStore {
               ORDER BY bm25(chunks_fts_trigram), c.id"
         } else {
             "SELECT c.id, c.item_id, c.ordinal, c.start_byte, c.end_byte, c.text,
-                    c.embedding_f32le, c.metadata_json, i.key, i.created_at_ms
+                    c.embedding_f32le, c.metadata_json, i.key, i.created_at_ms,
+                    -bm25(chunks_fts_porter)
                FROM chunks_fts_porter f JOIN chunks c ON c.id=f.chunk_id
                JOIN items i ON i.id=c.item_id
               WHERE chunks_fts_porter MATCH ?1 AND c.index_generation=?2
@@ -97,9 +100,13 @@ impl AiSearchStore {
             .query(params![fts_query, to_i64(index_generation)?])
             .map_err(sql_error)?;
         while let Some(row) = rows.next().map_err(sql_error)? {
+            let score = row.get::<_, f64>(10).map_err(sql_error)?;
+            if !score.is_finite() || score < 0.0 || score > f64::from(f32::MAX) {
+                return Err(invariant_error());
+            }
             let chunk = decode_chunk(row, self.active_dimensions, self.active_vector_enabled)
                 .map_err(sql_error)?;
-            if !visit(chunk)? {
+            if !visit(chunk, score as f32)? {
                 break;
             }
         }

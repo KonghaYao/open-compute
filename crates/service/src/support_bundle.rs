@@ -12,10 +12,13 @@ use open_compute_core::{
     ResourceAvailability,
 };
 use open_compute_document_parser::{PARSER_CONTRACT_SHA256, TESSDATA_CONTRACT_SHA256};
-use open_compute_storage::{
-    AI_SEARCH_SCHEMA_VERSION, VECTORIZE_SCHEMA_VERSION, inspect_control_db, inspect_master_key,
-    inspect_operator_event_count, inspect_resources, inspect_scheduler_db, read_operation_receipt,
+use open_compute_storage::ai_search::AI_SEARCH_SCHEMA_VERSION;
+use open_compute_storage::data_dir::read_operation_receipt;
+use open_compute_storage::inspect::{
+    inspect_control_db, inspect_master_key, inspect_operator_event_count, inspect_resources,
 };
+use open_compute_storage::scheduler::inspect_scheduler_db;
+use open_compute_storage::vectorize::VECTORIZE_SCHEMA_VERSION;
 use rustix::fs::{Mode, OFlags};
 use serde::Serialize;
 use sha2::Digest as _;
@@ -63,6 +66,7 @@ pub async fn create_support_bundle(
         &release.release.workerd_version,
     )?
     .render(&PlatformStatus::starting());
+    let (compatibility, system_workers) = open_compute_runtime::embedded_runtime_compatibility()?;
     let mut entries = vec![
         json_entry("release.json", &release)?,
         json_entry("config-policy.json", &redacted_policy(loaded))?,
@@ -76,6 +80,13 @@ pub async fn create_support_bundle(
         json_entry(
             "deployment-runtime.json",
             &deployment_runtime_summary(loaded)?,
+        )?,
+        json_entry(
+            "workerd-compatibility.json",
+            &serde_json::json!({
+                "compatibility": compatibility,
+                "system_workers": system_workers,
+            }),
         )?,
     ];
     if let Some(bytes) = workerd_last_exit(loaded)? {
@@ -129,7 +140,7 @@ fn workerd_last_exit(loaded: &LoadedConfig) -> Result<Option<Vec<u8>>, PlatformE
     if !path.exists() {
         return Ok(None);
     }
-    open_compute_storage::validate_owned_file(&path, true).map_err(|_| bundle_invalid())?;
+    open_compute_storage::fs::validate_owned_file(&path, true).map_err(|_| bundle_invalid())?;
     let bytes = std::fs::read(path).map_err(|_| bundle_invalid())?;
     if bytes.len() > 40 * 1024 || serde_json::from_slice::<serde_json::Value>(&bytes).is_err() {
         return Err(bundle_invalid());
@@ -138,12 +149,12 @@ fn workerd_last_exit(loaded: &LoadedConfig) -> Result<Option<Vec<u8>>, PlatformE
 }
 
 fn deployment_runtime_summary(loaded: &LoadedConfig) -> Result<serde_json::Value, PlatformError> {
-    let database = open_compute_storage::ControlDb::open(
+    let database = open_compute_storage::control_db::ControlDb::open(
         &loaded.config.data.path.join("control.sqlite"),
         loaded.config.data.sqlite_busy_timeout_ms,
     )
     .map_err(|_| bundle_invalid())?;
-    let summary = open_compute_storage::WorkerRepository::new(&database)
+    let summary = open_compute_storage::worker_repository::WorkerRepository::new(&database)
         .deployment_runtime_assessments()
         .map_err(|_| bundle_invalid())?;
     serde_json::to_value(summary).map_err(|_| bundle_invalid())
@@ -346,12 +357,12 @@ fn ai_backend_catalog_sha256(loaded: &LoadedConfig) -> Result<String, PlatformEr
     let config = &loaded.config.ai;
     config.validate()?;
     let mut digest = sha2::Sha256::new();
-    digest.update(b"open-compute/ai-backend-catalog/v3\0");
+    digest.update(b"open-compute/ai-backend-catalog/v4\0");
     for value in [
         u64::from(config.max_provider_in_flight),
         u64::from(config.max_embedding_inputs_per_batch),
-        config.max_embedding_request_bytes,
-        config.max_embedding_response_bytes,
+        config.max_provider_request_bytes,
+        config.max_provider_response_bytes,
         u64::from(config.max_vlm_in_flight),
         u64::from(config.max_vlm_images_per_document),
         config.max_vlm_request_bytes,
@@ -373,6 +384,14 @@ fn ai_backend_catalog_sha256(loaded: &LoadedConfig) -> Result<String, PlatformEr
         &mut digest,
         config
             .default_generation_model
+            .as_deref()
+            .unwrap_or("")
+            .as_bytes(),
+    );
+    digest_part(
+        &mut digest,
+        config
+            .default_reranking_model
             .as_deref()
             .unwrap_or("")
             .as_bytes(),
@@ -409,6 +428,11 @@ fn ai_backend_catalog_sha256(loaded: &LoadedConfig) -> Result<String, PlatformEr
         digest_part(&mut digest, contract.contract_sha256.as_bytes());
     }
     for (alias, model) in &config.generation_models {
+        digest_part(&mut digest, alias.as_bytes());
+        let bytes = serde_json::to_vec(model).map_err(|_| bundle_invalid())?;
+        digest_part(&mut digest, &bytes);
+    }
+    for (alias, model) in &config.reranking_models {
         digest_part(&mut digest, alias.as_bytes());
         let bytes = serde_json::to_vec(model).map_err(|_| bundle_invalid())?;
         digest_part(&mut digest, &bytes);

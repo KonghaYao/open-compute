@@ -1,9 +1,9 @@
 //! Fresh-process Queue commit-before-response crash evidence.
 
 use open_compute_core::{InstanceId, QueueId};
-use open_compute_storage::{
-    QueueConfig, QueueContentType, QueueEnqueueRequest, QueueMessageInput, QueueProjection,
-    SchedulerStore,
+use open_compute_storage::queues::QueueConfig;
+use open_compute_storage::scheduler::{
+    QueueContentType, QueueEnqueueRequest, QueueMessageInput, QueueProjection, SchedulerStore,
 };
 use std::fs;
 use std::io::Write as _;

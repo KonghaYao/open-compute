@@ -2,8 +2,9 @@ use super::*;
 use crate::{CreateResourceOutcome, CreateResourceRequest, ResourceController, ResourcePins};
 use open_compute_core::config::DataConfig;
 use open_compute_core::{RequestId, ResourceId, SystemClock};
-use open_compute_storage::{
-    D1DatabaseRepository, ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
+use open_compute_storage::d1::D1DatabaseRepository;
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
 };
 use std::time::Duration;
 

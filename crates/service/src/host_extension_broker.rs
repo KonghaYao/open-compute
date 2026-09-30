@@ -279,11 +279,11 @@ fn provider_environment(
 ) -> Result<Vec<(OsString, OsString)>, PlatformError> {
     let root = |kind: &str| -> Result<PathBuf, PlatformError> {
         let base = data_root.join(kind);
-        open_compute_storage::ensure_dir_secure(&base)?;
+        open_compute_storage::fs::ensure_dir_secure(&base)?;
         let extensions = base.join("extensions");
-        open_compute_storage::ensure_dir_secure(&extensions)?;
+        open_compute_storage::fs::ensure_dir_secure(&extensions)?;
         let provider = extensions.join(name);
-        open_compute_storage::ensure_dir_secure(&provider)?;
+        open_compute_storage::fs::ensure_dir_secure(&provider)?;
         Ok(provider)
     };
     let tmp = root("tmp")?;
@@ -534,9 +534,9 @@ mod tests {
     fn provider_process_environment_uses_instance_owned_roots() {
         let (_temporary, broker) = empty_broker();
         let working = broker.data_root.join("runtime/extensions/local-files");
-        open_compute_storage::ensure_dir_secure(&broker.data_root.join("runtime/extensions"))
+        open_compute_storage::fs::ensure_dir_secure(&broker.data_root.join("runtime/extensions"))
             .unwrap();
-        open_compute_storage::ensure_dir_secure(&working).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&working).unwrap();
         let environment = provider_environment(&broker.data_root, "local-files", &working).unwrap();
         let value = |key: &str| {
             environment

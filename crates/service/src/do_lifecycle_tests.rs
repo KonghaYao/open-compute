@@ -3,10 +3,13 @@ use open_compute_core::{
     BindingId, BindingKind, CanonicalBindingConfig, CanonicalPermissions, DurableObjectId,
     RequestId, ResourceId, VersionId, durable_object_namespace_prefix,
 };
-use open_compute_storage::{
-    DO_NAMESPACE_SCHEMA_VERSION, NewVersion, NewVersionBinding, NewVersionProducts,
-    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository, VersionContentKind,
-    WorkerRepository,
+use open_compute_storage::bindings::NewVersionBinding;
+use open_compute_storage::durable_objects::DO_NAMESPACE_SCHEMA_VERSION;
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
+};
+use open_compute_storage::worker_repository::{
+    NewVersion, NewVersionProducts, VersionContentKind, WorkerRepository,
 };
 use sha2::{Digest as _, Sha256};
 use std::collections::BTreeMap;
@@ -100,7 +103,7 @@ async fn reconciliation_finishes_creating_and_deleting_object_generations() {
                 worker_code_sha256: [2; 32],
                 compatibility_date: "2026-09-08".to_owned(),
                 compatibility_flags: Vec::new(),
-                resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+                resource_limits: open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
                 vars: BTreeMap::new(),
                 secrets: BTreeMap::new(),
                 request_id: RequestId::generate(),

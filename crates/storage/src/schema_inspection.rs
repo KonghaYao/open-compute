@@ -1,12 +1,15 @@
 //! Validation of independently migrated project-owned SQLite databases.
 
+use crate::ai_search::{AI_SEARCH_SCHEMA_VERSION, AiSearchPaths};
+use crate::control_db::ControlDb;
+use crate::d1::{D1_DATABASE_SCHEMA_VERSION, D1Paths};
+use crate::data_dir::DataDir;
+use crate::kv::{KV_SCHEMA_VERSION, KvPaths};
+use crate::migrations;
+use crate::scheduler::current_scheduler_schema_version;
 use crate::scheduler::inspect_scheduler_schema_version;
 use crate::schema_migrations::DatabaseKind;
-use crate::{
-    AI_SEARCH_SCHEMA_VERSION, AiSearchPaths, ControlDb, D1_DATABASE_SCHEMA_VERSION, D1Paths,
-    DataDir, KV_SCHEMA_VERSION, KvPaths, VECTORIZE_SCHEMA_VERSION, VectorizePaths,
-    current_scheduler_schema_version, migrations,
-};
+use crate::vectorize::{VECTORIZE_SCHEMA_VERSION, VectorizePaths};
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, ResourceId, ResourceState};
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;

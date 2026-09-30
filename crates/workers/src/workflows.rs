@@ -4,9 +4,11 @@ use open_compute_core::{
     ErrorCode, InstanceId, PlatformError, ResourceAvailability, ResourceState, WorkflowId,
     WorkflowInstanceId, WorkflowOperationId, WorkflowsConfig,
 };
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::scheduler::SchedulerStore;
 use open_compute_storage::scheduler::{ClaimedWorkflowRun, WorkflowFailure, WorkflowState};
-use open_compute_storage::{
-    PlatformStorage, SchedulerStore, WorkflowInstanceIdentity, WorkflowRefState, WorkflowRepository,
+use open_compute_storage::workflows::{
+    WorkflowInstanceIdentity, WorkflowRefState, WorkflowRepository,
 };
 use serde::Serialize;
 

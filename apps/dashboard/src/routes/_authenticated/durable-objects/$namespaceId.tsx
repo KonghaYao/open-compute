@@ -13,6 +13,7 @@ import {
   Section,
 } from "../../../components/dashboard-page";
 import { useAuth } from "../../../features/auth/auth-atoms";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute(
   "/_authenticated/durable-objects/$namespaceId",
@@ -22,7 +23,7 @@ function DurableObjectDetailPage() {
   const { namespaceId } = Route.useParams();
   const { client, instanceId: selectedInstanceId } = useAuth();
   const namespaces = useQuery({
-    queryKey: ["durable-objects", selectedInstanceId],
+    queryKey: queryKeys.durableObjects(selectedInstanceId),
     queryFn: ({ signal }) =>
       client!.openCompute.durableObjects.list(selectedInstanceId!, {
         signal,
@@ -31,7 +32,7 @@ function DurableObjectDetailPage() {
     enabled: client !== null && selectedInstanceId !== null,
   });
   const objects = useInfiniteQuery({
-    queryKey: ["cloudflare-v4", "durable-objects", namespaceId],
+    queryKey: queryKeys.durableObjects(selectedInstanceId, namespaceId),
     queryFn: ({ signal, pageParam }) =>
       client!.openCompute.durableObjects.objects(
         selectedInstanceId!,

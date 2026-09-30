@@ -40,7 +40,7 @@ pub(super) fn assert_no_leaks(round: &Round, s3: &MockS3) {
     let lock = round.data.join("platform.lock");
     if lock.exists() {
         assert!(
-            open_compute_storage::DataDirLock::probe_available(&lock)
+            open_compute_storage::lock::DataDirLock::probe_available(&lock)
                 .expect("lock probe must succeed"),
             "data dir lock still held"
         );

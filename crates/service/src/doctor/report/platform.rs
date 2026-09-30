@@ -4,9 +4,9 @@ pub(super) fn inspect_platform(
     loaded: &LoadedConfig,
     checks: &mut Vec<DoctorCheck>,
 ) -> (
-    Option<open_compute_storage::DataRootInspect>,
-    Result<open_compute_storage::MasterKey, PlatformError>,
-    Option<open_compute_storage::StableIdentity>,
+    Option<open_compute_storage::inspect::DataRootInspect>,
+    Result<open_compute_storage::master_key::MasterKey, PlatformError>,
+    Option<open_compute_storage::identity::StableIdentity>,
 ) {
     checks.push(ok(
         "config",
@@ -236,7 +236,7 @@ pub(super) fn inspect_platform(
 
 pub(super) fn inspect_scheduler(
     loaded: &LoadedConfig,
-    inspect: Option<&open_compute_storage::DataRootInspect>,
+    inspect: Option<&open_compute_storage::inspect::DataRootInspect>,
     checks: &mut Vec<DoctorCheck>,
 ) {
     match inspect {

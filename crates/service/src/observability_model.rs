@@ -5,7 +5,9 @@ use super::{
     TailFrame,
 };
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, SecretString, VersionId, WorkerId};
-use open_compute_storage::{NewObservabilityEvent, NewObservabilityInvocation, ObservabilityField};
+use open_compute_storage::observability::{
+    NewObservabilityEvent, NewObservabilityInvocation, ObservabilityField,
+};
 use serde_json::{Map, Value, json};
 use sha2::{Digest as _, Sha256};
 use std::collections::{BTreeMap, HashSet};

@@ -6,7 +6,7 @@ pub(super) struct BoundPlatform {
     pub(super) metrics: Arc<MetricsRegistry>,
     pub(super) health: HealthCoordinator,
     pub(super) storage: Arc<PlatformStorage>,
-    pub(super) scheduler_store: Arc<open_compute_storage::SchedulerStore>,
+    pub(super) scheduler_store: Arc<open_compute_storage::scheduler::SchedulerStore>,
     pub(super) observability: Arc<ObservabilityService>,
     pub(super) cache: Arc<ArtifactCache>,
     pub(super) response_cache: Arc<CacheBindingService>,

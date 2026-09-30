@@ -24,7 +24,7 @@ ocd capabilities --json
 
 ## Runtime 与项目合同
 
-正式 release 内嵌由 formal runtime lock 选择并校验 checksum 的 `elliothux/workerd` fork，生产启动保持离线。项目使用标准 `wrangler.jsonc` 和项目内 Wrangler。只有当前 runtime contract 支持的 compatibility date 与 flag 才能通过 admission。
+正式 release 内嵌由 formal runtime lock 选择并校验 checksum 的 `elliothux/workerd` fork，生产启动保持离线。项目使用标准 `wrangler.jsonc` 和项目内 Wrangler。exact binary 校验每个 Version 原样保存的 compatibility date/flags；reflection catalog 只用于能力发现，不是第二套 admission policy。
 
 Dynamic Worker Loader 由原生 runtime 提供有界 surface，并执行文档列出的本地 CPU、memory、subrequest、startup 与 simultaneous-connection ceiling；仍有两个 experimental trust/tail member blocked，因此不代表完整 Workers for Platforms 产品。
 

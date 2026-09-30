@@ -8,7 +8,7 @@ pub(super) async fn create_product_set(
     worker: open_compute_core::WorkerId,
 ) -> (
     ProductBindings,
-    open_compute_storage::DurableObjectMigrationPlan,
+    open_compute_storage::durable_objects::DurableObjectMigrationPlan,
 ) {
     let kv = create_product_resource(
         storage,
@@ -87,8 +87,9 @@ pub(super) async fn create_product_set(
         now_ms(),
     )
     .await;
-    let do_repository = open_compute_storage::DurableObjectRepository::new(storage);
-    let do_plan = open_compute_storage::DurableObjectMigrationPlan {
+    let do_repository =
+        open_compute_storage::durable_objects::DurableObjectRepository::new(storage);
+    let do_plan = open_compute_storage::durable_objects::DurableObjectMigrationPlan {
         declarative: false,
         old_tag: None,
         new_tag: "p0-exit-v1".to_owned(),
@@ -197,7 +198,7 @@ pub(super) async fn alarm_status(
     stack: &GateStack,
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     generation: u64,
 ) -> Value {
     let response = dispatch(

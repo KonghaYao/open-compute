@@ -1,7 +1,7 @@
 //! Bounded monotonic operation decisions; absence alone never authorizes control cleanup.
 
 use super::*;
-use crate::{
+use crate::workflows::{
     WorkflowAppliedOperation, WorkflowOperation, WorkflowOperationKind, WorkflowOperationResult,
     WorkflowRejectedOperation,
 };

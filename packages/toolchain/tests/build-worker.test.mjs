@@ -248,6 +248,61 @@ test("pinned @types/node compiles default node: builtins without a tenant flag",
   }
 });
 
+test("normalizes bare Node builtins used by npm dependencies", async (t) => {
+  const options = await project(
+    t,
+    {
+      "index.ts": 'import { promisify } from "util"; export default promisify;',
+    },
+    {
+      ...defaultConfig,
+      compilerOptions: {
+        ...defaultConfig.compilerOptions,
+        types: ["node"],
+      },
+    },
+  );
+  await mkdir(join(options.project, "node_modules/@types"), {
+    recursive: true,
+  });
+  await symlink(nodeTypes, join(options.project, "node_modules/@types/node"));
+  const compiled = await compileWorker(options);
+  const code = new TextDecoder().decode(compiled.modules[0].bytes);
+  assert.match(code, /from\s*["']node:util["']/);
+});
+
+test("converts CommonJS dependency requires for external Node builtins", async (t) => {
+  const options = await project(
+    t,
+    {
+      "index.ts": 'import value from "dependency"; export default value;',
+      "dependency.d.ts":
+        'declare module "dependency" { const value: unknown; export default value; }',
+      "node_modules/dependency/package.json": JSON.stringify({
+        name: "dependency",
+        main: "index.js",
+      }),
+      "node_modules/dependency/index.js":
+        'module.exports = require("util").promisify;',
+    },
+    {
+      ...defaultConfig,
+      compilerOptions: {
+        ...defaultConfig.compilerOptions,
+        types: ["node"],
+      },
+    },
+  );
+  await mkdir(join(options.project, "node_modules/@types"), {
+    recursive: true,
+  });
+  await symlink(nodeTypes, join(options.project, "node_modules/@types/node"));
+  const compiled = await compileWorker(options);
+  const code = new TextDecoder().decode(compiled.modules[0].bytes);
+  assert.match(code, /from\s*["']node:util["']/);
+  assert.doesNotMatch(code, /__require\(["']util["']\)/);
+});
+
 test("entry and configuration paths cannot escape the selected project", async (t) => {
   const options = await project(t, { "index.ts": "export default {};" });
   const outside = await project(t, { "index.ts": "export default {};" });

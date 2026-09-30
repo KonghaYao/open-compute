@@ -6,8 +6,10 @@ use open_compute_core::{
     ComponentName, ComponentState, ErrorCode, PlatformError, R2Config, ReadinessReason,
     ResourceAvailability, ResourceId, ResourceState,
 };
-use open_compute_storage::{PlatformStorage, R2BucketRepository, ResourceRepository};
-use open_compute_workers::R2ResourceDriver;
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::r2::R2BucketRepository;
+use open_compute_storage::resources::ResourceRepository;
+use open_compute_workers::{R2Controller, ResourcePins};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -26,6 +28,7 @@ impl R2Maintenance {
         &mut self,
         storage: &Arc<PlatformStorage>,
         objects: &R2ObjectStore,
+        pins: &ResourcePins,
         config: &R2Config,
         health: &HealthCoordinator,
     ) {
@@ -63,12 +66,12 @@ impl R2Maintenance {
         let timeout = Duration::from_millis(config.operation_timeout_ms);
         let debounce = timeout.saturating_mul(2).max(MIN_PROVIDER_DEBOUNCE);
         let resources = ResourceRepository::new(storage.db());
-        let driver = R2ResourceDriver::new(storage, objects.clone(), config.clone());
+        let controller = R2Controller::new(storage, objects.clone(), pins.clone(), config.clone());
 
         for bucket in ready.iter().cycle().skip(start).take(count) {
             saw_ready = true;
             let result = tokio::time::timeout(timeout, async {
-                driver.reconcile(&bucket.resource).await?;
+                controller.reconcile(&bucket.resource, now_ms).await?;
                 crate::r2_backend::multipart::reconcile_bucket_multipart(
                     storage, objects, bucket, false, false, timeout,
                 )

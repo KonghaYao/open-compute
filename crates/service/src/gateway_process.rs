@@ -31,7 +31,7 @@ impl GatewayProcess {
             .parent()
             .ok_or_else(|| PlatformError::new(ErrorCode::PathInvalid, "Gateway has no owner root"))?
             .join("tmp");
-        open_compute_storage::ensure_dir_secure(&tmp_dir)?;
+        open_compute_storage::fs::ensure_dir_secure(&tmp_dir)?;
         let domains = self.control.domains()?;
         let shared = self.shared.clone();
         let dns_control = self.control.clone();

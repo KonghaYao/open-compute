@@ -4,9 +4,9 @@ use open_compute_core::{
     BindingId, BindingKind, CanonicalBindingConfig, CanonicalPermissions, ErrorCode, InstanceId,
     PlatformError, ResourceId, VersionId,
 };
-use open_compute_storage::{
-    AuthorizedBinding, PlatformStorage, ResourceRepository, VersionBindingRecord,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::bindings::{AuthorizedBinding, VersionBindingRecord};
+use open_compute_storage::resources::ResourceRepository;
 
 /// Build a full-permission management binding for one persisted resource.
 pub(crate) fn management_binding(

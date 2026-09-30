@@ -8,7 +8,7 @@
       "configSchemaSha256": "e42dc556dcb039aa1103d4811b1f58497e2676aceee20488d9ceb1d8ab712018"
     },
     "cloudflareSdk": {
-      "version": "7.1.0",
+      "version": "7.2.0",
       "integrity": "sha512-eb6WtiAbhuqdWmBdVo6fuXQgEBkYjhOeujRDYLEUWEZIECuABvDLz2DUYTwpN/4KyFecM4JtMHgZn5prlFUjLg==",
       "packageSha256": "c6660b3ccbf65cf168fc396ab19ae2c91aebbca8be5691b9f016471c028cd753"
     },

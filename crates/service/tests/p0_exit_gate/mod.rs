@@ -24,7 +24,10 @@ use open_compute_service::backup_cli::{
     backup_attest_restore_smoke, backup_create, backup_inspect, backup_restore,
 };
 use open_compute_service::doctor::{DoctorMode, doctor_report};
-use open_compute_storage::{D1Migration, PlatformStorage, ResourceRepository, WorkerRepository};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::d1::D1Migration;
+use open_compute_storage::resources::ResourceRepository;
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{BundleLimits, ResourcePins, RuntimeValidator, VersionController};
 use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};

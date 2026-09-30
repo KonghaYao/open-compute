@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>一个二进制。一个数据目录。</strong><br/>
+  <strong>一个二进制。一个 daemon。多个隔离 instance。</strong><br/>
   在一台自己的机器上运行兼容 Cloudflare Workers 的完整平台。
 </p>
 
@@ -37,7 +37,7 @@
 
 如果你已经会写 Cloudflare Workers，就可以直接使用 open-compute。标准 module Worker、常用 binding 和 Wrangler 工作流都可以保留，只是运行位置换成了你自己的机器。
 
-**一个二进制。一个数据目录。一个对象 authority。** 默认直接使用 Local 文件系统，也可显式选择 S3-compatible 存储。
+**一个二进制。一个共享 daemon。每个 instance 一份对象 authority。** 默认直接使用 Local 文件系统，也可显式选择 S3-compatible 存储。
 
 不需要 Kubernetes、Redis、服务网格或分布式控制面，也不会把数据锁在托管平台里。
 
@@ -109,7 +109,7 @@ open-compute 补上了这一层，并把它交付为一个文件。
 | 表面                         | 状态                                                                 |
 | ---------------------------- | -------------------------------------------------------------------- |
 | Cloudflare v4 API            | █████████░ 90% — 本地 `/client/v4` 可与 Wrangler 及官方 SDK 配合使用 |
-| Wrangler                     | █████████▉ 99% ✅ — Wrangler `4.138.0` 可部署和管理已支持产品        |
+| Wrangler                     | █████████▉ 99% ✅ — Wrangler `4.143.0` 可部署和管理已支持产品        |
 | Dashboard                    | ████████░░ 80% — 基于同一套 `/client/v4` API 的 operator UI          |
 | Workers Logs / realtime tail | █████████░ 90% — 单机 logs、query、`wrangler tail` 与 live tail      |
 
@@ -178,12 +178,12 @@ sudo ocd setup --system --yes
 Wrangler 继续作为 Worker 项目的本地 dependency。本地开发直接使用 Wrangler，部署到 open-compute 时使用 `ocd wrangler`：
 
 ```sh
-npm install --save-dev wrangler@4.138.0
+npm install --save-dev wrangler@4.143.0
 npx wrangler dev
 ocd wrangler deploy
 ```
 
-生产环境仍然只需要**一个发布二进制、一个配置和一个数据目录**。runtime payload 已内嵌并经过校验；daemon 启动时不会下载 workerd，也不会在 `PATH` 中查找它。
+生产环境仍然只需要**一个发布二进制和一个共享 daemon**，每个 instance 显式拥有自己的配置与数据目录。runtime payload 已内嵌并经过校验；daemon 启动时不会下载 workerd，也不会在 `PATH` 中查找它。
 
 完整安装流程以及 remote target、CI、environment、tail 和 rollback 见[快速开始](https://open-compute.dev/zh/docs/get-started/)与[开发应用](https://open-compute.dev/zh/docs/develop/)。
 
@@ -249,7 +249,7 @@ Dashboard 用于管理 `/client/v4` 已开放的计算、存储、AI 和平台�
 
 - **不提供 Cloudflare 的全球边缘网络。** open-compute 运行在你自己的单节点基础设施上，没有 Anycast、跨地域复制或 POP 网络。对应的好处是本机状态保持强一致。
 - **并非所有 Cloudflare 产品都可以直接替换。** 兼容性按 surface 跟踪，已知差异会明确记录在文档中。
-- **不是多副本 HA 集群。** 一个数据目录、一个进程、一台机器是当前明确的部署模型。
+- **不是多副本 HA 集群。** 一个 daemon、一台机器和相互隔离的 instance authority 是当前明确的部署模型。
 
 ## 文档
 
@@ -266,9 +266,9 @@ Dashboard 用于管理 `/client/v4` 已开放的计算、存储、AI 和平台�
 
 ## 安全
 
-- 每个数据目录只允许一个 `ocd`——由锁强制，不是靠文档。
+- 每个 user 或 system 作用域只允许一个 `ocd`，每个 instance 数据目录都有独占锁。
 - 内部 token 永不出现在 argv、环境变量、日志、status 或 metrics 中。
-- 租户出站仅限公网；私有、回环、link-local 和 metadata 地址在地址层直接拒绝。
+- 租户出站可访问宿主可路由的公网、私网、loopback、link-local 与 metadata IP；operator 通过宿主 firewall、namespace、容器或 VM 负责目标过滤。
 
 ## 赞助
 

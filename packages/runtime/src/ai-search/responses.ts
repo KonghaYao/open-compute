@@ -247,8 +247,25 @@ function chunk(
     for (const key of ["provider_id", "source", "key", "revision"])
       text(source[key], key === "key" ? 1024 : 256);
   }
-  if (raw.scoring_details !== undefined && !json(raw.scoring_details))
-    fail("AI_SEARCH_PROTOCOL_ERROR");
+  if (raw.scoring_details !== undefined) {
+    const details = protocolExact(raw.scoring_details, [
+      "fusion_method",
+      "keyword_rank",
+      "keyword_score",
+      "reranking_score",
+      "vector_rank",
+      "vector_score",
+    ]);
+    if (
+      details.fusion_method !== undefined &&
+      !["rrf", "max"].includes(String(details.fusion_method))
+    )
+      fail("AI_SEARCH_PROTOCOL_ERROR");
+    for (const key of ["keyword_rank", "vector_rank"])
+      if (details[key] !== undefined) integer(details[key], 1, 1_000_000);
+    for (const key of ["keyword_score", "reranking_score", "vector_score"])
+      if (details[key] !== undefined) number(details[key], 0, 1);
+  }
   if (multi && typeof raw.instance_id !== "string")
     fail("AI_SEARCH_PROTOCOL_ERROR");
   return raw as AiSearchSearchResponse["chunks"][number];
@@ -259,11 +276,13 @@ export function searchResponse(
 ): AiSearchSearchResponse | AiSearchMultiSearchResponse {
   const raw = protocolExact(value, [
     "search_query",
+    "query_kind",
     "chunks",
     ...(multi ? ["errors"] : []),
   ]);
   if (
     typeof raw.search_query !== "string" ||
+    raw.query_kind !== "text" ||
     !Array.isArray(raw.chunks) ||
     raw.chunks.length > 50
   )
@@ -290,11 +309,15 @@ export function chatResponse(
     "model",
     "choices",
     "chunks",
+    "query_kind",
+    "search_query",
     ...(multi ? ["errors"] : []),
   ]);
   for (const key of ["id", "object", "model"])
     if (raw[key] !== undefined && typeof raw[key] !== "string")
       fail("AI_SEARCH_PROTOCOL_ERROR");
+  if (raw.query_kind !== "text" || typeof raw.search_query !== "string")
+    fail("AI_SEARCH_PROTOCOL_ERROR");
   if (
     !Array.isArray(raw.choices) ||
     raw.choices.length > 100 ||

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{DeploymentSource, WorkerObservabilityPatch};
+use crate::worker_repository::{DeploymentSource, WorkerObservabilityPatch};
 
 #[test]
 fn worker_observability_settings_are_day1_authority_and_invalidate_runtime_generation() {

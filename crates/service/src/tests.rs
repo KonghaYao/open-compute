@@ -40,7 +40,8 @@ use open_compute_core::{
 };
 use open_compute_runtime::GenerationAuthRegistry;
 use open_compute_runtime::supervisor::{SupervisorSnapshot, SupervisorState};
-use open_compute_storage::{DataDir, SchedulerStore, SchedulerSummary, inspect_scheduler_db};
+use open_compute_storage::data_dir::DataDir;
+use open_compute_storage::scheduler::{SchedulerStore, SchedulerSummary, inspect_scheduler_db};
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateVersionOutcome, CreateVersionRequest, ModuleInput,
     ModuleType, ProductPromotionCoordinator, ProductPromotionRequest, QueueConsumerInput,
@@ -415,7 +416,7 @@ pub(crate) async fn initialized_worker_http_fixture() -> (
     let transport =
         WorkerdTransport::new(GenerationAuthRegistry::new(), Arc::new(Mutex::new(None)));
     let observability_store = Arc::new(
-        open_compute_storage::ObservabilityStore::open(
+        open_compute_storage::observability::ObservabilityStore::open(
             &storage.data_dir().ensure_observability_db().unwrap(),
             storage.identity().instance_id,
             loaded.config.data.sqlite_busy_timeout_ms,

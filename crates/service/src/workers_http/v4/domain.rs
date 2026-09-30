@@ -9,11 +9,17 @@ use open_compute_core::{
     BindingKind, CanonicalBindingConfig, CanonicalPermissions, ErrorCode, InstanceId,
     PlatformError, RequestId, ResourceId, ResourceState, SecretString, WorkerId,
 };
-use open_compute_storage::{
-    AiSearchCatalog, BuiltinBindingKind, CatalogDirection, CatalogSort, DeploymentSource,
-    DurableObjectRepository, QueueRepository, ResourceRepository, ServiceTarget, VersionSnapshot,
-    WorkerRecord, WorkerRepository, WorkflowDefinitionReservation, WorkflowRepository,
+use open_compute_storage::ai_search::AiSearchCatalog;
+use open_compute_storage::catalog_page::{CatalogDirection, CatalogSort};
+use open_compute_storage::durable_objects::DurableObjectRepository;
+use open_compute_storage::queues::QueueRepository;
+use open_compute_storage::resources::ResourceRepository;
+use open_compute_storage::runtime_features::BuiltinBindingKind;
+use open_compute_storage::services::ServiceTarget;
+use open_compute_storage::worker_repository::{
+    DeploymentSource, VersionSnapshot, WorkerRecord, WorkerRepository,
 };
+use open_compute_storage::workflows::{WorkflowDefinitionReservation, WorkflowRepository};
 use open_compute_workers::{
     CreateVersionOutcome, CreateVersionRequest, ModuleBindingKind, RuntimeValidator,
     ServiceDescriptor, VersionBindingInput, VersionBundle, VersionCachePolicyInput, VersionContent,
@@ -39,7 +45,7 @@ pub(super) async fn create_from_upload(
     upload: ParsedWorkerUpload,
     strict_inheritance: bool,
     deployment_source: Option<DeploymentSource>,
-    observability: Option<open_compute_storage::WorkerObservabilityPatch>,
+    observability: Option<open_compute_storage::worker_repository::WorkerObservabilityPatch>,
     request_id: RequestId,
     now_ms: i64,
 ) -> Result<CreateVersionOutcome, PlatformError> {
@@ -88,7 +94,7 @@ async fn create_from_prepared_upload(
     upload: ParsedWorkerUpload,
     strict_inheritance: bool,
     deployment_source: Option<DeploymentSource>,
-    observability: Option<open_compute_storage::WorkerObservabilityPatch>,
+    observability: Option<open_compute_storage::worker_repository::WorkerObservabilityPatch>,
     request_id: RequestId,
     now_ms: i64,
     migration: Option<&super::do_lifecycle::PreparedDoMigration>,

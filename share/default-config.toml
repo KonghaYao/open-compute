@@ -99,8 +99,8 @@ max_stderr_bytes = 65536
 [ai]
 max_provider_in_flight = 16
 max_embedding_inputs_per_batch = 96
-max_embedding_request_bytes = 2097152
-max_embedding_response_bytes = 16777216
+max_provider_request_bytes = 2097152
+max_provider_response_bytes = 16777216
 max_vlm_in_flight = 2
 max_vlm_images_per_document = 16
 max_vlm_request_bytes = 8388608

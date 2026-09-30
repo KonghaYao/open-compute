@@ -12,10 +12,12 @@ use axum::extract::{Path, Request, State};
 use axum::response::Response;
 use axum::routing::get;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, QueueId, WorkerId};
-use open_compute_storage::{
-    PlatformStorage, QueueConsumerConfig, QueueConsumerRecord, QueueConsumerRepository,
-    QueueRecord, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::queue_consumers::{
+    QueueConsumerConfig, QueueConsumerRecord, QueueConsumerRepository,
 };
+use open_compute_storage::queues::QueueRecord;
+use open_compute_storage::worker_repository::WorkerRepository;
 use serde::{Deserialize, Serialize};
 
 pub(super) fn router() -> Router<HttpState> {
@@ -351,7 +353,7 @@ fn resolve_queue_name(
     account_id: InstanceId,
     name: &str,
 ) -> Result<QueueRecord, PlatformError> {
-    open_compute_storage::QueueRepository::new(storage.db())
+    open_compute_storage::queues::QueueRepository::new(storage.db())
         .list_instance(account_id)?
         .into_iter()
         .find(|queue| queue.name == name)
@@ -387,7 +389,8 @@ pub(crate) fn consumer_response(
     let dead_letter_queue = declaration
         .dlq_queue_id
         .map(|id| {
-            open_compute_storage::QueueRepository::new(storage.db()).get(record.instance_id, id)
+            open_compute_storage::queues::QueueRepository::new(storage.db())
+                .get(record.instance_id, id)
         })
         .transpose()?
         .map_or_else(String::new, |queue| queue.name);
@@ -446,7 +449,7 @@ pub(crate) struct ConsumerResponse {
     created_on: String,
     dead_letter_queue: String,
     queue_name: String,
-    /// Wrangler 4.138.0 reads `script` while cloudflare 7.1.0 reads `script_name`.
+    /// Wrangler 4.143.0 reads `script` while cloudflare 7.2.0 reads `script_name`.
     script: String,
     script_name: String,
     settings: ConsumerSettings,

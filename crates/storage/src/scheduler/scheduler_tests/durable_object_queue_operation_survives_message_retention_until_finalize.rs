@@ -12,9 +12,9 @@ fn durable_object_queue_operation_survives_message_retention_until_finalize() {
             instance_id: store.instance_id(),
             lifecycle_generation: 1,
             config_generation: 1,
-            config: crate::QueueConfig {
+            config: crate::queues::QueueConfig {
                 retention_seconds: 60,
-                ..crate::QueueConfig::default()
+                ..crate::queues::QueueConfig::default()
             },
             created_at_ms: 1_000,
             updated_at_ms: 1_000,

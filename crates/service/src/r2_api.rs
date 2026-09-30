@@ -5,8 +5,10 @@ use open_compute_artifacts::R2ObjectStore;
 use open_compute_core::{
     BindingKind, ErrorCode, PlatformError, R2Config, RequestId, ResourceState,
 };
-use open_compute_storage::{PlatformStorage, R2BucketRepository, ResourceRepository};
-use open_compute_workers::{R2ResourceDriver, ResourcePins};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::r2::R2BucketRepository;
+use open_compute_storage::resources::ResourceRepository;
+use open_compute_workers::{R2Controller, ResourcePins};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -69,7 +71,7 @@ impl R2ApiState {
     /// Recover every creating/deleting R2 lifecycle before readiness.
     pub async fn reconcile_pending(&self) -> Result<u32, PlatformError> {
         let candidates = ResourceRepository::new(self.storage.db()).reconcile_candidates()?;
-        let driver = self.driver();
+        let controller = self.controller();
         let mut reconciled = 0_u32;
         for resource in candidates {
             if resource.kind != BindingKind::R2Bucket {
@@ -77,15 +79,14 @@ impl R2ApiState {
             }
             match resource.state {
                 ResourceState::Creating => {
-                    driver.reconcile(&resource).await?;
-                    ResourceRepository::new(self.storage.db())
-                        .mark_ready(resource.id, open_compute_core::wall_time_ms())?;
+                    controller
+                        .reconcile(&resource, open_compute_core::wall_time_ms())
+                        .await?;
                 }
                 ResourceState::Deleting => {
                     let bucket = R2BucketRepository::new(self.storage.db())
                         .get(resource.instance_id, resource.id)?;
-                    R2BucketRepository::new(self.storage.db())
-                        .mark_delete_started(resource.id, open_compute_core::wall_time_ms())?;
+                    controller.resume_delete(&bucket, open_compute_core::wall_time_ms())?;
                     crate::r2_backend::multipart::reconcile_bucket_multipart(
                         &self.storage,
                         &self.objects,
@@ -102,14 +103,14 @@ impl R2ApiState {
                         Duration::from_millis(self.config.operation_timeout_ms),
                     )
                     .await?;
-                    driver.drain_objects(&bucket).await?;
-                    driver.finalize_delete(&bucket).await?;
-                    ResourceRepository::new(self.storage.db()).mark_tombstoned(
-                        resource.instance_id,
-                        resource.id,
-                        RequestId::generate(),
-                        open_compute_core::wall_time_ms(),
-                    )?;
+                    controller
+                        .finish_delete(
+                            &bucket,
+                            RequestId::generate(),
+                            open_compute_core::wall_time_ms(),
+                            true,
+                        )
+                        .await?;
                 }
                 ResourceState::Ready | ResourceState::Tombstoned => continue,
             }
@@ -138,31 +139,53 @@ impl R2ApiState {
         Ok(reconciled)
     }
 
-    fn driver(&self) -> R2ResourceDriver<'_> {
-        R2ResourceDriver::new(&self.storage, self.objects.clone(), self.config.clone())
+    pub(crate) fn controller(&self) -> R2Controller<'_> {
+        R2Controller::new(
+            &self.storage,
+            self.objects.clone(),
+            self.pins.clone(),
+            self.config.clone(),
+        )
     }
 
     pub(crate) fn storage(&self) -> &Arc<PlatformStorage> {
         &self.storage
     }
 
-    pub(crate) const fn objects(&self) -> &R2ObjectStore {
-        &self.objects
-    }
-
-    pub(crate) fn pins(&self) -> &ResourcePins {
-        &self.pins
-    }
-
-    pub(crate) const fn config(&self) -> &R2Config {
-        &self.config
-    }
-
-    pub(crate) const fn delete_drain_timeout(&self) -> Duration {
-        self.delete_drain_timeout
-    }
-
-    pub(crate) fn resource_driver(&self) -> R2ResourceDriver<'_> {
-        self.driver()
+    /// Run the complete durable bucket-delete workflow behind the transport boundary.
+    pub(crate) async fn delete_bucket(
+        &self,
+        bucket: &open_compute_storage::r2::R2BucketRecord,
+        request_id: RequestId,
+        now_ms: i64,
+    ) -> Result<(), PlatformError> {
+        let controller = self.controller();
+        let timeout = Duration::from_millis(self.config.operation_timeout_ms);
+        Box::pin(controller.delete(
+            bucket,
+            request_id,
+            now_ms,
+            self.delete_drain_timeout,
+            async {
+                crate::r2_backend::multipart::reconcile_bucket_multipart(
+                    &self.storage,
+                    &self.objects,
+                    bucket,
+                    false,
+                    true,
+                    timeout,
+                )
+                .await?;
+                crate::r2_backend::objects::reconcile_bucket_objects(
+                    &self.storage,
+                    &self.objects,
+                    bucket,
+                    timeout,
+                )
+                .await?;
+                Ok(())
+            },
+        ))
+        .await
     }
 }

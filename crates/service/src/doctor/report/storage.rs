@@ -2,9 +2,9 @@ use super::*;
 
 pub(super) fn inspect_local_components(
     loaded: &LoadedConfig,
-    inspect: &Option<open_compute_storage::DataRootInspect>,
-    inspected_key: &Result<open_compute_storage::MasterKey, PlatformError>,
-    db_ok: &Option<open_compute_storage::StableIdentity>,
+    inspect: &Option<open_compute_storage::inspect::DataRootInspect>,
+    inspected_key: &Result<open_compute_storage::master_key::MasterKey, PlatformError>,
+    db_ok: &Option<open_compute_storage::identity::StableIdentity>,
     checks: &mut Vec<DoctorCheck>,
 ) {
     checks.push(ok(
@@ -111,7 +111,7 @@ pub(super) fn inspect_local_components(
 pub(super) async fn inspect_object_storage(
     loaded: &LoadedConfig,
     mode: DoctorMode,
-    db_ok: Option<&open_compute_storage::StableIdentity>,
+    db_ok: Option<&open_compute_storage::identity::StableIdentity>,
     checks: &mut Vec<DoctorCheck>,
 ) -> Option<ObjectBackend> {
     let object_backend = match (db_ok, &loaded.config.object_storage, mode) {
@@ -303,8 +303,8 @@ pub(super) async fn inspect_object_storage(
 pub(super) async fn inspect_full(
     loaded: &LoadedConfig,
     mode: DoctorMode,
-    inspect: Option<&open_compute_storage::DataRootInspect>,
-    db_ok: Option<&open_compute_storage::StableIdentity>,
+    inspect: Option<&open_compute_storage::inspect::DataRootInspect>,
+    db_ok: Option<&open_compute_storage::identity::StableIdentity>,
     object_backend: Option<&ObjectBackend>,
     checks: &mut Vec<DoctorCheck>,
 ) {

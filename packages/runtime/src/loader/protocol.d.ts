@@ -9,9 +9,9 @@ export interface LoaderEnv extends BindingEnv, DoPolicyEnv {
   RUNTIME_SOURCE: Fetcher;
   INTERNAL_TOKEN: string;
   DO_ROUTER: DoRouterRpc;
-  PUBLIC_NETWORK: Fetcher;
-  COMPATIBILITY_DATE: string;
-  REQUIRED_COMPATIBILITY_FLAGS: string[];
+  OUTBOUND_NETWORK: Fetcher;
+  SYSTEM_COMPATIBILITY_DATE: string;
+  SYSTEM_COMPATIBILITY_FLAGS: string[];
   OBSERVABILITY_BACKEND: Fetcher;
   OBSERVABILITY_BACKEND_TOKEN: string;
 }

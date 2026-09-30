@@ -1,5 +1,5 @@
 use super::*;
-use crate::ResourceRecord;
+use crate::resources::ResourceRecord;
 use open_compute_core::{BindingKind, D1Config, ResourceAvailability, ResourceState};
 
 fn limits() -> super::super::D1QueryLimits {

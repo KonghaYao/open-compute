@@ -1,5 +1,5 @@
 use super::*;
-use crate::ControlDb;
+use crate::control_db::ControlDb;
 
 fn reopen_storage(temp: &tempfile::TempDir) -> PlatformStorage {
     let root = temp.path().join("data");

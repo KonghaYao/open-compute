@@ -1,6 +1,6 @@
 //! Durable fixed-Wrangler Static Assets upload sessions.
 
-use crate::ControlDb;
+use crate::control_db::ControlDb;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError};
 use rusqlite::{OptionalExtension, params};
 use std::collections::BTreeMap;
@@ -78,7 +78,7 @@ impl<'a> AssetUploadRepository<'a> {
         expires_at_ms: i64,
         max_open_per_worker: u32,
     ) -> Result<AssetUploadSession, PlatformError> {
-        crate::workers::validate_worker_name(script_name)?;
+        crate::worker_repository::validate_worker_name(script_name)?;
         validate_entries(entries)?;
         if expires_at_ms <= now_ms || max_open_per_worker == 0 {
             return Err(invalid());
@@ -447,7 +447,7 @@ fn require_instance(
     tx: &rusqlite::Transaction<'_>,
     instance_id: InstanceId,
 ) -> Result<(), PlatformError> {
-    crate::workers::require_instance(tx, instance_id).map_err(|error| {
+    crate::worker_repository::require_instance(tx, instance_id).map_err(|error| {
         if error.code() == ErrorCode::InstanceNotFound {
             not_found()
         } else {

@@ -3,8 +3,6 @@ import { connect as tlsConnect } from "node:tls";
 import { connect as socketConnect } from "cloudflare:sockets";
 import { WorkerEntrypoint } from "cloudflare:workers";
 
-const DENIED =
-  /not allowed|disallowed|denied|refused by|private network|network address|proxy request failed/i;
 const encoder = new TextEncoder();
 
 async function deadline(promise, label, milliseconds = 5000) {
@@ -133,27 +131,6 @@ async function halfOpen(address, allowHalfOpen) {
     "half-open socket close",
   );
   return { marker, writeAfterEof, closeError };
-}
-
-async function deniedSocket(address) {
-  let socket;
-  try {
-    socket = socketConnect(address, {
-      allowHalfOpen: false,
-      secureTransport: "off",
-    });
-    await deadline(socket.opened, "private socket rejection", 1500);
-    await socket.close();
-    return { opened: true, denied: false };
-  } catch (error) {
-    try {
-      await socket?.close();
-    } catch {}
-    return {
-      opened: false,
-      denied: DENIED.test(String((error && error.message) || error)),
-    };
-  }
 }
 
 async function cloudflareTlsFailure(address, mode, expectedServerHostname) {
@@ -350,27 +327,6 @@ function nodeTimeout(host, port) {
   );
 }
 
-function nodeDenied(host, port) {
-  return deadline(
-    new Promise((resolve) => {
-      const socket = nodeConnect({ host, port });
-      socket.once("connect", () => {
-        socket.destroy();
-        resolve({ opened: true, denied: false });
-      });
-      socket.once("error", (error) => {
-        socket.destroy();
-        resolve({
-          opened: false,
-          denied: DENIED.test(String((error && error.message) || error)),
-        });
-      });
-    }),
-    "node private rejection",
-    1500,
-  );
-}
-
 async function loopbackEcho(service, label) {
   const expected = payload(96 * 1024);
   const expectedAuthority = "loopback.invalid:7000";
@@ -513,16 +469,19 @@ async function rawTcpMatrix(config) {
       ],
       [
         "privateDns",
-        () => deniedSocket(authority(config.privateHostname, tcpPort)),
+        () => socketEcho(authority(config.privateHostname, tcpPort)),
       ],
-      ["loopback", () => deniedSocket(authority("127.0.0.1", tcpPort))],
+      ["loopback", () => socketEcho(authority("127.0.0.1", tcpPort))],
     ]),
     probeGroup("node", [
       ["net", () => nodeEcho({ host: config.hostname, port: tcpPort })],
       ["tls", () => nodeTlsFailure(config.ipv4Host, tlsPort, config.hostname)],
       ["timeout", () => nodeTimeout(config.hostname, tcpPort)],
-      ["privateDns", () => nodeDenied(config.privateHostname, tcpPort)],
-      ["loopback", () => nodeDenied("127.0.0.1", tcpPort)],
+      [
+        "privateDns",
+        () => nodeEcho({ host: config.privateHostname, port: tcpPort }),
+      ],
+      ["loopback", () => nodeEcho({ host: "127.0.0.1", port: tcpPort })],
     ]),
   ]);
   return {
@@ -535,8 +494,10 @@ async function eventSourceRawTcp(env, source) {
   const config = JSON.parse(env.RAW_TCP_CONFIG_JSON);
   const tcpPort = Number(config.tcpPort);
   const echo = await socketEcho(authority(config.hostname, tcpPort));
-  const denied = await deniedSocket(authority(config.privateHostname, tcpPort));
-  if (echo.bytes !== 192 * 1024 || !denied.denied) {
+  const privateEcho = await socketEcho(
+    authority(config.privateHostname, tcpPort),
+  );
+  if (echo.bytes !== 192 * 1024 || privateEcho.bytes !== 192 * 1024) {
     throw new Error(`${source} raw TCP event-source policy mismatch`);
   }
 }
@@ -576,10 +537,10 @@ export class SocketService extends WorkerEntrypoint {
 
 export default {
   async fetch(_request, env, ctx) {
-    const publicTargets = JSON.parse(env.PUBLIC_TARGETS_JSON);
-    const deniedTargets = JSON.parse(env.DENIED_TARGETS_JSON);
+    const allowedTargets = JSON.parse(env.ALLOWED_TARGETS_JSON);
+    const unreachableTargets = JSON.parse(env.UNREACHABLE_TARGETS_JSON);
     const allowed = await Promise.all(
-      publicTargets.map(async (target) => {
+      allowedTargets.map(async (target) => {
         try {
           const response = await fetch(target, {
             signal: AbortSignal.timeout(3000),
@@ -592,8 +553,8 @@ export default {
         }
       }),
     );
-    const deniedResults = await Promise.all(
-      deniedTargets.map(async (target) => {
+    const unreachableResults = await Promise.all(
+      unreachableTargets.map(async (target) => {
         try {
           await fetch(target, { signal: AbortSignal.timeout(1000) });
           return false;
@@ -602,7 +563,7 @@ export default {
         }
       }),
     );
-    const denied = deniedResults.filter(Boolean).length;
+    const unreachable = unreachableResults.filter(Boolean).length;
     const ctxExports = await loopbackProbe(
       ctx.exports.SocketService,
       "ctx.exports",
@@ -610,7 +571,7 @@ export default {
     const rawTcp = env.RAW_TCP_CONFIG_JSON
       ? await rawTcpMatrix(JSON.parse(env.RAW_TCP_CONFIG_JSON))
       : null;
-    return Response.json({ allowed, denied, ctxExports, rawTcp });
+    return Response.json({ allowed, unreachable, ctxExports, rawTcp });
   },
 
   async queue(batch, env) {

@@ -181,6 +181,7 @@ export function buildCapability(
   subset,
   manifest,
   source,
+  wranglerVersion,
   configSchemaSha256,
   configSchema,
 ) {
@@ -341,8 +342,7 @@ export function buildCapability(
       status: "unsupported",
       source: "pinned-schema-absence",
       stage: "P8",
-      constraint:
-        "wrangler@4.138.0 config-schema.json has no usage_model property",
+      constraint: `wrangler@${wranglerVersion} config-schema.json has no usage_model property`,
     },
     {
       id: "worker_loaders[].binding",
@@ -395,7 +395,7 @@ export function buildCapability(
     workersObservability: source.workersObservability,
     workerLoader: source.workerLoader,
     wrangler: {
-      version: "4.138.0",
+      version: wranglerVersion,
       configSchemaSha256,
       fields,
       bindings,
@@ -844,24 +844,75 @@ function extensionSchemas() {
       [
         "release",
         "wrangler_version",
-        "compatibility_date",
-        "compatibility_flags",
+        "compatibility",
+        "system_workers",
         "endpoints",
         "deviations",
         "configuration",
       ],
       {
         release: { type: "string", minLength: 1 },
-        wrangler_version: { type: "string", const: "4.138.0" },
-        compatibility_date: objectSchema(["minimum", "maximum"], {
-          minimum: { type: "string", format: "date" },
-          maximum: { type: "string", format: "date" },
-        }),
-        compatibility_flags: {
-          type: "array",
-          uniqueItems: true,
-          items: string,
-        },
+        wrangler_version: { type: "string", const: "4.143.0" },
+        compatibility: objectSchema(
+          [
+            "validation",
+            "binary_maximum_date",
+            "future_dates_allowed",
+            "experimental_enabled",
+            "features",
+            "catalog_sha256",
+          ],
+          {
+            validation: { type: "string", const: "workerd_code_version" },
+            binary_maximum_date: { type: "string", format: "date" },
+            future_dates_allowed: { type: "boolean", const: false },
+            experimental_enabled: { type: "boolean" },
+            features: {
+              type: "array",
+              items: objectSchema(
+                [
+                  "field",
+                  "enabled_for_all_dates",
+                  "experimental",
+                  "python_snapshot_release",
+                ],
+                {
+                  field: { type: "string", minLength: 1 },
+                  enable_flag: { type: "string", minLength: 1 },
+                  disable_flag: { type: "string", minLength: 1 },
+                  default_on_date: { type: "string", format: "date" },
+                  enabled_for_all_dates: { type: "boolean" },
+                  experimental: { type: "boolean" },
+                  python_snapshot_release: { type: "boolean" },
+                  implied_by: {
+                    type: "array",
+                    items: objectSchema(["flags", "after_date"], {
+                      flags: {
+                        type: "array",
+                        minItems: 1,
+                        uniqueItems: true,
+                        items: { type: "string", minLength: 1 },
+                      },
+                      after_date: { type: "string", format: "date" },
+                    }),
+                  },
+                },
+              ),
+            },
+            catalog_sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+          },
+        ),
+        system_workers: objectSchema(
+          ["compatibility_date", "compatibility_flags"],
+          {
+            compatibility_date: { type: "string", format: "date" },
+            compatibility_flags: {
+              type: "array",
+              uniqueItems: true,
+              items: { type: "string", minLength: 1 },
+            },
+          },
+        ),
         endpoints: {
           type: "object",
           additionalProperties: {
@@ -1685,6 +1736,7 @@ export function validateCommitted({ openapiPath, wranglerRoot, sdkRoot } = {}) {
           subset,
           manifest,
           json(CAPABILITY_SOURCE_PATH),
+          lock.wrangler.version,
           lock.wrangler.configSchemaSha256,
           json(join(wranglerRoot, "config-schema.json")),
         ),
@@ -1758,6 +1810,7 @@ function main() {
       JSON.parse(output),
       json(MANIFEST_PATH),
       json(CAPABILITY_SOURCE_PATH),
+      lock.wrangler.version,
       lock.wrangler.configSchemaSha256,
       json(join(wranglerRoot, "config-schema.json")),
     );

@@ -99,37 +99,8 @@ pub fn gateway_router(state: HttpState) -> Router {
 
 /// Admin routes, including public health plus operator API and metrics.
 pub fn admin_router(state: HttpState) -> Router {
-    let metrics_enabled = state.metrics_enabled;
     let middleware_state = state.clone();
-    let v4_state = state.clone();
-    let mut router = Router::new()
-        .route("/health/live", get(live))
-        .route("/health/ready", get(ready))
-        .nest(
-            "/client/v4",
-            crate::cloudflare_v4::router(
-                v4_state,
-                workers_http::v4::router().merge(crate::cloudflare_v4::storage_router()),
-            ),
-        )
-        .merge(removed_management_router(false));
-    if metrics_enabled {
-        router = router.route("/metrics", get(metrics_handler));
-    }
-    router = router
-        .route(
-            "/operator/session/exchange",
-            post(operator_session::exchange_login_code),
-        )
-        .route(
-            "/operator/session",
-            post(operator_session::mint_session_from_admin),
-        )
-        .route("/operator", any(operator_surface))
-        .route("/operator/", any(operator_surface))
-        .route("/operator/{*rest}", any(operator_surface))
-        .merge(test_control_router());
-    router
+    admin_routes(&state)
         .fallback(fallback)
         .layer(middleware::from_fn_with_state(
             middleware_state,
@@ -138,25 +109,19 @@ pub fn admin_router(state: HttpState) -> Router {
         .with_state(state)
 }
 
-/// Merged public+admin on one listener.
-pub fn merged_router(state: HttpState) -> Router {
-    let metrics_enabled = state.metrics_enabled;
-    let middleware_state = state.clone();
-    let v4_state = state.clone();
-    let host_state = state.clone();
+fn admin_routes(state: &HttpState) -> Router<HttpState> {
     let mut router = Router::new()
         .route("/health/live", get(live))
         .route("/health/ready", get(ready))
-        .merge(crate::artifact_git_http::router())
         .nest(
             "/client/v4",
             crate::cloudflare_v4::router(
-                v4_state,
+                state.clone(),
                 workers_http::v4::router().merge(crate::cloudflare_v4::storage_router()),
             ),
         )
         .merge(removed_management_router(false));
-    if metrics_enabled {
+    if state.platform.metrics_enabled {
         router = router.route("/metrics", get(metrics_handler));
     }
     router
@@ -172,6 +137,15 @@ pub fn merged_router(state: HttpState) -> Router {
         .route("/operator/", any(operator_surface))
         .route("/operator/{*rest}", any(operator_surface))
         .merge(test_control_router())
+}
+
+/// Merged public+admin on one listener.
+pub fn merged_router(state: HttpState) -> Router {
+    let middleware_state = state.clone();
+    let host_state = state.clone();
+    Router::new()
+        .merge(crate::artifact_git_http::router())
+        .merge(admin_routes(&state))
         .fallback(workers_http::local_ingress)
         .layer(middleware::from_fn_with_state(
             host_state,
@@ -189,7 +163,7 @@ async fn live() -> StatusCode {
 }
 
 async fn ready(State(state): State<HttpState>) -> Response {
-    let reason = state.health.readiness();
+    let reason = state.platform.health.readiness();
     if reason.is_ready() {
         StatusCode::OK.into_response()
     } else {
@@ -229,7 +203,10 @@ async fn metrics_handler(State(state): State<HttpState>, request: Request) -> Re
         );
         return platform_error_response(&error, request_id);
     }
-    let body = state.metrics.render(&state.health.snapshot());
+    let body = state
+        .platform
+        .metrics
+        .render(&state.platform.health.snapshot());
     (
         [(header::CONTENT_TYPE, HeaderValue::from_static(CONTENT_TYPE))],
         body,
@@ -238,10 +215,10 @@ async fn metrics_handler(State(state): State<HttpState>, request: Request) -> Re
 }
 
 async fn operator_surface(State(state): State<HttpState>, request: Request) -> Response {
-    if !state.dashboard_enabled {
+    if !state.dashboard.enabled {
         return StatusCode::NOT_FOUND.into_response();
     }
-    let dispatch = state.dashboard_dispatch.read().await.clone();
+    let dispatch = state.dashboard.dispatch.read().await.clone();
     let Some(dispatch) = dispatch else {
         return dashboard_not_ready().into_response();
     };
@@ -357,7 +334,7 @@ pub(crate) fn authorize(state: &HttpState, request: &Request) -> bool {
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok());
-    if let Some(secret) = &state.admin_secret
+    if let Some(secret) = &state.auth.admin_secret
         && bearer_matches(header, secret)
     {
         return true;
@@ -504,7 +481,10 @@ async fn bounds_middleware(
     if let Some(error) = response.extensions().get::<ProductErrorCode>()
         && let Some(operation) = product_operation(&route)
     {
-        state.metrics.observe_product_error(operation, error.0);
+        state
+            .platform
+            .metrics
+            .observe_product_error(operation, error.0);
         if matches!(
             error.0,
             ErrorCode::QuotaExceeded
@@ -513,13 +493,16 @@ async fn bounds_middleware(
                 | ErrorCode::DiskHardLimit
                 | ErrorCode::PlatformUnavailable
         ) {
-            state.metrics.observe_admission(operation, Some(error.0));
+            state
+                .platform
+                .metrics
+                .observe_admission(operation, Some(error.0));
         }
     } else if is_mutation
         && response.status().is_success()
         && let Some(operation) = product_operation(&route)
     {
-        state.metrics.observe_admission(operation, None);
+        state.platform.metrics.observe_admission(operation, None);
     }
     let status = response.status().as_u16();
     response.headers_mut().insert(
@@ -730,7 +713,7 @@ impl HttpState {
     /// Health coordinator handle.
     #[must_use]
     pub fn health(&self) -> &HealthCoordinator {
-        &self.health
+        &self.platform.health
     }
 }
 

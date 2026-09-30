@@ -22,6 +22,7 @@ import {
 import { openResourceNameDialog } from "../../../components/resource-dialog";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/ai-search/")({
   validateSearch: (search: Record<string, unknown>): { namespace?: string } =>
@@ -38,7 +39,7 @@ function AISearchPage() {
   const [filter, setFilter] = useState("");
 
   const namespaces = useQuery({
-    queryKey: ["ai-search", selectedInstanceId, "namespaces"],
+    queryKey: queryKeys.aiSearch(selectedInstanceId, "namespaces"),
     queryFn: ({ signal }) =>
       client!.aiSearch.namespaces.list(
         { account_id: selectedInstanceId!, per_page: 100 },
@@ -51,7 +52,11 @@ function AISearchPage() {
     namespaces.data?.result[0]?.name ??
     "";
   const catalog = useQuery({
-    queryKey: ["ai-search", selectedInstanceId, selectedNamespace, "instances"],
+    queryKey: queryKeys.aiSearch(
+      selectedInstanceId,
+      selectedNamespace,
+      "instances",
+    ),
     queryFn: ({ signal }) =>
       client!.aiSearch.namespaces.instances.list(
         selectedNamespace,
@@ -84,7 +89,7 @@ function AISearchPage() {
           throw error;
         }
         await queryClient.invalidateQueries({
-          queryKey: ["ai-search", selectedInstanceId, "namespaces"],
+          queryKey: queryKeys.aiSearch(selectedInstanceId, "namespaces"),
         });
         feedback.success("AI Search namespace created.");
         await navigate({

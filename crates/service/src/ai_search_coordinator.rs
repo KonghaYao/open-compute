@@ -6,7 +6,7 @@ use crate::metrics::{AiIndexStage, AiProviderCapability, AiProviderOutcome, Metr
 use open_compute_artifacts::{AiSearchObjectRef, AiSearchObjectStore};
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, ResourceId};
 use open_compute_search::ai_search::{ChunkConfig, TextChunk, chunk_text};
-use open_compute_storage::{
+use open_compute_storage::ai_search::{
     AiSearchJobClaim, AiSearchParseCache, AiSearchSourceReference, AiSearchStore,
     StagedAiSearchChunk,
 };

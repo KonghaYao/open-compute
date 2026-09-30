@@ -1,6 +1,6 @@
 ---
 name: grok-executor
-description: Delegate a concrete, locally authorized implementation task from Codex as planner and reviewer to the official Grok Build CLI as executor. Use when the user explicitly asks Codex to have Grok, SuperGrok, or Grok CLI implement, fix, test, or modify code, or asks for a Codex-planner/Grok-executor workflow. Do not trigger for ordinary coding tasks that do not request Grok, or for external commits, pushes, deployments, publication, or production mutations.
+description: Delegate a concrete, locally authorized implementation or read-only web research task from Codex to the official Grok Build CLI. Use when the user explicitly asks Codex to have Grok, SuperGrok, or Grok CLI implement, inspect, test, or research something. Do not trigger for ordinary tasks that do not request Grok, or for external commits, pushes, deployments, publication, or production mutations.
 ---
 
 # Grok Executor
@@ -45,6 +45,11 @@ For a Grok read-only investigation explicitly requested by the user:
   --prompt-file /absolute/path/to/task-brief.md
 ```
 
+For live web research explicitly requested by the user, add `--web-search` to the
+read-only command. This opt-in is accepted only with `--inspect`; the wrapper
+rejects it in execute mode. Keep the brief read-only, require source URLs, and do
+not authenticate to sites or perform external interactions.
+
 Allocate a PTY when Codex may need to steer the task. The wrapper prints `GROK_ACP_SESSION` once the fresh session exists, `GROK_ACP_TURN_STARTED` for each turn, and `GROK_ACP_IDLE` after a turn completes. It remains alive at idle and accepts one JSON control object per input line:
 
 ```json
@@ -65,7 +70,7 @@ The default `summary` output is the context-efficient interface. It suppresses s
 
 `GROK_ACP_SESSION` includes a `diagnosticFile` path. Full ACP traffic, prompts, tool events, and stderr are recorded there with mode `0600` and a 16 MiB cap. The file is inside the task's temporary Grok home and disappears on `close`; it may contain sensitive task text. Read only a targeted tail or matching lines when a result fails or is ambiguous, and do so before closing. Use `--output-format plain` or `--output-format streaming-json` only for an explicitly diagnosed transport problem; these debug modes can consume substantial context. `json` keeps controller events structured without streaming raw ACP traffic.
 
-The script defaults to `--inspect`; require the explicit `--execute` flag for writes. Let the script own Grok's ACP lifecycle, permission, sandbox, update, plan, subagent, memory, web-search, and destructive-command controls. Do not bypass or weaken them. The wrapper isolates each task home but atomically preserves an OAuth auth file refreshed by the official CLI, because refresh-token rotation would otherwise invalidate the next fresh session.
+The script defaults to `--inspect`; require the explicit `--execute` flag for writes and `--web-search` for live research. Let the script own Grok's ACP lifecycle, permission, sandbox, update, plan, subagent, memory, web-search, and destructive-command controls. Do not bypass or weaken them. The wrapper isolates each task home but atomically preserves an OAuth auth file refreshed by the official CLI, because refresh-token rotation would otherwise invalidate the next fresh session.
 
 Read [references/grok-build.md](references/grok-build.md) only when CLI flags drift or sandbox behavior needs troubleshooting.
 

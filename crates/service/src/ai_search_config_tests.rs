@@ -14,10 +14,16 @@ prefix = "system/"
 
 [ai]
 default_embedding_model = "@cf/qwen/qwen3-embedding-0.6b"
+default_reranking_model = "@cf/baai/bge-reranker-base"
 
 [ai.backends.fixture]
 protocol = "openai_embeddings_v1"
 endpoint = "http://127.0.0.1:8080/v1/embeddings"
+auth = { kind = "none" }
+
+[ai.backends.rerank]
+protocol = "cohere_rerank_v2"
+endpoint = "http://127.0.0.1:8080/v2/rerank"
 auth = { kind = "none" }
 
 [ai.embedding_profiles."fixture/qwen3"]
@@ -30,6 +36,11 @@ backend = "fixture"
 remote_model = "@cf/qwen/qwen3-embedding-0.6b"
 provider_revision = "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3"
 profile = "fixture/qwen3"
+
+[ai.reranking_models."@cf/baai/bge-reranker-base"]
+backend = "rerank"
+remote_model = "rerank-v4.0-fast"
+provider_revision = "2026-09-01"
 "#,
     )
     .unwrap()
@@ -148,6 +159,53 @@ fn r2_source_config_is_strict_canonical_and_accepts_current_intervals() {
         serde_json::json!({"id":"bad", "type":"r2", "source":"documents", "token_id":token, "source_params":{"include_items":["[bad]"]}}),
     ] {
         let input: AiSearchCreateInput = serde_json::from_value(value).unwrap();
+        assert!(input.prepare(&catalog()).is_err());
+    }
+}
+
+#[test]
+fn reranking_and_boosting_resolve_independently_and_fail_closed() {
+    let input: AiSearchCreateInput = serde_json::from_value(serde_json::json!({
+        "id": "ranked",
+        "reranking": true,
+        "index_method": {"vector": true, "keyword": true},
+        "custom_metadata": [
+            {"field_name": "Priority", "data_type": "number"},
+            {"field_name": "draft", "data_type": "boolean"}
+        ],
+        "retrieval_options": {"boost_by": [
+            {"field": "priority", "direction": "desc"},
+            {"field": "DRAFT", "direction": "not_exists"},
+            {"field": "timestamp"}
+        ]}
+    }))
+    .unwrap();
+    let prepared = input.prepare(&catalog()).unwrap();
+    let public: Value = serde_json::from_slice(&prepared.public_config_json).unwrap();
+    assert_eq!(public["reranking_model"], "@cf/baai/bge-reranker-base");
+    assert_eq!(
+        public["retrieval_options"]["boost_by"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+
+    for boost_by in [
+        serde_json::json!([{"field":"missing"}]),
+        serde_json::json!([{"field":"draft","direction":"desc"}]),
+        serde_json::json!([{"field":"Priority"},{"field":"priority"}]),
+    ] {
+        let input: AiSearchCreateInput = serde_json::from_value(serde_json::json!({
+            "id": "bad",
+            "index_method": {"vector": false, "keyword": true},
+            "custom_metadata": [
+                {"field_name": "Priority", "data_type": "number"},
+                {"field_name": "draft", "data_type": "boolean"}
+            ],
+            "retrieval_options": {"boost_by": boost_by}
+        }))
+        .unwrap();
         assert!(input.prepare(&catalog()).is_err());
     }
 }

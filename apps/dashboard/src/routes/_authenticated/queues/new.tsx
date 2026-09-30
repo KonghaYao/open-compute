@@ -5,6 +5,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { PageHeader } from "../../../components/dashboard-page";
 import { useAuth } from "../../../features/auth/auth-atoms";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/queues/new")({
   component: CreateQueuePage,
@@ -28,7 +29,7 @@ function CreateQueuePage() {
     },
     onSuccess: async (queue) => {
       await queryClient.invalidateQueries({
-        queryKey: ["cloudflare-v4", "queues", selectedInstanceId],
+        queryKey: queryKeys.queues(selectedInstanceId),
       });
       if (queue.queue_id) {
         await navigate({

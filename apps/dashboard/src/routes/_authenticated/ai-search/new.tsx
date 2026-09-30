@@ -8,6 +8,7 @@ import { useState } from "react";
 import { CloudflareProductIcon } from "../../../components/cloudflare-product-icons";
 import { CreateStepper } from "../../../components/create-stepper";
 import { useAuth } from "../../../features/auth/auth-atoms";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/ai-search/new")({
   component: CreateAISearchPage,
@@ -52,7 +53,7 @@ function CreateAISearchPage() {
     scoreThreshold <= 1;
 
   const namespaces = useQuery({
-    queryKey: ["ai-search", selectedInstanceId, "namespaces"],
+    queryKey: queryKeys.aiSearch(selectedInstanceId, "namespaces"),
     queryFn: ({ signal }) =>
       client!.aiSearch.namespaces.list(
         { account_id: selectedInstanceId!, per_page: 100 },
@@ -61,7 +62,7 @@ function CreateAISearchPage() {
     enabled: client !== null && selectedInstanceId !== null,
   });
   const buckets = useQuery({
-    queryKey: ["cloudflare-v4", "r2", selectedInstanceId, "buckets"],
+    queryKey: queryKeys.r2(selectedInstanceId, "buckets"),
     queryFn: ({ signal }) =>
       client!.r2.buckets.list({ account_id: selectedInstanceId! }, { signal }),
     enabled: client !== null && selectedInstanceId !== null && source === "r2",
@@ -101,7 +102,7 @@ function CreateAISearchPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["ai-search", selectedInstanceId],
+        queryKey: queryKeys.aiSearch(selectedInstanceId),
       });
       await navigate({
         to: "/ai-search/$namespaceName/$instanceId",

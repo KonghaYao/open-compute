@@ -1,6 +1,6 @@
 # P18：单域名公网网关、DNS 与 TLS
 
-状态：**implemented locally**（2026-09-22）。真实公网 DNS/ACME 资格见 [P18 验收计划](../acceptance/p18-single-domain-public-gateway-acceptance.md)。
+状态：**implemented locally**（2026-09-22）。
 
 ## 用户结果
 
@@ -30,4 +30,5 @@ DNS verify 检查公网递归结果、父区委派、CAA 和 challenge authority
 
 Caddy 2.11.4 的 Go module graph、module inventory、四平台 binary 和摘要由正式 lock 固定并嵌入单一发行 executable。2026-09-22 的定向测试覆盖配置解析、route/claim 事务、DNS fixtures、provider rollback、Caddyfile 组合、热重载、快照恢复、child supervision 和 CLI。固定 Rust 1.98/Ubuntu builder 的断网 final layer 启动了真实 `ocd` 与内嵌 Caddy，并确认退出后没有 Caddy/workerd 残留。
 
-本地验证不等于公网证书签发；当前支持声明必须继续标注验收计划中的外部边界。
+公网入口要求部署主机实际可达 TCP 443，并为 challenge listener 委派 UDP/TCP 53；条件不满足时不会提供
+public endpoint，本机 route 继续可用。

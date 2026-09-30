@@ -14,10 +14,11 @@ use open_compute_artifacts::{
 };
 use open_compute_core::{
     AiAuthConfig, AiBackendConfig, AiBackendProtocol, AiConfig, AiEmbeddingModelConfig,
-    AiEmbeddingProfileConfig, AiGenerationCapability, AiGenerationModelConfig, AiTokenizer,
-    AiTokenizerArtifactConfig, AiTokenizerConfig, BindingKind, CacheConfig, CanonicalBindingConfig,
-    CanonicalPermissions, DataConfig, DocumentParserConfig, PlatformConfig, R2Config, Redactor,
-    RequestId, RuntimeConfig, SecretReference, StartupId, SystemClock,
+    AiEmbeddingProfileConfig, AiGenerationCapability, AiGenerationModelConfig,
+    AiRerankingModelConfig, AiTokenizer, AiTokenizerArtifactConfig, AiTokenizerConfig, BindingKind,
+    CacheConfig, CanonicalBindingConfig, CanonicalPermissions, DataConfig, DocumentParserConfig,
+    PlatformConfig, R2Config, Redactor, RequestId, RuntimeConfig, SecretReference, StartupId,
+    SystemClock,
 };
 use open_compute_document_parser::{
     DocumentFormat, InputHeader, PARSER_CONTRACT_SHA256, ParseOutput, ParseRequest,
@@ -39,12 +40,18 @@ use open_compute_service::{
     R2BindingService, SqliteKvBindingExecutor, bind_binding_backend,
     serve_binding_backend_with_ai_search,
 };
-use open_compute_storage::{
-    AI_SEARCH_NAMESPACE_SCHEMA_VERSION, AI_SEARCH_SCHEMA_VERSION, PlatformStorage,
-    R2_SCHEMA_VERSION, ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
-    VECTORIZE_SCHEMA_VERSION, VectorizeEngine, VectorizeIndexRepository, VectorizePaths,
-    WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::ai_search::{
+    AI_SEARCH_NAMESPACE_SCHEMA_VERSION, AI_SEARCH_SCHEMA_VERSION,
 };
+use open_compute_storage::r2::R2_SCHEMA_VERSION;
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
+};
+use open_compute_storage::vectorize::{
+    VECTORIZE_SCHEMA_VERSION, VectorizeEngine, VectorizeIndexRepository, VectorizePaths,
+};
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{
     AiSearchInstanceResourceDriver, AiSearchInstanceSpec, AiSearchNamespaceResourceDriver,
     BundleLimits, CanonicalBundle, CreateResourceOutcome, CreateResourceRequest,
@@ -58,6 +65,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use support::*;
@@ -65,9 +73,39 @@ use tokio::io::AsyncWriteExt as _;
 
 const EMBEDDING_ALIAS: &str = "@cf/qwen/qwen3-embedding-0.6b";
 const GENERATION_ALIAS: &str = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const COHERE_RERANK_ALIAS: &str = "@cf/baai/bge-reranker-base";
+const GENERIC_RERANK_ALIAS: &str = "fixture/generic-reranker";
 const EMBEDDING_KEY_ENV: &str = "OPEN_COMPUTE_TEST_EMBEDDING_API_KEY";
 const EMBEDDING_BASE_URL_ENV: &str = "OPEN_COMPUTE_TEST_EMBEDDING_BASE_URL";
 const EMBEDDING_FIXTURE_SECRET: &str = "fixture-secret";
+const QUALIFICATION_CASE_ENV: &str = "OPEN_COMPUTE_AI_QUALIFICATION_CASE";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum QualificationCase {
+    BailianDeepseek,
+    Cohere,
+    BailianRerank,
+}
+
+impl QualificationCase {
+    fn from_env() -> Option<Self> {
+        match std::env::var(QUALIFICATION_CASE_ENV).ok().as_deref() {
+            None => None,
+            Some("bailian-embedding-deepseek-chat") => Some(Self::BailianDeepseek),
+            Some("bailian-embedding-cohere-rerank-deepseek-chat") => Some(Self::Cohere),
+            Some("bailian-embedding-bailian-rerank-deepseek-chat") => Some(Self::BailianRerank),
+            Some(_) => panic!("unknown AI provider qualification case"),
+        }
+    }
+
+    fn rerank_model(self) -> Option<&'static str> {
+        match self {
+            Self::BailianDeepseek => None,
+            Self::Cohere => Some(COHERE_RERANK_ALIAS),
+            Self::BailianRerank => Some(GENERIC_RERANK_ALIAS),
+        }
+    }
+}
 
 async fn parse_with_production_limits(
     executable: &Path,
@@ -217,7 +255,7 @@ export default class Main extends WorkerEntrypoint {
       chunk: true,
       chunk_size: 128,
       chunk_overlap: 10,
-      rewrite_query: false,
+      rewrite_query: new URL(request.url).searchParams.get("qualification") === "1",
       reranking: false,
       custom_metadata: [{ field_name: "category", data_type: "text" }],
     });
@@ -251,6 +289,52 @@ export default class Main extends WorkerEntrypoint {
       ai_search_options: { retrieval: { retrieval_type: "hybrid", max_num_results: 5 } },
     });
     return Response.json({ retrieval });
+    }
+
+    if (phase === "namespace-rerank") {
+    stage = "search-rerank";
+    const instance = this.env.SEARCH.get("docs");
+    const cohere = await instance.search({
+      query: "cobalt retrieval marker",
+      ai_search_options: {
+        retrieval: { retrieval_type: "hybrid", max_num_results: 5 },
+        reranking: { enabled: true, model: "@cf/baai/bge-reranker-base", match_threshold: 0.8 },
+      },
+    });
+    const generic = await instance.search({
+      query: "cobalt retrieval marker",
+      ai_search_options: {
+        retrieval: { retrieval_type: "hybrid", max_num_results: 5 },
+        reranking: { enabled: true, model: "fixture/generic-reranker" },
+      },
+    });
+    return Response.json({ cohere, generic });
+    }
+
+    if (phase === "qualification-search") {
+    stage = "qualification-search";
+    const instance = this.env.SEARCH.get("docs");
+    const model = new URL(request.url).searchParams.get("model");
+    const options = { retrieval: { retrieval_type: "hybrid", max_num_results: 3 } };
+    if (model) options.reranking = { enabled: true, model };
+    const qualificationSearch = await instance.search({
+      query: "cobalt retrieval marker",
+      ai_search_options: options,
+    });
+    return Response.json({ qualificationSearch });
+    }
+
+    if (phase === "qualification-chat") {
+    stage = "qualification-chat";
+    const instance = this.env.SEARCH.get("docs");
+    const model = new URL(request.url).searchParams.get("model");
+    const options = { retrieval: { retrieval_type: "hybrid", max_num_results: 3 } };
+    if (model) options.reranking = { enabled: true, model };
+    const qualificationChat = await instance.chatCompletions({
+      messages: [{ role: "user", content: "Summarize the cobalt retrieval marker." }],
+      ai_search_options: options,
+    });
+    return Response.json({ qualificationChat });
     }
 
     if (phase === "namespace-management") {
@@ -519,6 +603,7 @@ export default class Main extends WorkerEntrypoint {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn p5_real_vectorize_ai_search_and_markdown_matrix() {
+    let qualification = QualificationCase::from_env();
     let workerd = std::env::var_os("OPEN_COMPUTE_TEST_WORKERD")
         .map(PathBuf::from)
         .expect("OPEN_COMPUTE_TEST_WORKERD must name the verified stock runtime");
@@ -533,16 +618,24 @@ async fn p5_real_vectorize_ai_search_and_markdown_matrix() {
         .unwrap(),
     );
     let mock = MockS3::spawn("open-compute").await;
-    let (chat_base_url, chat_shutdown, chat_task) = spawn_chat_fixture().await;
-    let embedding_fixture = match std::env::var(EMBEDDING_BASE_URL_ENV) {
-        Ok(url) if !url.is_empty() => None,
-        _ => Some(spawn_embedding_fixture().await),
+    let (chat_base_url, rerank_calls, chat_shutdown, chat_task) = spawn_chat_fixture().await;
+    let embedding_fixture = if qualification.is_some() {
+        None
+    } else {
+        match std::env::var(EMBEDDING_BASE_URL_ENV) {
+            Ok(url) if !url.is_empty() => None,
+            _ => Some(spawn_embedding_fixture().await),
+        }
     };
-    let embedding_base_url = embedding_fixture.as_ref().map_or_else(
-        || std::env::var(EMBEDDING_BASE_URL_ENV).unwrap(),
-        |(url, _, _)| url.clone(),
-    );
-    let ai = ai_config(&chat_base_url, &embedding_base_url, temporary.path());
+    let ai = if qualification.is_some() {
+        qualification_ai_config()
+    } else {
+        let embedding_base_url = embedding_fixture.as_ref().map_or_else(
+            || std::env::var(EMBEDDING_BASE_URL_ENV).unwrap(),
+            |(url, _, _)| url.clone(),
+        );
+        ai_config(&chat_base_url, &embedding_base_url, temporary.path())
+    };
     let (artifacts, s3_client) = artifact_store(&mock);
     let artifact_cache = Arc::new(
         ArtifactCache::open(
@@ -607,36 +700,38 @@ async fn p5_real_vectorize_ai_search_and_markdown_matrix() {
     let parser_executable = PathBuf::from(env!("CARGO_BIN_EXE_ocd"));
     let parser_cache_root = temporary.path().join("xberg-cache");
     let tessdata = materialize_tessdata(storage.data_dir().root()).unwrap();
-    let raster = parse_with_production_limits(
-        &parser_executable,
-        temporary.path(),
-        &parser_cache_root,
-        &tessdata,
-        "scan.png",
-        "image/png",
-        raster_ocr_fixture(),
-    )
-    .await;
-    assert_eq!(raster.format, DocumentFormat::Png);
-    let scanned_pdf = parse_with_production_limits(
-        &parser_executable,
-        temporary.path(),
-        &parser_cache_root,
-        &tessdata,
-        "scan.pdf",
-        "application/pdf",
-        std::fs::read(
-            root.join("test/fixtures/document-parser/corpus/apache-tika/pdf/testOCR.pdf"),
+    if qualification.is_none() {
+        let raster = parse_with_production_limits(
+            &parser_executable,
+            temporary.path(),
+            &parser_cache_root,
+            &tessdata,
+            "scan.png",
+            "image/png",
+            raster_ocr_fixture(),
         )
-        .unwrap(),
-    )
-    .await;
-    assert_eq!(scanned_pdf.format, DocumentFormat::Pdf);
-    assert!(!scanned_pdf.markdown.trim().is_empty());
-    assert!(
-        !parser_cache_root.join("ocr").exists(),
-        "Xberg OCR cache must remain unused"
-    );
+        .await;
+        assert_eq!(raster.format, DocumentFormat::Png);
+        let scanned_pdf = parse_with_production_limits(
+            &parser_executable,
+            temporary.path(),
+            &parser_cache_root,
+            &tessdata,
+            "scan.pdf",
+            "application/pdf",
+            std::fs::read(
+                root.join("test/fixtures/document-parser/corpus/apache-tika/pdf/testOCR.pdf"),
+            )
+            .unwrap(),
+        )
+        .await;
+        assert_eq!(scanned_pdf.format, DocumentFormat::Pdf);
+        assert!(!scanned_pdf.markdown.trim().is_empty());
+        assert!(
+            !parser_cache_root.join("ocr").exists(),
+            "Xberg OCR cache must remain unused"
+        );
+    }
     let binding_task = tokio::spawn({
         let storage = storage.clone();
         let auth = binding_auth.clone();
@@ -806,7 +901,11 @@ async fn p5_real_vectorize_ai_search_and_markdown_matrix() {
     }
 
     let mut body_fields = serde_json::Map::new();
-    for phase in ["vector", "namespace-upload", "r2-create"] {
+    for phase in if qualification.is_some() {
+        &["namespace-upload&qualification=1"][..]
+    } else {
+        &["vector", "namespace-upload", "r2-create"][..]
+    } {
         merge_phase_fields(&mut body_fields, phase, request_phase!(phase));
     }
     let namespace_started = Instant::now();
@@ -822,6 +921,38 @@ async fn p5_real_vectorize_ai_search_and_markdown_matrix() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     };
     merge_phase_fields(&mut body_fields, "namespace-status", namespace_item);
+    if let Some(case) = qualification {
+        let model = case.rerank_model().unwrap_or_default();
+        let search = request_phase!(&format!("qualification-search&model={model}"));
+        let result = &search["qualificationSearch"];
+        assert_eq!(result["query_kind"], "text");
+        let chunks = result["chunks"].as_array().expect("qualification chunks");
+        assert!(!chunks.is_empty());
+        assert!(chunks.iter().any(|chunk| {
+            chunk["text"]
+                .as_str()
+                .is_some_and(|text| text.contains("cobalt retrieval marker"))
+        }));
+        assert_eq!(
+            chunks[0]["scoring_details"]["reranking_score"].is_number(),
+            case.rerank_model().is_some()
+        );
+        let chat = request_phase!(&format!("qualification-chat&model={model}"));
+        assert!(
+            chat["qualificationChat"]["choices"][0]["message"]["content"]
+                .as_str()
+                .is_some_and(|content| !content.trim().is_empty())
+        );
+
+        supervisor.shutdown().await;
+        assert_eq!(supervisor.owner_registry_len(), 0);
+        let _ = shutdown.send(true);
+        source_task.await.unwrap().unwrap();
+        binding_task.await.unwrap().unwrap();
+        let _ = chat_shutdown.send(());
+        chat_task.await.unwrap();
+        return;
+    }
     let r2_started = Instant::now();
     let r2_item = loop {
         let fields = request_phase!("r2-status");
@@ -842,7 +973,19 @@ async fn p5_real_vectorize_ai_search_and_markdown_matrix() {
         "r2-paused-explicit",
         request_phase!("r2-paused-explicit"),
     );
-    for phase in ["namespace-retrieval", "namespace-management"] {
+    merge_phase_fields(
+        &mut body_fields,
+        "namespace-retrieval",
+        request_phase!("namespace-retrieval"),
+    );
+    assert_eq!(rerank_calls.load(Ordering::SeqCst), 0);
+    merge_phase_fields(
+        &mut body_fields,
+        "namespace-rerank",
+        request_phase!("namespace-rerank"),
+    );
+    assert_eq!(rerank_calls.load(Ordering::SeqCst), 2);
+    for phase in ["namespace-management"] {
         merge_phase_fields(&mut body_fields, phase, request_phase!(phase));
     }
     let sync_started = Instant::now();
@@ -942,6 +1085,25 @@ async fn p5_real_vectorize_ai_search_and_markdown_matrix() {
                 .as_str()
                 .is_some_and(|text| text.contains("cobalt retrieval marker"))))
     );
+    for protocol in ["cohere", "generic"] {
+        assert_eq!(body[protocol]["query_kind"], "text");
+        let chunks = body[protocol]["chunks"].as_array().unwrap();
+        assert!(!chunks.is_empty());
+        let threshold = if protocol == "cohere" { 0.8 } else { 0.4 };
+        assert!(chunks.iter().all(|chunk| {
+            chunk["score"]
+                .as_f64()
+                .is_some_and(|score| score >= threshold)
+                && chunk["scoring_details"]["reranking_score"] == chunk["score"]
+        }));
+        if protocol == "generic" {
+            assert!(chunks.iter().any(|chunk| {
+                chunk["score"]
+                    .as_f64()
+                    .is_some_and(|score| (0.4..0.8).contains(&score))
+            }));
+        }
+    }
     assert!(
         body["listedInstances"]["result"]
             .as_array()

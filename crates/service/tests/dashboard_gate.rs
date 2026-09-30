@@ -28,8 +28,9 @@ use open_compute_service::{
     serve_binding_backend_with_assets,
 };
 use open_compute_storage::PlatformStorage;
-use open_compute_storage::{
-    SYSTEM_DASHBOARD_WORKER_NAME, SystemOwnedVersionKind, VersionAssetsRepository, WorkerRepository,
+use open_compute_storage::assets::VersionAssetsRepository;
+use open_compute_storage::worker_repository::{
+    SYSTEM_DASHBOARD_WORKER_NAME, SystemOwnedVersionKind, WorkerRepository,
 };
 use open_compute_workers::{BundleLimits, ResourcePins, RuntimeSource, VersionPins};
 use std::os::unix::fs::PermissionsExt;
@@ -347,6 +348,7 @@ async fn dashboard_real_runtime_serves_spa_assets_and_cloudflare_v4_api() {
         "dashboard root must serve the embedded SPA shell"
     );
     assert_dashboard_surface_excludes_admin_token(&home_body, "dashboard-gate-admin");
+    assert_dashboard_asset_is_release_safe(&home_body);
 
     let deep_link = router
         .clone()
@@ -370,6 +372,7 @@ async fn dashboard_real_runtime_serves_spa_assets_and_cloudflare_v4_api() {
     );
     let deep_link_body = to_bytes(deep_link.into_body(), 256 * 1024).await.unwrap();
     assert_dashboard_surface_excludes_admin_token(&deep_link_body, "dashboard-gate-admin");
+    assert_dashboard_asset_is_release_safe(&deep_link_body);
 
     let asset_path = sample_asset_url_path();
     let asset = router
@@ -396,6 +399,7 @@ async fn dashboard_real_runtime_serves_spa_assets_and_cloudflare_v4_api() {
     );
     let asset_body = to_bytes(asset.into_body(), 2 * 1024 * 1024).await.unwrap();
     assert_dashboard_surface_excludes_admin_token(&asset_body, "dashboard-gate-admin");
+    assert_dashboard_asset_is_release_safe(&asset_body);
 
     let meta = router
         .clone()
@@ -420,7 +424,7 @@ async fn dashboard_real_runtime_serves_spa_assets_and_cloudflare_v4_api() {
     let meta_body = to_bytes(meta.into_body(), 64 * 1024).await.unwrap();
     let meta_json: serde_json::Value = serde_json::from_slice(&meta_body).unwrap();
     assert_eq!(meta_json["success"], true);
-    assert_eq!(meta_json["result"]["wrangler_version"], "4.138.0");
+    assert_eq!(meta_json["result"]["wrangler_version"], "4.143.0");
     assert_dashboard_surface_excludes_admin_token(&meta_body, "dashboard-gate-admin");
 
     let unauthorized = router
@@ -451,17 +455,20 @@ fn sample_asset_url_path() -> String {
 
 fn assert_dashboard_surface_excludes_admin_token(body: &[u8], token: &str) {
     let rendered = String::from_utf8_lossy(body).to_ascii_lowercase();
-    for forbidden in [
-        token,
-        "bearer ",
-        "authorization:",
-        "localstorage",
-        "sourcemappingurl",
-        ".js.map",
-    ] {
+    for forbidden in [token, "bearer ", "authorization:"] {
         assert!(
             !rendered.contains(&forbidden.to_ascii_lowercase()),
             "dashboard surface leaked forbidden material: {forbidden}"
+        );
+    }
+}
+
+fn assert_dashboard_asset_is_release_safe(body: &[u8]) {
+    let rendered = String::from_utf8_lossy(body).to_ascii_lowercase();
+    for forbidden in ["localstorage", "sourcemappingurl", ".js.map"] {
+        assert!(
+            !rendered.contains(forbidden),
+            "dashboard asset leaked forbidden material: {forbidden}"
         );
     }
 }

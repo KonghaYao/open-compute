@@ -1,10 +1,13 @@
 use super::*;
-use crate::{
-    CatalogDirection, CatalogSort, PlatformStorage, R2MultipartPartRecord, R2MultipartRepository,
-    R2MultipartState, R2MultipartUploadRecord, R2ObjectListEntry, R2ObjectMutationKind,
-    R2ObjectRecord, R2ObjectRepository, ReserveResourceCreate, ResourceCreateReservation,
-    ResourceRepository, decode_catalog_cursor,
+use crate::PlatformStorage;
+use crate::catalog_page::{CatalogDirection, CatalogSort, decode_catalog_cursor};
+use crate::r2_multipart::{
+    R2MultipartPartRecord, R2MultipartRepository, R2MultipartState, R2MultipartUploadRecord,
 };
+use crate::r2_objects::{
+    R2ObjectListEntry, R2ObjectMutationKind, R2ObjectRecord, R2ObjectRepository,
+};
+use crate::resources::{ReserveResourceCreate, ResourceCreateReservation, ResourceRepository};
 use open_compute_core::config::DataConfig;
 use open_compute_core::{
     BindingKind, ErrorCode, InstanceId, RequestId, ResourceId, ResourceState, SystemClock,

@@ -7,13 +7,13 @@ fn queue_projection_enqueue_retention_and_repair_boundaries_are_complete() {
     let store = open_store(&temp, 1);
     let queue_id = QueueId::generate();
     let account_id = store.instance_id();
-    let config = crate::QueueConfig {
+    let config = crate::queues::QueueConfig {
         retention_seconds: 60,
         max_message_bytes: 4,
         max_batch_messages: 2,
         max_batch_bytes: 6,
         max_backlog_bytes: 12,
-        ..crate::QueueConfig::default()
+        ..crate::queues::QueueConfig::default()
     };
     let projection = QueueProjection {
         queue_id,
@@ -130,7 +130,7 @@ fn queue_projection_enqueue_retention_and_repair_boundaries_are_complete() {
         ErrorCode::QueueInvalidMessage
     );
     let too_many = request(
-        (0..=crate::QUEUE_MAX_BATCH_MESSAGES)
+        (0..=crate::queues::QUEUE_MAX_BATCH_MESSAGES)
             .map(|_| message(b"", None))
             .collect(),
     );
@@ -139,14 +139,14 @@ fn queue_projection_enqueue_retention_and_repair_boundaries_are_complete() {
         ErrorCode::QueueBatchLimitExceeded
     );
     let mut delayed = request(vec![message(b"x", None)]);
-    delayed.batch_delay_seconds = Some(crate::QUEUE_MAX_DELAY_SECONDS + 1);
+    delayed.batch_delay_seconds = Some(crate::queues::QUEUE_MAX_DELAY_SECONDS + 1);
     assert_eq!(
         store.enqueue_queue(&delayed, 2_000).unwrap_err().code(),
         ErrorCode::QueueDelayInvalid
     );
     let delayed_message = request(vec![message(
         b"x",
-        Some(crate::QUEUE_MAX_DELAY_SECONDS + 1),
+        Some(crate::queues::QUEUE_MAX_DELAY_SECONDS + 1),
     )]);
     assert_eq!(
         store
@@ -156,7 +156,7 @@ fn queue_projection_enqueue_retention_and_repair_boundaries_are_complete() {
         ErrorCode::QueueDelayInvalid
     );
     let oversized = request(vec![message(
-        &vec![0; usize::try_from(crate::QUEUE_MAX_MESSAGE_BYTES).unwrap() + 1],
+        &vec![0; usize::try_from(crate::queues::QUEUE_MAX_MESSAGE_BYTES).unwrap() + 1],
         None,
     )]);
     assert_eq!(

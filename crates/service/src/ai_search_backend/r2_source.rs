@@ -4,7 +4,8 @@ use super::*;
 use futures::{TryStreamExt as _, stream};
 use open_compute_artifacts::UserObjectKey;
 use open_compute_document_parser::{FilenameMatcher, ai_search_formats, canonical_content_type};
-use open_compute_storage::{AiSearchR2Candidate, AiSearchSourceReference, R2ObjectRecord};
+use open_compute_storage::ai_search::{AiSearchR2Candidate, AiSearchSourceReference};
+use open_compute_storage::r2_objects::R2ObjectRecord;
 
 const MAX_PREFIX_OBJECTS: u32 = 100_000;
 const MAX_MATCHING_OBJECTS: usize = 10_000;
@@ -452,20 +453,18 @@ fn materialize_r2_metadata(
             continue;
         };
         let value = match field.data_type {
-            crate::ai_search_config::AiSearchMetadataType::Text => {
-                Some(Value::String((*text).clone()))
-            }
-            crate::ai_search_config::AiSearchMetadataType::Number => text
+            AiSearchMetadataType::Text => Some(Value::String((*text).clone())),
+            AiSearchMetadataType::Number => text
                 .parse::<serde_json::Number>()
                 .ok()
                 .filter(|number| number.as_f64().is_some_and(f64::is_finite))
                 .map(Value::Number),
-            crate::ai_search_config::AiSearchMetadataType::Boolean => match text.as_str() {
+            AiSearchMetadataType::Boolean => match text.as_str() {
                 "true" => Some(Value::Bool(true)),
                 "false" => Some(Value::Bool(false)),
                 _ => None,
             },
-            crate::ai_search_config::AiSearchMetadataType::Datetime => text
+            AiSearchMetadataType::Datetime => text
                 .parse::<jiff::Timestamp>()
                 .ok()
                 .map(|_| Value::String((*text).clone())),

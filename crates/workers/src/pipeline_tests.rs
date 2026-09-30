@@ -43,7 +43,10 @@ fn assets_only_request(assets: &VersionAssets) -> CreateVersionRequest {
         secrets: BTreeMap::new(),
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
         deployment_source: None,
@@ -80,7 +83,10 @@ fn worker_request(
         secrets: BTreeMap::new(),
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
         deployment_source: None,
@@ -252,8 +258,9 @@ fn staged_prepared_bundle_preserves_manifest_digest_size_and_admission() {
 }
 
 #[test]
-fn runtime_features_prepare_every_builtin_and_enforce_the_pinned_compatibility() {
+fn runtime_features_prepare_every_builtin_and_preserve_compatibility_for_workerd() {
     let features = VersionRuntimeFeatures {
+        compatibility_date: "2026-09-08".to_owned(),
         compatibility_flags: vec!["nodejs_compat".to_owned()],
         worker_loaders: vec!["LOADER".to_owned()],
         cache: VersionCacheInput {
@@ -336,13 +343,16 @@ fn runtime_features_prepare_every_builtin_and_enforce_the_pinned_compatibility()
     let mut unsupported_date = features.clone();
     unsupported_date.compatibility_date = "2025-01-01".to_owned();
     assert_eq!(
-        validate_compatibility(&unsupported_date)
-            .unwrap_err()
-            .code(),
-        ErrorCode::CompatibilityUnsupported
+        validate_compatibility(&unsupported_date).unwrap(),
+        ["nodejs_compat"]
     );
     let mut unsupported_flag = features;
-    unsupported_flag.compatibility_flags = vec!["unsupported".to_owned()];
+    unsupported_flag.compatibility_flags = vec!["unsupported".to_owned(), "unsupported".to_owned()];
+    assert_eq!(
+        validate_compatibility(&unsupported_flag).unwrap(),
+        ["unsupported", "unsupported"]
+    );
+    unsupported_flag.compatibility_date = "x".repeat(33);
     assert_eq!(
         validate_compatibility(&unsupported_flag)
             .unwrap_err()
@@ -543,7 +553,7 @@ prefix = "system/"
     let resources = ResourceRepository::new(storage.db());
     let fingerprint = [7; 32];
     let resource_id = ResourceId::generate();
-    let reservation = open_compute_storage::ReserveResourceCreate {
+    let reservation = open_compute_storage::resources::ReserveResourceCreate {
         instance_id: account,
         kind: BindingKind::KvNamespace,
         name: "binding-kv",
@@ -585,7 +595,7 @@ prefix = "system/"
     let namespace_id = ResourceId::generate();
     let namespace = match resources
         .reserve_create(
-            &open_compute_storage::ReserveResourceCreate {
+            &open_compute_storage::resources::ReserveResourceCreate {
                 instance_id: account,
                 kind: BindingKind::DoNamespace,
                 name: "cross-authority-do",
@@ -593,7 +603,8 @@ prefix = "system/"
                 fingerprint_key_id: "test-key",
                 request_fingerprint: &[8; 32],
                 resource_id: namespace_id,
-                driver_schema_version: open_compute_storage::DO_NAMESPACE_SCHEMA_VERSION,
+                driver_schema_version:
+                    open_compute_storage::durable_objects::DO_NAMESPACE_SCHEMA_VERSION,
                 request_id: RequestId::generate(),
                 now_ms: 6,
                 expires_at_ms: 10_000,
@@ -602,7 +613,7 @@ prefix = "system/"
         )
         .unwrap()
     {
-        open_compute_storage::ResourceCreateReservation::Reserved(value) => value,
+        open_compute_storage::resources::ResourceCreateReservation::Reserved(value) => value,
         other => panic!("unexpected reservation: {other:?}"),
     };
     DurableObjectRepository::new(&storage)
@@ -627,7 +638,7 @@ prefix = "system/"
             account,
             queue_id,
             "binding-queue",
-            open_compute_storage::QueueConfig::default(),
+            open_compute_storage::queues::QueueConfig::default(),
             5,
         )
         .unwrap();
@@ -647,7 +658,7 @@ prefix = "system/"
     request.services.insert(
         "MISSING".to_owned(),
         VersionServiceInput {
-            target: open_compute_storage::ServiceTarget::Worker {
+            target: open_compute_storage::services::ServiceTarget::Worker {
                 worker_id: WorkerId::generate(),
             },
             entrypoint: None,

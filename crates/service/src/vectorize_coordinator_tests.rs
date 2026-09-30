@@ -2,8 +2,9 @@ use super::*;
 use crate::metrics::MetricsRegistry;
 use open_compute_core::config::{DataConfig, MetricsConfig};
 use open_compute_core::{BindingKind, PlatformStatus, RequestId, SystemClock};
-use open_compute_storage::{
-    VECTORIZE_SCHEMA_VERSION, VectorMutationInput, VectorMutationKind, inspect_resources,
+use open_compute_storage::inspect::inspect_resources;
+use open_compute_storage::vectorize::{
+    VECTORIZE_SCHEMA_VERSION, VectorMutationInput, VectorMutationKind,
 };
 use open_compute_workers::{
     CreateResourceOutcome, CreateResourceRequest, ResourceController, ResourcePins,

@@ -23,14 +23,14 @@ pub(crate) fn create(root: &Path, prefix: &str) -> Result<tempfile::TempDir, Pla
     )
     .map_err(|_| invalid())?;
     rustix::fs::fchmod(&directory, rustix::fs::Mode::RWXU).map_err(|_| invalid())?;
-    open_compute_storage::ensure_dir_secure(workspace.path())?;
+    open_compute_storage::fs::ensure_dir_secure(workspace.path())?;
     let owner = format!("{OWNER}\n{}\n", std::process::id());
-    open_compute_storage::atomic_write(&workspace.path().join(".owner"), owner.as_bytes())?;
+    open_compute_storage::fs::atomic_write(&workspace.path().join(".owner"), owner.as_bytes())?;
     Ok(workspace)
 }
 
 pub(crate) fn mark_completed(workspace: &Path) -> Result<(), PlatformError> {
-    open_compute_storage::atomic_write(&workspace.join(".completed"), COMPLETE)
+    open_compute_storage::fs::atomic_write(&workspace.join(".completed"), COMPLETE)
 }
 
 pub(crate) fn recover(
@@ -42,7 +42,7 @@ pub(crate) fn recover(
     match fs::symlink_metadata(root) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(_) => return Err(invalid()),
-        Ok(_) => open_compute_storage::ensure_dir_secure(root)?,
+        Ok(_) => open_compute_storage::fs::ensure_dir_secure(root)?,
     }
     for entry in fs::read_dir(root).map_err(|_| invalid())? {
         let path = entry.map_err(|_| invalid())?.path();
@@ -97,7 +97,7 @@ fn completed(path: &Path) -> bool {
 }
 
 fn read_marker(path: &Path, max_bytes: u64) -> Option<Vec<u8>> {
-    open_compute_storage::validate_owned_file(path, true).ok()?;
+    open_compute_storage::fs::validate_owned_file(path, true).ok()?;
     if fs::symlink_metadata(path).ok()?.len() > max_bytes {
         return None;
     }
@@ -134,25 +134,25 @@ mod tests {
     fn recovery_preserves_active_and_unknown_entries() {
         let temporary = tempfile::tempdir().unwrap();
         let root = temporary.path().join("tmp");
-        open_compute_storage::ensure_dir_secure(&root).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&root).unwrap();
         let stale = root.join("caddy-tool-stale");
         let incomplete = root.join("caddy-tool-incomplete");
         let active = root.join("caddy-tool-active");
         let unknown = root.join("caddy-tool-unknown");
         for path in [&stale, &incomplete, &active, &unknown] {
-            open_compute_storage::ensure_dir_secure(path).unwrap();
+            open_compute_storage::fs::ensure_dir_secure(path).unwrap();
         }
-        open_compute_storage::atomic_write(
+        open_compute_storage::fs::atomic_write(
             &stale.join(".owner"),
             format!("{OWNER}\n{}\n", i32::MAX).as_bytes(),
         )
         .unwrap();
-        open_compute_storage::atomic_write(
+        open_compute_storage::fs::atomic_write(
             &incomplete.join(".owner"),
             format!("{OWNER}\n{}\n", i32::MAX).as_bytes(),
         )
         .unwrap();
-        open_compute_storage::atomic_write(
+        open_compute_storage::fs::atomic_write(
             &active.join(".owner"),
             format!("{OWNER}\n{}\n", std::process::id()).as_bytes(),
         )
@@ -171,10 +171,10 @@ mod tests {
     fn recovery_clears_a_dead_verified_child_lease_before_workspace_deletion() {
         let temporary = tempfile::tempdir().unwrap();
         let root = temporary.path().join("tmp");
-        open_compute_storage::ensure_dir_secure(&root).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&root).unwrap();
         let workspace = root.join("document-parser-stale");
-        open_compute_storage::ensure_dir_secure(&workspace).unwrap();
-        open_compute_storage::atomic_write(
+        open_compute_storage::fs::ensure_dir_secure(&workspace).unwrap();
+        open_compute_storage::fs::atomic_write(
             &workspace.join(".owner"),
             format!("{OWNER}\n{}\n", i32::MAX).as_bytes(),
         )
@@ -187,7 +187,7 @@ mod tests {
             "start_key": "former-child",
             "binary_sha256": digest,
         });
-        open_compute_storage::atomic_write(
+        open_compute_storage::fs::atomic_write(
             &workspace.join("child.lease"),
             &serde_json::to_vec(&lease).unwrap(),
         )
@@ -231,7 +231,7 @@ mod tests {
     fn caddy_and_parser_workspaces_recover_after_real_owner_sigkill() {
         let temporary = tempfile::tempdir().unwrap();
         let root = temporary.path().join("tmp");
-        open_compute_storage::ensure_dir_secure(&root).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&root).unwrap();
         let digest = hex::encode(Sha256::digest(fs::read("/bin/sleep").unwrap()));
         for (prefix, lease_name) in [
             ("caddy-tool-", "tool.lease"),

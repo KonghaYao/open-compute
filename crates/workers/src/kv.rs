@@ -4,9 +4,9 @@ use crate::{ReconcileOutcome, ResourceDriver, ResourceHealth};
 use open_compute_core::{
     BindingKind, ErrorCode, PlatformError, ResourceAvailability, ResourceState,
 };
-use open_compute_storage::{
-    KV_SCHEMA_VERSION, KvEngine, KvNamespaceRepository, KvPaths, PlatformStorage, ResourceRecord,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::kv::{KV_SCHEMA_VERSION, KvEngine, KvNamespaceRepository, KvPaths};
+use open_compute_storage::resources::ResourceRecord;
 
 /// Static filesystem and SQLite driver for `kv_namespace` resources.
 #[derive(Debug)]
@@ -32,7 +32,7 @@ impl<'a> KvResourceDriver<'a> {
     fn catalog(
         &self,
         resource: &ResourceRecord,
-    ) -> Result<open_compute_storage::KvNamespaceRecord, PlatformError> {
+    ) -> Result<open_compute_storage::kv::KvNamespaceRecord, PlatformError> {
         KvNamespaceRepository::new(self.storage.db()).get(resource.instance_id, resource.id)
     }
 

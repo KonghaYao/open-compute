@@ -3,7 +3,7 @@
 use crate::dashboard_auth::DashboardAuth;
 use crate::instance_registry::ServiceScope;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, StartupId};
-use open_compute_storage::{atomic_write, ensure_dir_secure};
+use open_compute_storage::fs::{atomic_write, ensure_dir_secure};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{Read, Write};

@@ -1,7 +1,7 @@
 **
-!packages
-!packages/caddy
-!packages/caddy/**
+!third_party
+!third_party/caddy
+!third_party/caddy/**
 !test
 !test/gateway
 !test/gateway/Caddyfile

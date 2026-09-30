@@ -1,11 +1,10 @@
 //! Independent Queue catalog and immutable producer-binding authority.
 
 use crate::catalog_page::{CatalogColumns, build_catalog_sql, record_catalog_cursor};
-use crate::workers::require_instance;
-use crate::{
-    CatalogCursor, CatalogDirection, CatalogListPage, CatalogSort, ControlDb,
-    IdempotencyReservation, VersionState,
-};
+use crate::catalog_page::{CatalogCursor, CatalogDirection, CatalogListPage, CatalogSort};
+use crate::control_db::ControlDb;
+use crate::worker_repository::require_instance;
+use crate::worker_repository::{IdempotencyReservation, VersionState};
 use open_compute_core::{
     BindingId, ErrorCode, InstanceId, PlatformError, QueueId, RequestId, VersionId,
 };

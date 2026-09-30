@@ -1,7 +1,7 @@
 //! Single-domain authority for the optional public gateway.
 
-use crate::ControlDb;
-use crate::workers::db_error;
+use crate::control_db::ControlDb;
+use crate::worker_repository::db_error;
 use open_compute_core::{ErrorCode, PlatformError, PublicGatewayConfig};
 use rusqlite::{OptionalExtension, params};
 

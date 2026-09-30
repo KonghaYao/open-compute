@@ -1,5 +1,6 @@
 use super::*;
-use crate::{PlatformStorage, WorkerRepository};
+use crate::PlatformStorage;
+use crate::worker_repository::WorkerRepository;
 use open_compute_core::{DataConfig, RequestId, SystemClock};
 
 fn storage_config(root: &std::path::Path) -> DataConfig {

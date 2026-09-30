@@ -6,9 +6,10 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ItemGetResponse } from "cloudflare/resources/aisearch/namespaces/instances/items";
+import type { ItemGetResponse } from "@open-compute/sdk";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 import { ErrorState } from "./dashboard-page";
 import { openAlert } from "./dialog-manager";
 
@@ -37,13 +38,12 @@ export function AISearchItemDetail({
     name: namespaceName,
     id: instanceId,
   };
-  const prefix = [
-    "ai-search",
+  const prefix = queryKeys.aiSearch(
     selectedInstanceId,
     namespaceName,
     instanceId,
     "items",
-  ];
+  );
   const item = useQuery({
     queryKey: [...prefix, itemId],
     queryFn: ({ signal }) =>

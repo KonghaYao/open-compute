@@ -1,8 +1,8 @@
 use super::*;
 use open_compute_core::config::DataConfig;
 use open_compute_core::{BindingKind, RequestId, SystemClock};
-use open_compute_storage::{D1QueryLimits, D1Statement, D1Value};
-use open_compute_storage::{D1TransferAction, D1TransferKind, D1TransferState, NewD1Transfer};
+use open_compute_storage::d1::{D1QueryLimits, D1Statement, D1Value};
+use open_compute_storage::d1::{D1TransferAction, D1TransferKind, D1TransferState, NewD1Transfer};
 use open_compute_workers::{
     CreateResourceOutcome, CreateResourceRequest, D1ResourceDriver, ResourceController,
 };
@@ -45,7 +45,7 @@ fn fixture() -> (
         kind: BindingKind::D1Database,
         name: "coordinator-db".to_owned(),
         idempotency_key: "coordinator-db".to_owned(),
-        driver_schema_version: open_compute_storage::D1_DATABASE_SCHEMA_VERSION,
+        driver_schema_version: open_compute_storage::d1::D1_DATABASE_SCHEMA_VERSION,
         request_id: RequestId::generate(),
         now_ms: 10,
     })

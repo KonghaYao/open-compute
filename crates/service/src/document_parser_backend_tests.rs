@@ -16,6 +16,7 @@ use std::path::Path;
 
 async fn fixture() -> (RuntimeFeatureFixture, DocumentParserBindingService) {
     let fixture = RuntimeFeatureFixture::create(VersionRuntimeFeatures {
+        compatibility_date: "2026-09-08".to_owned(),
         ai: Some(VersionAiInput {
             binding: "AI".to_owned(),
         }),
@@ -1057,16 +1058,31 @@ async fn vlm_resizes_candidates_and_merges_a_bounded_provider_description() {
     let mut invalid_base64 = candidate.clone();
     invalid_base64.data_base64 = "%%%".to_owned();
     assert_eq!(
-        fit_vision_candidate(invalid_base64, contract).unwrap_err(),
+        fit_vision_candidate(&service.image_engine, invalid_base64, contract).unwrap_err(),
         ErrorCode::DocumentProtocolError
     );
     let mut invalid_digest = candidate.clone();
     invalid_digest.sha256 = "0".repeat(64);
     assert_eq!(
-        fit_vision_candidate(invalid_digest, contract).unwrap_err(),
+        fit_vision_candidate(&service.image_engine, invalid_digest, contract).unwrap_err(),
         ErrorCode::DocumentProtocolError
     );
-    let resized = fit_vision_candidate(candidate.clone(), contract).unwrap();
+    let invalid_jpeg = b"not-a-jpeg";
+    let malformed = VisionCandidate {
+        data_base64: base64::engine::general_purpose::STANDARD.encode(invalid_jpeg),
+        mime_type: "image/jpeg".to_owned(),
+        width: 200,
+        height: 100,
+        sha256: hex::encode(Sha256::digest(invalid_jpeg)),
+        source_page: None,
+        ocr_performed: false,
+        ocr_confidence_milli: None,
+    };
+    assert_eq!(
+        fit_vision_candidate(&service.image_engine, malformed, contract).unwrap_err(),
+        ErrorCode::DocumentProtocolError
+    );
+    let resized = fit_vision_candidate(&service.image_engine, candidate.clone(), contract).unwrap();
     assert!(resized.width <= 20);
     assert!(resized.height <= 10);
 

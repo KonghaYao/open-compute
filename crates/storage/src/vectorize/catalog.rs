@@ -1,6 +1,7 @@
 //! Durable Vectorize product rows in `control.sqlite`.
 
-use crate::{ControlDb, ResourceRecord, ResourceRepository};
+use crate::control_db::ControlDb;
+use crate::resources::{ResourceRecord, ResourceRepository};
 use open_compute_core::{
     BindingKind, ErrorCode, InstanceId, PlatformError, ResourceId, ResourceState,
 };

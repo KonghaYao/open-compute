@@ -23,9 +23,11 @@ use open_compute_core::{
     AiTokenizerConfig, DocumentParserConfig, PlatformConfig, R2Config, SecretReference,
     SecretString,
 };
-use open_compute_storage::{
-    AiSearchObjectReference, R2BucketRepository, R2ObjectRecord, R2ObjectRepository,
-    ReserveResourceCreate, ResourceCreateReservation, ResourceRecord, StagedAiSearchChunk,
+use open_compute_storage::ai_search::{AiSearchObjectReference, StagedAiSearchChunk};
+use open_compute_storage::r2::R2BucketRepository;
+use open_compute_storage::r2_objects::{R2ObjectRecord, R2ObjectRepository};
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRecord,
 };
 use open_compute_workers::{
     AiSearchNamespaceResourceDriver, CreateResourceOutcome, R2ResourceDriver, ResourcePins,
@@ -116,9 +118,11 @@ impl SearchBehaviorFixture {
         parser_executable: PathBuf,
         manual_endpoint: String,
     ) -> Self {
-        let runtime =
-            RuntimeFeatureFixture::create(open_compute_workers::VersionRuntimeFeatures::default())
-                .await;
+        let runtime = RuntimeFeatureFixture::create(open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        })
+        .await;
         let pins = ResourcePins::new();
         let namespace_id = match ResourceController::new(
             &runtime.storage,
@@ -130,7 +134,8 @@ impl SearchBehaviorFixture {
             kind: BindingKind::AiSearchNamespace,
             name: "search-behavior".to_owned(),
             idempotency_key: "search-behavior-namespace".to_owned(),
-            driver_schema_version: open_compute_storage::AI_SEARCH_NAMESPACE_SCHEMA_VERSION,
+            driver_schema_version:
+                open_compute_storage::ai_search::AI_SEARCH_NAMESPACE_SCHEMA_VERSION,
             request_id: RequestId::generate(),
             now_ms: 10,
         })
@@ -226,7 +231,7 @@ impl SearchBehaviorFixture {
                     fingerprint_key_id: self.storage().crypto().fingerprint_key_id(),
                     request_fingerprint: &fingerprint,
                     resource_id,
-                    driver_schema_version: open_compute_storage::R2_SCHEMA_VERSION,
+                    driver_schema_version: open_compute_storage::r2::R2_SCHEMA_VERSION,
                     request_id: RequestId::generate(),
                     now_ms: 20,
                     expires_at_ms: 1_000,

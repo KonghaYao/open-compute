@@ -1,5 +1,6 @@
 use super::*;
-use crate::{PlatformStorage, inspect_resources};
+use crate::PlatformStorage;
+use crate::inspect::inspect_resources;
 use open_compute_core::SystemClock;
 use open_compute_core::config::DataConfig;
 
@@ -249,7 +250,7 @@ fn read_only_inspection_lists_only_secret_free_resource_health() {
     let rows = inspect_resources(&path, 5_000, 10).unwrap();
     assert_eq!(
         rows,
-        vec![crate::ResourceInspect {
+        vec![crate::inspect::ResourceInspect {
             id,
             kind: BindingKind::KvNamespace,
             availability: ResourceAvailability::Unavailable,

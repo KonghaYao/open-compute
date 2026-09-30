@@ -24,7 +24,7 @@ Most products are reported as `supported_with_deviation` because they use a sing
 
 ## Runtime and project contract
 
-The release embeds a checksum-verified `elliothux/workerd` fork selected by the formal runtime lock. Production startup remains offline. Projects use standard `wrangler.jsonc` and project-local Wrangler. Compatibility dates and flags are admitted only when the current runtime contract supports them.
+The release embeds a checksum-verified `elliothux/workerd` fork selected by the formal runtime lock. Production startup remains offline. Projects use standard `wrangler.jsonc` and project-local Wrangler. The exact binary validates each Version's unchanged compatibility date and flags; its reflected catalog is exposed for discovery and is not a second admission policy.
 
 Dynamic Worker Loader support is native and enforces the documented local CPU, memory, subrequest, startup, and simultaneous-connection ceilings. The two experimental trust/tail members remain blocked, so this is not a claim of the complete Workers for Platforms product.
 

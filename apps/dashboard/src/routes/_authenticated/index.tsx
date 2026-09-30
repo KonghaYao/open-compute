@@ -1,76 +1,12 @@
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  CloudflareProductIcon,
-  type CloudflareProductName,
-} from "../../components/cloudflare-product-icons";
+import { CloudflareProductIcon } from "../../components/cloudflare-product-icons";
 import { PageHeader, Section } from "../../components/dashboard-page";
+import { supportedProducts } from "../../lib/supported-products";
 
 export const Route = createFileRoute("/_authenticated/")({
   component: AccountHomePage,
 });
-
-const products: readonly {
-  name: string;
-  description: string;
-  href: string;
-  icon: CloudflareProductName;
-}[] = [
-  {
-    name: "Workers",
-    description: "Deploy and manage serverless applications.",
-    href: "/workers",
-    icon: "Workers",
-  },
-  {
-    name: "KV",
-    description: "Read and write globally addressed key-value data.",
-    href: "/kv",
-    icon: "KV",
-  },
-  {
-    name: "D1",
-    description: "Build with serverless SQL databases.",
-    href: "/d1",
-    icon: "D1",
-  },
-  {
-    name: "R2",
-    description: "Store objects with an S3-compatible API.",
-    href: "/r2",
-    icon: "R2",
-  },
-  {
-    name: "Durable Objects",
-    description: "Inspect stateful Worker namespaces.",
-    href: "/durable-objects",
-    icon: "Durable Objects",
-  },
-  {
-    name: "Queues",
-    description: "Connect producers to reliable consumers.",
-    href: "/queues",
-    icon: "Queues",
-  },
-  {
-    name: "Workflows",
-    description: "Run durable multi-step applications.",
-    href: "/workflows",
-    icon: "Workflows",
-  },
-  {
-    name: "Vectorize",
-    description: "Store and query vector embeddings.",
-    href: "/vectorize",
-    icon: "Vectorize",
-  },
-  {
-    name: "AI Search",
-    description: "Build retrieval-backed AI applications.",
-    href: "/ai-search",
-    icon: "AI Search",
-  },
-];
 
 function AccountHomePage() {
   return (
@@ -84,7 +20,7 @@ function AccountHomePage() {
         description="Choose a product to create or manage resources."
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {products.map((product) => {
+          {supportedProducts.map((product) => {
             return (
               <LayerCard key={product.href} className="overflow-hidden p-0">
                 <Link

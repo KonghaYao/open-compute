@@ -3,10 +3,11 @@
 use super::{D1BindingService, ensure_d1_storage_headroom, limit_error};
 use md5::Md5;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, ResourceId};
-use open_compute_storage::{
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::d1::{
     D1_MAX_TRANSFER_SQL_BYTES, D1Engine, D1ExportOptions, D1Paths, D1QueryLimits,
     D1SnapshotRepository, D1TransferAction, D1TransferKind, D1TransferRecord, D1TransferState,
-    NewD1Transfer, PlatformStorage,
+    NewD1Transfer,
 };
 use sha2::{Digest as _, Sha256};
 use std::time::Duration;
@@ -76,7 +77,7 @@ impl D1BindingService {
                 let generation = (|| {
                     let paths = D1Paths::open(context.storage.data_dir().root())?;
                     let catalog =
-                        open_compute_storage::D1DatabaseRepository::new(context.storage.db())
+                        open_compute_storage::d1::D1DatabaseRepository::new(context.storage.db())
                             .get(instance_id, resource_id)?;
                     let snapshot_path = paths.resolve_snapshot_key(
                         &snapshot.snapshot_key,
@@ -616,8 +617,9 @@ impl D1BindingService {
                     resource_id,
                     source.session_version,
                 )?;
-                let catalog = open_compute_storage::D1DatabaseRepository::new(context.storage.db())
-                    .get(instance_id, resource_id)?;
+                let catalog =
+                    open_compute_storage::d1::D1DatabaseRepository::new(context.storage.db())
+                        .get(instance_id, resource_id)?;
                 context
                     .engine
                     .restore_in_place(

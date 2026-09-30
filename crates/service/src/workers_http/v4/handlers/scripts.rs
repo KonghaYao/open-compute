@@ -198,9 +198,9 @@ pub(super) async fn upload(
 
 fn observability_patch(
     value: &super::super::model::WorkerUploadObservability,
-) -> open_compute_storage::WorkerObservabilityPatch {
+) -> open_compute_storage::worker_repository::WorkerObservabilityPatch {
     let logs = value.logs.as_ref();
-    open_compute_storage::WorkerObservabilityPatch {
+    open_compute_storage::worker_repository::WorkerObservabilityPatch {
         enabled: Some(value.enabled),
         head_sampling_rate: value.head_sampling_rate,
         logs_enabled: logs.and_then(|settings| settings.enabled),

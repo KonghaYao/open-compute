@@ -4,7 +4,9 @@ use open_compute_core::config::DataConfig;
 use open_compute_core::{
     BindingKind, PlatformConfig, RequestId, ResourceAvailability, SystemClock,
 };
-use open_compute_storage::{ReserveResourceCreate, ResourceCreateReservation, ResourceRepository};
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
+};
 use std::time::Duration;
 
 #[tokio::test]
@@ -74,7 +76,7 @@ request_timeout_ms = 1000
                 fingerprint_key_id: storage.crypto().fingerprint_key_id(),
                 request_fingerprint: &fingerprint,
                 resource_id,
-                driver_schema_version: open_compute_storage::R2_SCHEMA_VERSION,
+                driver_schema_version: open_compute_storage::r2::R2_SCHEMA_VERSION,
                 request_id: RequestId::generate(),
                 now_ms: 10,
                 expires_at_ms: 10_000,
@@ -85,12 +87,10 @@ request_timeout_ms = 1000
     else {
         panic!("expected reserved R2 resource")
     };
-    R2ResourceDriver::new(&storage, objects.clone(), config.clone())
-        .create(&resource)
+    let pins = ResourcePins::new();
+    R2Controller::new(&storage, objects.clone(), pins.clone(), config.clone())
+        .reconcile(&resource, 11)
         .await
-        .unwrap();
-    ResourceRepository::new(storage.db())
-        .mark_ready(resource_id, 11)
         .unwrap();
 
     let health = HealthCoordinator::new();
@@ -102,7 +102,9 @@ request_timeout_ms = 1000
         )
         .unwrap();
     let mut maintenance = R2Maintenance::default();
-    maintenance.run(&storage, &objects, &config, &health).await;
+    maintenance
+        .run(&storage, &objects, &pins, &config, &health)
+        .await;
     assert!(
         R2BucketRepository::new(storage.db())
             .get(account, resource_id)
@@ -112,7 +114,9 @@ request_timeout_ms = 1000
     );
 
     mock.set_fault(Fault::NotFound);
-    maintenance.run(&storage, &objects, &config, &health).await;
+    maintenance
+        .run(&storage, &objects, &pins, &config, &health)
+        .await;
     assert_eq!(
         ResourceRepository::new(storage.db())
             .get(account, resource_id)
@@ -122,7 +126,9 @@ request_timeout_ms = 1000
     );
 
     mock.set_fault(Fault::None);
-    maintenance.run(&storage, &objects, &config, &health).await;
+    maintenance
+        .run(&storage, &objects, &pins, &config, &health)
+        .await;
     assert_eq!(
         ResourceRepository::new(storage.db())
             .get(account, resource_id)
@@ -132,7 +138,9 @@ request_timeout_ms = 1000
     );
 
     mock.set_fault(Fault::Auth);
-    maintenance.run(&storage, &objects, &config, &health).await;
+    maintenance
+        .run(&storage, &objects, &pins, &config, &health)
+        .await;
     assert_eq!(
         ResourceRepository::new(storage.db())
             .get(account, resource_id)
@@ -144,7 +152,9 @@ request_timeout_ms = 1000
         resource_id,
         Instant::now() - MIN_PROVIDER_DEBOUNCE - Duration::from_secs(1),
     );
-    maintenance.run(&storage, &objects, &config, &health).await;
+    maintenance
+        .run(&storage, &objects, &pins, &config, &health)
+        .await;
     assert_eq!(
         ResourceRepository::new(storage.db())
             .get(account, resource_id)
@@ -162,7 +172,9 @@ request_timeout_ms = 1000
             .state,
         ComponentState::Degraded
     );
-    maintenance.run(&storage, &objects, &config, &health).await;
+    maintenance
+        .run(&storage, &objects, &pins, &config, &health)
+        .await;
     assert_eq!(
         ResourceRepository::new(storage.db())
             .get(account, resource_id)
@@ -172,7 +184,9 @@ request_timeout_ms = 1000
     );
 
     mock.set_fault(Fault::None);
-    maintenance.run(&storage, &objects, &config, &health).await;
+    maintenance
+        .run(&storage, &objects, &pins, &config, &health)
+        .await;
     assert_eq!(
         ResourceRepository::new(storage.db())
             .get(account, resource_id)

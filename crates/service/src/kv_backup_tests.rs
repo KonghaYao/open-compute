@@ -39,7 +39,7 @@ fn backup_error_mapping_and_file_hashing_are_stable() {
 
 #[test]
 fn replayed_kv_backup_failure_maps_stored_error_code() {
-    let backup = open_compute_storage::KvBackupRecord {
+    let backup = open_compute_storage::kv::KvBackupRecord {
         id: "01bbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
         source_resource_id: ResourceId::generate(),
         state: KvBackupState::Failed,
@@ -53,7 +53,7 @@ fn replayed_kv_backup_failure_maps_stored_error_code() {
     };
     let err = replayed_backup_failure(&backup);
     assert_eq!(err.code(), ErrorCode::KvCorrupt);
-    let backup = open_compute_storage::KvBackupRecord {
+    let backup = open_compute_storage::kv::KvBackupRecord {
         error_code: None,
         ..backup
     };

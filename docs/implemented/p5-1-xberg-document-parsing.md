@@ -10,5 +10,4 @@ extension/MIME/magic admission、normalized Markdown，以及输入、输出、c
 [P5.3](p5-3-document-formats-ocr-vlm.md)直接替换；没有保留 Xberg 1.0、13-format 列表、OCR-required 分支或旧
 parser contract。当前支持面以[兼容矩阵](../references/cloudflare-compatibility.md)和源码 registry 为准。
 
-macOS parser child 的 RSS hard limit 仍由[后续 TODO](../p5-8-macos-document-parser.md)追踪；其它发行资格见
-[P5 剩余验收](../acceptance/p5-release-acceptance.md)。
+macOS parser child 无 RSS hard limit 是当前明确接受的边界；CPU、deadline、输入输出和进程组回收限制继续生效。

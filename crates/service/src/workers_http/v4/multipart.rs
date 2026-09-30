@@ -3,9 +3,7 @@
 use super::model::WorkerUploadMetadata;
 use axum::extract::Multipart;
 use open_compute_core::{ErrorCode, PlatformError};
-use open_compute_workers::{
-    BundleLimits, CanonicalBundle, ModuleInput, ModuleType, supports_worker_compatibility,
-};
+use open_compute_workers::{BundleLimits, CanonicalBundle, ModuleInput, ModuleType};
 use std::collections::BTreeSet;
 
 const METADATA_PART: &str = "metadata";
@@ -218,17 +216,23 @@ fn parse_parts(
 }
 
 fn validate_metadata(metadata: &WorkerUploadMetadata) -> Result<(), PlatformError> {
-    if !supports_worker_compatibility(&metadata.compatibility_date, &metadata.compatibility_flags) {
-        return Err(PlatformError::new(
-            ErrorCode::BundleInvalid,
-            "Worker compatibility metadata is unsupported by the pinned runtime",
-        ));
-    }
-    if metadata.bindings.len() > MAX_METADATA_BINDINGS
+    if metadata.compatibility_date.len() > 32
+        || metadata.compatibility_flags.len() > 64
+        || metadata
+            .compatibility_flags
+            .iter()
+            .any(|flag| flag.len() > 128)
+        || metadata.bindings.len() > MAX_METADATA_BINDINGS
         || metadata.keep_bindings.len() > 32
         || metadata.annotations.len() > 16
     {
         return Err(too_large());
+    }
+    if metadata
+        .code_update_strategy
+        .is_some_and(|strategy| !strategy.is_valid())
+    {
+        return Err(invalid());
     }
     if let Some(exports) = &metadata.exports {
         for (name, export) in exports {

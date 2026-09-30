@@ -1,9 +1,10 @@
 //! Authorized private backend for AI Search namespace and instance bindings.
 
-use crate::ai_provider::{ChatMessage, OpenAiChatClient, OpenAiProviderClient};
+use crate::ai_provider::{ChatMessage, OpenAiChatClient, OpenAiProviderClient, RerankClient};
 use crate::ai_search_config::{
-    AiSearchCreateInput, AiSearchFusionMethod, AiSearchKeywordMatchMode, AiSearchKeywordTokenizer,
-    ResolvedAiSearchConfig, parse_keyword_only_tokenizer_contract,
+    AiSearchBoost, AiSearchBoostDirection, AiSearchCreateInput, AiSearchFusionMethod,
+    AiSearchKeywordMatchMode, AiSearchKeywordTokenizer, AiSearchMetadataType,
+    ResolvedAiSearchConfig, parse_keyword_only_tokenizer_contract, validate_boosts,
 };
 use crate::ai_search_coordinator::{
     AiSearchChunking, AiSearchCoordinator, AiSearchParseCacheLocks, IsolatedAiSearchDocumentParser,
@@ -31,13 +32,17 @@ use open_compute_search::ai_search::{
     build_fts_query, cosine_similarity, fuse_candidates,
 };
 use open_compute_search::{FilterExpr, compile_filter, validate_metadata};
-use open_compute_storage::{
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::ai_search::{
     AiSearchCatalog, AiSearchChunkRecord, AiSearchInstanceInspection, AiSearchInstanceRecord,
     AiSearchInstanceStorageContract, AiSearchItemRecord, AiSearchJobRecord, AiSearchParseCache,
-    AiSearchPaths, AiSearchSourceReference, AiSearchStore, BindingRepository,
-    NewAiSearchItemGeneration, NewAiSearchManualGeneration, PlatformStorage, R2BucketRepository,
-    R2ObjectRepository, ResourceRecord, ResourceRepository,
+    AiSearchPaths, AiSearchSourceReference, AiSearchStore, NewAiSearchItemGeneration,
+    NewAiSearchManualGeneration,
 };
+use open_compute_storage::bindings::BindingRepository;
+use open_compute_storage::r2::R2BucketRepository;
+use open_compute_storage::r2_objects::R2ObjectRepository;
+use open_compute_storage::resources::{ResourceRecord, ResourceRepository};
 use open_compute_workers::{
     AiSearchInstanceResourceDriver, AiSearchInstanceSpec, AiSearchManualSourceSpec,
     AiSearchR2SourceSpec, CreateResourceRequest, ResourceController, ResourceDriver, ResourcePin,
@@ -66,9 +71,11 @@ mod namespace;
 mod protocol;
 mod r2_source;
 mod search;
+mod search_projection;
 mod search_types;
 use embedding_cache::*;
 use protocol::*;
+use search_projection::*;
 use search_types::*;
 
 #[cfg(test)]

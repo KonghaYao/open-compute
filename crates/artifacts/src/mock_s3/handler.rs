@@ -118,6 +118,7 @@ fn record_request(state: &Arc<Mutex<Inner>>, request: &ParsedRequest) {
             .get("x-amz-server-side-encryption-customer-key-md5")
             .cloned(),
         storage_class: request.headers.get("x-amz-storage-class").cloned(),
+        body_len: request.body.len(),
     });
 }
 
@@ -321,7 +322,11 @@ async fn handle_special_routes(
             write_s3_err(stream, 400, "InvalidRequest").await?;
             return Ok(SpecialRoute::Handled);
         };
-        let etag = hex::encode(md5::Md5::digest(body.as_slice()));
+        let etag = if ssec.is_some() {
+            format!("opaque-{}", hex::encode(Sha256::digest(body.as_slice())))
+        } else {
+            hex::encode(md5::Md5::digest(body.as_slice()))
+        };
         let ok = {
             let mut g = state.lock().expect("lock");
             match g.uploads.get_mut(&upload_id) {
@@ -348,6 +353,21 @@ async fn handle_special_routes(
             write_s3_err(stream, 400, "InvalidRequest").await?;
             return Ok(SpecialRoute::Handled);
         };
+        let too_small = {
+            let g = state.lock().expect("lock");
+            g.strict_multipart_minimum
+                && g.uploads.get(&upload_id).is_some_and(|upload| {
+                    upload
+                        .parts
+                        .values()
+                        .take(upload.parts.len().saturating_sub(1))
+                        .any(|(_, part)| part.len() < crate::R2_MIN_MULTIPART_PART_BYTES as usize)
+                })
+        };
+        if too_small {
+            write_s3_err(stream, 400, "EntityTooSmall").await?;
+            return Ok(SpecialRoute::Handled);
+        }
         let completed = {
             let mut g = state.lock().expect("lock");
             g.uploads.remove(&upload_id)
@@ -366,17 +386,28 @@ async fn handle_special_routes(
         }
         let mut assembled = Vec::new();
         let mut part_digests = Vec::new();
+        let mut md5_parts = true;
         let part_count = upload.parts.len();
         for (_number, (etag, part)) in upload.parts {
-            part_digests.extend_from_slice(&hex::decode(etag).expect("stored part MD5"));
+            match hex::decode(etag) {
+                Ok(digest) if digest.len() == 16 => part_digests.extend_from_slice(&digest),
+                Ok(_) | Err(_) => md5_parts = false,
+            }
             assembled.extend_from_slice(&part);
         }
         let sha256 = hex::encode(Sha256::digest(&assembled));
         let metadata = upload.metadata;
-        let etag = format!(
-            "{}-{part_count}",
-            hex::encode(md5::Md5::digest(part_digests))
-        );
+        let etag = if md5_parts {
+            format!(
+                "{}-{part_count}",
+                hex::encode(md5::Md5::digest(part_digests))
+            )
+        } else {
+            format!(
+                "opaque-{}-{part_count}",
+                hex::encode(Sha256::digest(&assembled))
+            )
+        };
         if fault == Fault::CompleteResponseLoss {
             state.lock().expect("lock").objects.insert(
                 key.clone(),

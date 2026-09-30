@@ -135,7 +135,7 @@ async fn streaming_put_frame_stages_exact_bytes_and_cleans_every_terminal_path()
         .to_vec();
     oversized.extend_from_slice(&oversized_header);
     oversized.resize(
-        oversized.len() + open_compute_storage::KV_MAX_VALUE_BYTES + 1,
+        oversized.len() + open_compute_storage::kv::KV_MAX_VALUE_BYTES + 1,
         7,
     );
     assert_eq!(
@@ -204,7 +204,7 @@ async fn streaming_put_frame_stages_exact_bytes_and_cleans_every_terminal_path()
         .code(),
         ErrorCode::KvInternalProtocolError
     );
-    let duplicate = open_compute_storage::KvPaths::open(storage.data_dir().root())
+    let duplicate = open_compute_storage::kv::KvPaths::open(storage.data_dir().root())
         .unwrap()
         .create_write_staging(binding.resource.id, request_id)
         .unwrap();
@@ -290,7 +290,7 @@ async fn streamed_get_rejects_invalid_part_order_and_surfaces_terminal_errors() 
     for bytes in [b"".as_slice(), b"xx".as_slice()] {
         let response = run(StreamExecutor {
             parts: vec![
-                KvStreamPart::Entry(Some(open_compute_storage::KvEntryInfo {
+                KvStreamPart::Entry(Some(open_compute_storage::kv::KvEntryInfo {
                     value_length: 1,
                     metadata_json: None,
                     expires_at_ms: None,
@@ -309,7 +309,7 @@ async fn streamed_get_rejects_invalid_part_order_and_surfaces_terminal_errors() 
 
     let response = run(StreamExecutor {
         parts: vec![
-            KvStreamPart::Entry(Some(open_compute_storage::KvEntryInfo {
+            KvStreamPart::Entry(Some(open_compute_storage::kv::KvEntryInfo {
                 value_length: 2,
                 metadata_json: None,
                 expires_at_ms: None,
@@ -328,7 +328,7 @@ async fn streamed_get_rejects_invalid_part_order_and_surfaces_terminal_errors() 
 
     let response = run(StreamExecutor {
         parts: vec![
-            KvStreamPart::Entry(Some(open_compute_storage::KvEntryInfo {
+            KvStreamPart::Entry(Some(open_compute_storage::kv::KvEntryInfo {
                 value_length: 1,
                 metadata_json: None,
                 expires_at_ms: None,

@@ -7,13 +7,13 @@ fn api_queue_consumer_generations_preserve_version_manifest_and_release_queue_re
     let account = storage.identity().instance_id;
     let request = open_compute_core::RequestId::generate();
     let queue_id = open_compute_core::QueueId::generate();
-    let queues = crate::QueueRepository::new(storage.db());
+    let queues = crate::queues::QueueRepository::new(storage.db());
     queues
         .insert_creating(
             account,
             queue_id,
             "api-consumer",
-            crate::QueueConfig::default(),
+            crate::queues::QueueConfig::default(),
             1,
         )
         .unwrap();

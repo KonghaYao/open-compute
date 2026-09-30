@@ -17,7 +17,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::{delete, get, post};
 use open_compute_core::{ArtifactTokenId, ErrorCode, PlatformError, RequestId};
-use open_compute_storage::{
+use open_compute_storage::cloudflare_artifacts::{
     ArtifactNamespaceRecord, ArtifactRepositoryRecord, ArtifactTokenRecord, ArtifactTokenScope,
 };
 use serde::de::DeserializeOwned;

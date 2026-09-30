@@ -7,9 +7,15 @@ fn lock_source_provenance_and_independent_types_are_validated() {
     let mut good: serde_json::Value =
         serde_json::from_str(&lock_json(&"ab".repeat(32), "")).unwrap();
     good["workersTypes"]["gitHead"] = serde_json::json!("12".repeat(20));
-    good["targets"][host_target()]["archiveUrl"] = serde_json::Value::Null;
     let parsed = RuntimeLock::parse(&serde_json::to_vec(&good).unwrap()).unwrap();
-    assert!(parsed.current_target().unwrap().1.archive_url.is_none());
+    assert!(
+        parsed
+            .current_target()
+            .unwrap()
+            .1
+            .archive_url
+            .starts_with("https://github.com/")
+    );
     assert_ne!(parsed.workers_types.git_head, parsed.revision);
     for (pointer, invalid) in [
         (
@@ -25,7 +31,6 @@ fn lock_source_provenance_and_independent_types_are_validated() {
             serde_json::json!("x".repeat(2049)),
         ),
         ("/source/buildInputs/mode", serde_json::json!("fastbuild")),
-        ("/source/buildInputs/ioBackend", serde_json::json!("rust")),
         ("/source/buildInputs/strip", serde_json::json!("never")),
         (
             "/source/buildInputs/macosExecRustStrip",
@@ -45,6 +50,9 @@ fn lock_source_provenance_and_independent_types_are_validated() {
             "{pointer}"
         );
     }
+    let mut value = good.clone();
+    value["targets"][host_target()]["archiveUrl"] = serde_json::Value::Null;
+    assert!(RuntimeLock::parse(&serde_json::to_vec(&value).unwrap()).is_err());
     for invalid_key in [String::new(), "x".repeat(129), "control\u{7f}".to_owned()] {
         let mut value = good.clone();
         value["source"]["buildInputs"][invalid_key] = serde_json::json!("value");

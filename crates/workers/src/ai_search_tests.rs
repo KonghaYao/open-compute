@@ -4,7 +4,7 @@ use open_compute_core::config::DataConfig;
 use open_compute_core::{
     AiTokenizer, ErrorCode, RequestId, ResolvedTokenizerContract, SystemClock,
 };
-use open_compute_storage::ResourceRepository;
+use open_compute_storage::resources::ResourceRepository;
 use sha2::{Digest as _, Sha256};
 use std::time::Duration;
 

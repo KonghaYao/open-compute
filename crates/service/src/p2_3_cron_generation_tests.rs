@@ -1,7 +1,8 @@
 //! Cron generations survive removal of every trigger and a platform restart.
 
 use super::*;
-use open_compute_storage::{CronActivationState, CronRepository, WorkerRepository};
+use open_compute_storage::cron::{CronActivationState, CronRepository};
+use open_compute_storage::worker_repository::WorkerRepository;
 
 #[tokio::test]
 async fn cron_remove_all_restart_and_reenable_preserves_generation_and_retry_identity() {
@@ -82,10 +83,15 @@ async fn cron_remove_all_restart_and_reenable_preserves_generation_and_retry_ide
             secrets: Default::default(),
             bindings: Default::default(),
             services: Default::default(),
-            runtime_features: Default::default(),
+            runtime_features: open_compute_workers::VersionRuntimeFeatures {
+                compatibility_date: "2026-09-08".to_owned(),
+                ..Default::default()
+            },
             queue_consumers: Vec::new(),
             crons: vec!["*/5 * * * *".into()],
-            deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+            deployment_source: Some(
+                open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+            ),
             observability: None,
             request_id: open_compute_core::RequestId::generate(),
             now_ms: 60_000,
@@ -138,7 +144,7 @@ async fn cron_remove_all_restart_and_reenable_preserves_generation_and_retry_ide
         instance_id: account,
         worker_id: worker,
         version_id: version,
-        source: open_compute_storage::DeploymentSource::Rollback,
+        source: open_compute_storage::worker_repository::DeploymentSource::Rollback,
         annotations: Default::default(),
         observability: None,
         request_id: open_compute_core::RequestId::generate(),

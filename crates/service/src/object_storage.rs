@@ -7,7 +7,7 @@ use open_compute_artifacts::{
 use open_compute_core::{
     ErrorCode, InstanceId, ObjectStorageConfig, ObjectStorageKind, PlatformConfig, PlatformError,
 };
-use open_compute_storage::StableIdentity;
+use open_compute_storage::identity::StableIdentity;
 
 /// Connected backend plus short-lived S3 credentials for redactor registration.
 pub(crate) struct ConnectedObjectBackend {

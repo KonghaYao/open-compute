@@ -25,10 +25,11 @@ use open_compute_core::{
     BindingKind, ErrorCode, InstanceId, OperationClass, PlatformError, R2Config, RequestId,
     ResourceId, VersionId,
 };
-use open_compute_storage::{
-    AuthorizedBinding, BindingRepository, PlatformStorage, R2BucketRepository, R2ObjectListEntry,
-    R2ObjectRecord, R2ObjectRepository, R2Staging,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::bindings::{AuthorizedBinding, BindingRepository};
+use open_compute_storage::r2::R2BucketRepository;
+use open_compute_storage::r2_objects::{R2ObjectListEntry, R2ObjectRecord, R2ObjectRepository};
+use open_compute_storage::r2_staging::R2Staging;
 use open_compute_workers::{ResourcePin, ResourcePins};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};

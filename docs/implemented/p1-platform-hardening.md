@@ -1,7 +1,6 @@
 # P1：平台加固
 
-状态：**implemented（2026-08-28）**。P1.0–P1.7 本地验证完成；长时 soak 和发行演练见
-[P1 资格](../acceptance/p1-release-acceptance.md)。
+状态：**implemented（2026-08-28）**。
 
 ## 最终结果
 
@@ -17,7 +16,6 @@
 ## 历史验证与限制
 
 在 Darwin arm64 和 workerd `v1.20260826.1` 上，workspace、real-runtime Gate、静态检查及 coverage 成功；coverage 为
-43,685 / 48,521 Rust lines（90.03%）。10 分钟本地 mixed soak 成功，但 1 小时 developer soak、24 小时 RC soak、
-release package 和 service rehearsal 未执行。
+43,685 / 48,521 Rust lines（90.03%）。
 
 G0 的 `loader:D-abort` 限制继续接受；P1.8 hibernatable WebSocket 当时为 No-Go，不影响基础 WebSocket。

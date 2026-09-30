@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
@@ -170,14 +171,20 @@ jobs:
       - uses: actions/checkout@v7
         with:
           lfs: true
-      - name: Initialize pinned gitserver-core submodule
-        run: git submodule update --init --depth 1 third_party/gitserver
+      - name: Initialize pinned source submodules
+        run: git submodule update --init --depth 1 third_party/caddy third_party/gitserver
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - name: Install locked JavaScript tooling
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Download and verify pinned runtime inputs
+        run: |
+          mkdir -p "$PWD/.temp/runtime-inputs"
+          bun scripts/prepare-workerd.ts --dest "$PWD/.temp/runtime-inputs/workerd" --download >> "$GITHUB_ENV"
+          bun scripts/prepare-caddy.ts --dest "$PWD/.temp/runtime-inputs/caddy" --download >> "$GITHUB_ENV"
       - name: Prepare exact embedded inputs for the Docker runtime build
         run: |
-          bun install --frozen-lockfile --ignore-scripts
           bun scripts/build-workerd.ts
           bun run --filter @open-compute/sdk build
           bun run --filter @open-compute/dashboard build
@@ -226,6 +233,96 @@ jobs:
             test/release-tools.test.mjs
           bun scripts/check-docs.ts
 
+  ai-search-qualification:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    runs-on: ubuntu-24.04
+    environment: ai-search-qualification
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+      - uses: ./.github/actions/setup-open-compute
+        with:
+          rust-cache-key: ai-search-qualification-${{ hashFiles('crates/storage/refinery-migrations/**/*.sql') }}
+          rust-cache-save: "false"
+      - name: Build current runtime and application assets
+        run: bun run build
+      - name: Fetch locked Rust dependencies
+        run: cargo fetch --locked
+      - name: Run local AI Search Gate
+        run: ./test/gate.py p5-search --jobs 1
+      - name: Require protected provider configuration
+        env:
+          BAILIAN_API_HOST: ${{ secrets.BAILIAN_API_HOST }}
+          BAILIAN_API_KEY: ${{ secrets.BAILIAN_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$BAILIAN_API_HOST"
+          test -n "$BAILIAN_API_KEY"
+          test -n "$DEEPSEEK_API_KEY"
+          test -n "$COHERE_API_KEY"
+      - name: Run live AI provider qualification
+        env:
+          BAILIAN_API_HOST: ${{ secrets.BAILIAN_API_HOST }}
+          BAILIAN_API_KEY: ${{ secrets.BAILIAN_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+        run: ./test/gate.py p5-ai-provider-qualification --jobs 1
+      # The harness redacts provider credentials from captured case output, and
+      # Actions masks registered secrets; retained tmp/ evidence is never uploaded.
+      - name: Show AI provider qualification diagnostics
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for log in .temp/gate-run/failed/*/round-*/p5-ai-provider-qualification/output.log \
+            .temp/gate-run/failed/*/prepare/p5-ai-provider-qualification/output.log; do
+            echo "=== $log"
+            cat "$log"
+          done
+          for report in .temp/gate-run/failed/*/report.json; do
+            echo "=== $report"
+            jq '{status, error, results}' "$report"
+          done
+      - name: Upload AI provider qualification evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ai-provider-qualification-failed-${{ github.run_attempt }}
+          path: |
+            .temp/gate-run/failed/*/*.json
+            .temp/gate-run/failed/*/*.log
+            .temp/gate-run/failed/*/*/*/output.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  s3-provider-qualification:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    runs-on: ubuntu-24.04
+    environment: s3-provider-qualification
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: true
+      - uses: ./.github/actions/setup-open-compute
+        with:
+          rust-cache-key: s3-provider-qualification-${{ hashFiles('Cargo.lock') }}
+          rust-cache-save: "false"
+          python: "false"
+          node: "false"
+      - name: Fetch locked Rust dependencies
+        run: cargo fetch --locked
+      - name: Run production S3 preflight against hosted R2
+        env:
+          OPEN_COMPUTE_TEST_R2_S3_ENDPOINT: ${{ secrets.OPEN_COMPUTE_TEST_R2_S3_ENDPOINT }}
+          OPEN_COMPUTE_TEST_R2_S3_REGION: ${{ secrets.OPEN_COMPUTE_TEST_R2_S3_REGION }}
+          OPEN_COMPUTE_TEST_R2_S3_BUCKET: ${{ secrets.OPEN_COMPUTE_TEST_R2_S3_BUCKET }}
+          OPEN_COMPUTE_TEST_R2_S3_ACCESS_KEY_ID: ${{ secrets.OPEN_COMPUTE_TEST_R2_S3_ACCESS_KEY_ID }}
+          OPEN_COMPUTE_TEST_R2_S3_SECRET_ACCESS_KEY: ${{ secrets.OPEN_COMPUTE_TEST_R2_S3_SECRET_ACCESS_KEY }}
+          OPEN_COMPUTE_TEST_R2_S3_MUTATION_ACK: ${{ secrets.OPEN_COMPUTE_TEST_R2_S3_MUTATION_ACK }}
+        run: ./test/gate.py s3-provider-qualification --jobs 1
+
   ci:
     if: ${{ always() && !cancelled() }}
     needs:
@@ -236,6 +333,8 @@ jobs:
         docs-checks,
         release-tooling-checks,
         gateway-caddy-module,
+        ai-search-qualification,
+        s3-provider-qualification,
       ]
     runs-on: ubuntu-24.04
     steps:
@@ -245,6 +344,10 @@ jobs:
         run: |
           set -euo pipefail
           test "${{ needs.failfast.result }}" = success
+          if [ "${{ github.event_name }}" != pull_request ]; then
+            test "${{ needs.ai-search-qualification.result }}" = success
+            test "${{ needs.s3-provider-qualification.result }}" = success
+          fi
           case "$SCOPE" in
             full)
               test "${{ needs.checks.result }}" = success

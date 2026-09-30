@@ -9,7 +9,7 @@ use hyper_util::rt::TokioExecutor;
 use std::panic::AssertUnwindSafe;
 use std::process::Output;
 
-const WRANGLER_VERSION: &str = "4.138.0";
+const WRANGLER_VERSION: &str = "4.143.0";
 const WORKER_NAME: &str = "wrangler-runtime-gate";
 const WORKFLOW_NAME: &str = "wrangler-runtime-gate-flow";
 const FIXTURE_SECRET: &str = "wrangler-runtime-gate-secret";
@@ -121,8 +121,8 @@ async fn verify_project(
             account,
             Some(WORKFLOW_NAME),
             None,
-            open_compute_storage::CatalogSort::Name,
-            open_compute_storage::CatalogDirection::Asc,
+            open_compute_storage::catalog_page::CatalogSort::Name,
+            open_compute_storage::catalog_page::CatalogDirection::Asc,
             None,
             10,
         )
@@ -487,7 +487,7 @@ impl WranglerCommand<'_> {
 fn fixed_wrangler() -> PathBuf {
     let root = repo_root();
     let lock = std::fs::read_to_string(root.join("bun.lock")).unwrap();
-    assert!(lock.contains("\"wrangler\": [\"wrangler@4.138.0\""));
+    assert!(lock.contains("\"wrangler\": [\"wrangler@4.143.0\""));
     let package = root.join("node_modules/.bun/node_modules/wrangler");
     let metadata: serde_json::Value =
         serde_json::from_slice(&std::fs::read(package.join("package.json")).unwrap()).unwrap();

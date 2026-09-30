@@ -1,21 +1,25 @@
 {
-  "schemaVersion": 3,
-  "release": "v1.20260918.1-open-compute-i102.1c7b89be",
-  "revision": "1c7b89bea323a39a8511271913820f9fcf39306d",
-  "expectedVersionOutput": "workerd 2026-09-18",
-  "effectiveCompatibilityDate": "2026-09-08",
-  "requiredCompatibilityFlags": [],
+  "schemaVersion": 4,
+  "release": "v1.20260930.0-open-compute-r3.e3bdb07f5",
+  "revision": "e3bdb07f52affc6a618f02ed2b731a581b0b2f69",
+  "expectedVersionOutput": "workerd 2026-09-30",
+  "systemCompatibilityDate": "2026-09-08",
   "systemCompatibilityFlags": [
     "experimental",
     "service_binding_extra_handlers"
   ],
+  "binaryMaximumCompatibilityDate": "2026-10-07",
+  "compatibilityCatalog": {
+    "schemaVersion": 1,
+    "sha256": "a6a00dc87f3e246dbc29ee32a5ab06db2867ad165798b3f71b131cfc5c1281b4"
+  },
   "processFlags": ["--experimental"],
   "pyodideBundle": {
-    "version": "314.0.6_2026-08-17_2",
-    "fileName": "pyodide_314.0.6_2026-08-17_2.capnp.bin",
-    "archiveName": "pyodide_314.0.6_2026-08-17_2.capnp.bin.gz",
-    "archiveSha256": "5c6c15ece332f7d473cda43343cc9d58e06435a659f38fc9851e67ce89c88b8f",
-    "bundleSha256": "c7bae5aa740a62c5ad817d103f404155b248eab3f45cbd52b8c5e5f7d8588441"
+    "version": "314.0.6_2026-08-17_6",
+    "fileName": "pyodide_314.0.6_2026-08-17_6.capnp.bin",
+    "archiveName": "pyodide_314.0.6_2026-08-17_6.capnp.bin.gz",
+    "archiveSha256": "043d493bd89473409cdbf8504b0a35cdc31122b3effd87067cacbf19fa8e976b",
+    "bundleSha256": "3c3fd5a4179230e21e018e28b0e735e7c4abd8fe8e4ff39d2fd6bb2ea3a2e260"
   },
   "workersTypes": {
     "version": "5.20260830.1",
@@ -24,48 +28,47 @@
     "astSha256": "da29f5ec1d9a81cc0094bd083ed3b28013573fcb2d4febd9fd62aecbfb53c6b3"
   },
   "workersSdk": {
-    "revision": "f8085545bcaa2c639f171c25e4424685036a0e10",
-    "wranglerVersion": "4.138.0",
+    "revision": "968d629c9f4978d6842b0e11af511ef59a51cd79",
+    "wranglerVersion": "4.143.0",
     "vitePluginVersion": "1.54.2"
   },
   "targets": {
     "darwin-arm64": {
       "archiveName": "workerd-darwin-arm64.gz",
-      "archiveUrl": null,
-      "archiveSha256": "c72592eca1089921c7d164f7e3de218b4a128da54dd4ebdb2bb5c806981b3bc9",
-      "binarySha256": "f9adf7bd167f5ddedb1d952e0729219763ac11d59034e5c37bca1f707f7cf33d"
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-darwin-arm64.gz",
+      "archiveSha256": "632d2ee13c684e70200bacd0bf1583360d430ad1054ef3cb29e0c20ef52481e0",
+      "binarySha256": "d489faf23b0ecf7bfa8edccac5e6d5295f262f7f02f392c7ae92b06d95f55ddf"
     },
     "darwin-x64": {
       "archiveName": "workerd-darwin-64.gz",
-      "archiveUrl": null,
-      "archiveSha256": "cf44289e39892e13624f642ef2ff3dd1c8918387c4c0b07dc331f9855df6556f",
-      "binarySha256": "80d741fb70a0df2c3effc4045cc9934f3fe72fdad559dc8321dd15965c171619"
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-darwin-64.gz",
+      "archiveSha256": "cd7c543b688120ccb5fdc57706c0e0bddbdde6ee140b55fd7f30cc3e3524c015",
+      "binarySha256": "9149f00c2f2b7bd576f6b164e924ed306562845ca72a8207d99ff6774c58753e"
     },
     "linux-arm64": {
       "archiveName": "workerd-linux-arm64.gz",
-      "archiveUrl": null,
-      "archiveSha256": "daa7c804fd17c68c0ae8ddaab1bc0f237d38d95f97177623220cce7e97298e24",
-      "binarySha256": "289e5ce01435333e7aed351f2094b8adb6ff3fdf2d84fe2443166f0654b18a2b"
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-arm64.gz",
+      "archiveSha256": "76d00935975e38c1b114771903cac54644dc1cde9a9c1b68a1afbd6829822f6b",
+      "binarySha256": "744a56e9b28728ead237765abc6cbded98560acc4bbfb5339d21e184394839d5"
     },
     "linux-x64": {
       "archiveName": "workerd-linux-64.gz",
-      "archiveUrl": null,
-      "archiveSha256": "c206955e123f62358c1d441d58b152cf129a14621448a7d0b8f7e898bdbd74c7",
-      "binarySha256": "7b8a7e2a6cdd77ec3a2996c0f1ac494af42927b595df2e4344604185e5553f3d"
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-64.gz",
+      "archiveSha256": "5145314dbd608857bbd765cc479a609619f0cf380bb91d9704303d218816fa48",
+      "binarySha256": "40424924678782e02d6a68a1af512b1a9dacdf93b16e47c2d7f4825a09f5e336"
     }
   },
   "source": {
     "repository": "https://github.com/elliothux/workerd",
-    "upstreamBase": "679c09e5eea0af8a04062e1875e99c75af532e3b",
+    "upstreamBase": "cb26acc62e64f64487a78e3f73d0a08e9926c690",
     "buildInputs": {
       "bazel": "9.2.0",
       "target": "//src/workerd/server:workerd",
       "mode": "opt",
-      "ioBackend": "cxx",
       "strip": "always",
       "macosExecRustStrip": "none",
-      "workflowRun": "https://github.com/elliothux/workerd/actions/runs/35592596362",
-      "sourceTreeSha256": "4b346b9959b0ab89753b06d941bdbf10f22f083308c6bc152c8e20ab31ed2778",
+      "workflowRun": "https://github.com/elliothux/workerd/actions/runs/36668461686",
+      "sourceTreeSha256": "d3a2b9f7bc182c25f8c72d0a0b6209043b6aeaedc940823de53b778b912d19bb",
       "darwinArm64Config": "release_macos",
       "darwinX64Config": "release_macos_cross_x86_64",
       "linuxConfig": "release_linux",
@@ -75,8 +78,9 @@
       "macosSdk": "15.4",
       "linuxArm64Runner": "ubuntu-24.04-arm",
       "linuxX64Runner": "ubuntu-24.04",
-      "linuxCompiler": "/usr/lib/llvm-19/bin/clang via release_linux config",
-      "linuxLinker": "/usr/lib/llvm-19/bin/ld.lld via release_linux config",
+      "linuxCompiler": "/usr/lib/llvm-22/bin/clang via setup-runner Linux config",
+      "linuxLinker": "/usr/lib/llvm-22/bin/ld.lld via setup-runner Linux config",
+      "linuxRecordedRunnerCompiler": "Ubuntu clang 18.1.3 (runner default; Bazel uses configured LLVM 22)",
       "archive": "Bun 1.3.14 node:zlib gzipSync level 9; mtime 0; no filename; OS 255",
       "pyodideBundleTarget": "//src/pyodide:pyodide.capnp.bin@rule@314.0.6",
       "pyodideBundleArchive": "Bun 1.3.14 node:zlib gzipSync level 9; mtime 0; no filename; OS 255"

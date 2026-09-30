@@ -8,9 +8,8 @@ use open_compute_core::SchedulerFaultPoint;
 use open_compute_core::{
     ErrorCode, PlatformError, SchedulerKind, SchedulerPoolState, WorkloadSummary,
 };
-use open_compute_storage::{
-    AlarmProjection, ClaimResult, ClaimedJob, DurableObjectRecord, DurableObjectRepository,
-};
+use open_compute_storage::durable_objects::{DurableObjectRecord, DurableObjectRepository};
+use open_compute_storage::scheduler::{AlarmProjection, ClaimResult, ClaimedJob};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -187,7 +186,8 @@ impl SchedulerService {
     async fn authority(
         &self,
         job: &ClaimedJob,
-    ) -> Result<open_compute_storage::AuthorizedDurableObjectDispatch, PlatformError> {
+    ) -> Result<open_compute_storage::durable_objects::AuthorizedDurableObjectDispatch, PlatformError>
+    {
         let storage = self.storage.clone();
         let namespace = job.namespace_resource_id;
         let object = job.object_id;
@@ -307,7 +307,7 @@ impl SchedulerService {
     async fn apply_repair(
         &self,
         object: DurableObjectRecord,
-        authority: open_compute_storage::AuthorizedDurableObjectDispatch,
+        authority: open_compute_storage::durable_objects::AuthorizedDurableObjectDispatch,
         result: AlarmRepairResult,
     ) -> Result<(), PlatformError> {
         let store = self.store.clone();

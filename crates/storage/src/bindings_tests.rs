@@ -1,9 +1,9 @@
 use super::*;
-use crate::workers::EffectiveResourceLimits;
-use crate::{
-    NewQueueProducerBinding, NewVersion, PlatformStorage, QueueConfig, QueueRepository,
-    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository, WorkerRepository,
-};
+use crate::PlatformStorage;
+use crate::queues::{NewQueueProducerBinding, QueueConfig, QueueRepository};
+use crate::resources::{ReserveResourceCreate, ResourceCreateReservation, ResourceRepository};
+use crate::worker_repository::EffectiveResourceLimits;
+use crate::worker_repository::{NewVersion, WorkerRepository};
 use open_compute_core::config::DataConfig;
 use open_compute_core::{BindingId, QueueId, RequestId, SystemClock, WorkerId};
 use std::collections::BTreeMap;
@@ -28,7 +28,7 @@ fn version(instance_id: InstanceId, worker_id: WorkerId, version_id: VersionId) 
         id: version_id,
         instance_id,
         worker_id,
-        content_kind: crate::VersionContentKind::Worker,
+        content_kind: crate::worker_repository::VersionContentKind::Worker,
         artifact_sha256: Some([1; 32]),
         artifact_size: Some(1),
         artifact_schema_version: Some(1),
@@ -93,7 +93,7 @@ fn binding_insert_referrer_authorize_and_worker_release_are_atomic() {
     workers
         .insert_staging_version(
             &version(account, worker.id, version_id),
-            &crate::NewVersionProducts {
+            &crate::worker_repository::NewVersionProducts {
                 bindings: std::slice::from_ref(&binding),
                 ..Default::default()
             },
@@ -155,7 +155,7 @@ fn queue_producer_referrer_is_released_when_its_worker_is_deleted() {
     workers
         .insert_staging_version(
             &version(account, worker.id, version_id),
-            &crate::NewVersionProducts {
+            &crate::worker_repository::NewVersionProducts {
                 queue_bindings: std::slice::from_ref(&binding),
                 ..Default::default()
             },
@@ -230,7 +230,7 @@ fn binding_triggers_reject_cross_kind_and_runtime_forgery() {
         workers
             .insert_staging_version(
                 &version(account, worker.id, version_id),
-                &crate::NewVersionProducts {
+                &crate::worker_repository::NewVersionProducts {
                     bindings: &[bad],
                     ..Default::default()
                 },

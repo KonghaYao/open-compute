@@ -548,6 +548,13 @@ function renderNodeInterfaces(
         );
       } else if (
         method.operation ===
+        "GET /accounts/{account_id}/workers/scripts/{script_name}/deployments"
+      ) {
+        members.push(
+          `  readonly list: (scriptName: string, params: DeploymentListParams, options?: OpenComputeRequestOptions) => APIPromise<DeploymentListResponse>;`,
+        );
+      } else if (
+        method.operation ===
         "PATCH /accounts/{account_id}/workers/scripts/{script_name}/settings"
       ) {
         members.push(
@@ -597,6 +604,13 @@ function renderRuntimeTree(node: TreeNode, indent: string): string {
     ) {
       lines.push(
         `${inner}update: (scriptName, params, options) => workerUpload(transport, "PUT", scriptName, params, options),`,
+      );
+    } else if (
+      method.operation ===
+      "GET /accounts/{account_id}/workers/scripts/{script_name}/deployments"
+    ) {
+      lines.push(
+        `${inner}list: (scriptName, params, options) => listWorkerDeployments(transport, scriptName, params, options),`,
       );
     } else if (
       method.operation === "POST /accounts/{account_id}/workers/assets/upload"
@@ -998,6 +1012,7 @@ function renderGenerated(input: {
     `import type { VersionCreateParams, VersionCreateResponse } from "cloudflare/resources/workers/scripts/versions";`,
     `import type { ScriptUpdateParams, ScriptUpdateResponse } from "cloudflare/resources/workers/scripts/scripts";`,
     `import type { ScriptAndVersionSettingEditParams } from "cloudflare/resources/workers/scripts/script-and-version-settings";`,
+    `import type { DeploymentListParams, DeploymentListResponse } from "cloudflare/resources/workers/scripts/deployments";`,
     `import type { UploadCreateParams } from "cloudflare/resources/workers/assets/upload";`,
     `import { Artifacts } from "./artifacts.ts";`,
     `import { uploadAiSearchItem } from "./ai-search-upload.ts";`,
@@ -1227,6 +1242,21 @@ function segment(value: string): string {
   if (value.length === 0 || value === "." || value === "..")
     throw new Error("invalid vendor path segment");
   return encodeURIComponent(value);
+}
+
+function listWorkerDeployments(
+  transport: BaseCloudflare,
+  scriptName: string,
+  params: DeploymentListParams,
+  options?: OpenComputeRequestOptions,
+): APIPromise<DeploymentListResponse> {
+  const { account_id, ...query } = params;
+  const path = "/accounts/" + segment(account_id) + "/workers/scripts/" +
+    segment(scriptName) + "/deployments";
+  return transport.get<V4Envelope<DeploymentListResponse>>(path, {
+    ...options,
+    query,
+  })._thenUnwrap((envelope) => envelope.result);
 }
 
 ${vendorTypeDeclarations}

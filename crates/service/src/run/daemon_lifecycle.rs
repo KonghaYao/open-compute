@@ -46,8 +46,8 @@ pub(crate) async fn clean_registered_instance_cache(
 
 pub(crate) struct OfflineInstanceOwner {
     cache_path: std::path::PathBuf,
-    _readonly: Option<open_compute_storage::InspectLock>,
-    _owned: Option<open_compute_storage::DataDir>,
+    _readonly: Option<open_compute_storage::lock::InspectLock>,
+    _owned: Option<open_compute_storage::data_dir::DataDir>,
 }
 
 impl OfflineInstanceOwner {
@@ -72,7 +72,7 @@ impl OfflineInstanceOwner {
         let readonly = if dry_run {
             open_compute_storage::fs::validate_root(&data.path)?;
             Some(
-                open_compute_storage::InspectLock::try_acquire(&data.data_lock_path())?
+                open_compute_storage::lock::InspectLock::try_acquire(&data.data_lock_path())?
                     .ok_or_else(|| {
                         PlatformError::new(
                             ErrorCode::DataDirInUse,
@@ -86,11 +86,9 @@ impl OfflineInstanceOwner {
         let owned = if dry_run {
             None
         } else {
-            Some(open_compute_storage::DataDir::acquire_existing_offline(
-                data,
-            )?)
+            Some(open_compute_storage::data_dir::DataDir::acquire_existing_offline(data)?)
         };
-        let (_, identity) = open_compute_storage::inspect_control_db(
+        let (_, identity) = open_compute_storage::inspect::inspect_control_db(
             &data.path.join("control.sqlite"),
             data.sqlite_busy_timeout_ms,
         )?;

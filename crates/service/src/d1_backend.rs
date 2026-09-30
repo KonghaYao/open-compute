@@ -18,9 +18,12 @@ use open_compute_core::{
     BindingId, BindingKind, D1Config, ErrorCode, InstanceId, OperationClass, PlatformError,
     ResourceId, VersionId,
 };
-use open_compute_storage::{
-    BindingRepository, D1Engine, D1Migration, D1MigrationRecord, D1QueryLimits, D1Statement,
-    D1StatementResult, D1Value, PlatformStorage,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::bindings::BindingRepository;
+#[cfg(test)]
+use open_compute_storage::d1::D1Value;
+use open_compute_storage::d1::{
+    D1Engine, D1Migration, D1MigrationRecord, D1QueryLimits, D1Statement, D1StatementResult,
 };
 use open_compute_workers::ResourcePins;
 use std::str::FromStr;
@@ -181,35 +184,8 @@ impl D1BindingService {
         .await
     }
 
-    /// List user-visible tables for the operator dashboard.
-    pub async fn operator_list_tables(
-        &self,
-        instance_id: InstanceId,
-        resource_id: ResourceId,
-    ) -> Result<Vec<String>, PlatformError> {
-        self.run_control(instance_id, resource_id, false, |engine, limits| {
-            let statement = D1Statement {
-                sql: "SELECT name FROM sqlite_master WHERE type = 'table' \
-                      AND name NOT LIKE 'sqlite_%' \
-                      AND name NOT LIKE '__open_compute_%' \
-                      ORDER BY name"
-                    .to_owned(),
-                params: vec![],
-            };
-            let result = engine.query(&statement, limits)?;
-            Ok(result
-                .rows
-                .into_iter()
-                .filter_map(|row| match row.into_iter().next()? {
-                    D1Value::Text(name) => Some(name),
-                    _ => None,
-                })
-                .collect())
-        })
-        .await
-    }
-
     /// Execute one bounded SQL statement for the operator dashboard.
+    #[cfg(any(test, feature = "test-support"))]
     pub async fn operator_query(
         &self,
         instance_id: InstanceId,

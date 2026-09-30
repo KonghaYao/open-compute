@@ -2,7 +2,9 @@
 
 use super::*;
 use open_compute_artifacts::{R2Condition, R2EtagMatch, R2GetResult, R2ObjectStore, UserObjectKey};
-use open_compute_storage::{PlatformStorage, R2BucketRepository, R2ObjectRepository};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::r2::R2BucketRepository;
+use open_compute_storage::r2_objects::R2ObjectRepository;
 
 /// Production reader that dispatches built-in and frozen R2 source locators.
 #[derive(Clone, Debug)]

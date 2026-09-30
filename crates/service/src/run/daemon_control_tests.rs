@@ -3,6 +3,23 @@ use crate::instance_registry::{RegisteredObjectAuthority, ServiceScope};
 use open_compute_core::{CacheConfig, StartupId, SystemClock, config::DataConfig};
 
 #[test]
+fn lifecycle_control_timeouts_cover_their_existing_operation_budgets() {
+    let id = InstanceId::generate();
+    assert_eq!(
+        response_timeout(&ControlRequest::Start { instance_id: id }),
+        crate::instance_ops::INSTANCE_READY_TIMEOUT
+    );
+    assert_eq!(
+        response_timeout(&ControlRequest::Stop { instance_id: id }),
+        crate::instance_ops::INSTANCE_STOP_TIMEOUT
+    );
+    assert_eq!(
+        response_timeout(&ControlRequest::List),
+        Duration::from_secs(3)
+    );
+}
+
+#[test]
 fn daemon_api_scopes_tokens_and_refreshes_only_stopped_instances() {
     let id = InstanceId::generate();
     let mut record = InstanceRecord {

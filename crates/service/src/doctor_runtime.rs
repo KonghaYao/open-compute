@@ -10,7 +10,8 @@ use open_compute_runtime::{
     StaticConfigCompiler, SupervisorState, WorkerdSupervisor, WorkerdSupervisorOptions,
     embedded_runtime_lock, inspect_embedded_runtime, materialize_embedded_runtime,
 };
-use open_compute_storage::{DataRootInspect, inspect_durable_object_storage};
+use open_compute_storage::data_dir::inspect_durable_object_storage;
+use open_compute_storage::inspect::DataRootInspect;
 use std::sync::Arc;
 use std::time::Duration;
 

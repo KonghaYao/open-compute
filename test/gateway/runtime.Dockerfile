@@ -4,6 +4,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends clang cmake pkg
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
+ENV OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE=/src/.temp/runtime-inputs/workerd/workerd-linux-64.gz
+ENV OPEN_COMPUTE_BUILD_CADDY=/src/.temp/runtime-inputs/caddy/caddy
 RUN cargo build --locked -p open-compute-service --bin ocd
 
 FROM ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3

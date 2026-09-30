@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, HashSet};
 pub(crate) async fn reconcile_bucket_multipart(
     storage: &PlatformStorage,
     objects: &R2ObjectStore,
-    bucket: &open_compute_storage::R2BucketRecord,
+    bucket: &open_compute_storage::r2::R2BucketRecord,
     classify_startup_initiating: bool,
     drain_all: bool,
     timeout: Duration,

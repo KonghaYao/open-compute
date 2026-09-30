@@ -255,6 +255,7 @@ pub(super) fn version_request(
         bindings,
         services: BTreeMap::new(),
         runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
             ai: Some(VersionAiInput {
                 binding: "AI".to_owned(),
             }),
@@ -262,7 +263,9 @@ pub(super) fn version_request(
         },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: Some(
+            open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+        ),
         observability: None,
         request_id: RequestId::generate(),
         now_ms: 10,
@@ -273,7 +276,7 @@ pub(super) async fn deploy(
     controller: &VersionController<'_>,
     request: CreateVersionRequest,
     supervisor: &WorkerdSupervisor,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     match controller
         .create_version(request)
         .await
@@ -294,7 +297,7 @@ pub(super) async fn dispatch(
     workers: &WorkerRepository<'_>,
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     uri: &str,
 ) -> (u16, String) {
     let route_generation = i64::try_from(
@@ -362,7 +365,28 @@ pub(super) fn ai_config(
         "chat-fixture".to_owned(),
         AiBackendConfig {
             protocol: AiBackendProtocol::OpenAiChatCompletionsV1,
-            endpoint: format!("{}/chat/completions", chat_base_url.trim_end_matches('/')),
+            endpoint: format!(
+                "{}/v1/chat/completions",
+                chat_base_url.trim_end_matches('/')
+            ),
+            auth: AiAuthConfig::None,
+            headers: BTreeMap::new(),
+        },
+    );
+    config.backends.insert(
+        "cohere-rerank-fixture".to_owned(),
+        AiBackendConfig {
+            protocol: AiBackendProtocol::CohereRerankV2,
+            endpoint: format!("{}/v2/rerank", chat_base_url.trim_end_matches('/')),
+            auth: AiAuthConfig::None,
+            headers: BTreeMap::new(),
+        },
+    );
+    config.backends.insert(
+        "generic-rerank-fixture".to_owned(),
+        AiBackendConfig {
+            protocol: AiBackendProtocol::RerankV1,
+            endpoint: format!("{}/v1/rerank", chat_base_url.trim_end_matches('/')),
             auth: AiAuthConfig::None,
             headers: BTreeMap::new(),
         },
@@ -404,13 +428,179 @@ pub(super) fn ai_config(
             capabilities: BTreeSet::from([
                 AiGenerationCapability::Chat,
                 AiGenerationCapability::Rewrite,
-                AiGenerationCapability::Rerank,
             ]),
         },
     );
     config.default_generation_model = Some(GENERATION_ALIAS.to_owned());
+    config.reranking_models.insert(
+        COHERE_RERANK_ALIAS.to_owned(),
+        AiRerankingModelConfig {
+            backend: "cohere-rerank-fixture".to_owned(),
+            remote_model: "fixture-cohere-rerank".to_owned(),
+            provider_revision: Some("fixture-cohere-revision".to_owned()),
+        },
+    );
+    config.reranking_models.insert(
+        GENERIC_RERANK_ALIAS.to_owned(),
+        AiRerankingModelConfig {
+            backend: "generic-rerank-fixture".to_owned(),
+            remote_model: "fixture-generic-rerank".to_owned(),
+            provider_revision: Some("fixture-generic-revision".to_owned()),
+        },
+    );
+    config.default_reranking_model = Some(COHERE_RERANK_ALIAS.to_owned());
     config.validate().unwrap();
     config
+}
+
+pub(super) fn qualification_ai_config() -> AiConfig {
+    let bailian = provider_authority("BAILIAN_API_HOST");
+    let mut config = AiConfig {
+        max_provider_request_bytes: 64 * 1024,
+        max_provider_response_bytes: 256 * 1024,
+        provider_timeout_ms: 30_000,
+        query_timeout_ms: 30_000,
+        ..AiConfig::default()
+    };
+    let (tokenizer_path, tokenizer_sha256) = tokenizer_artifact();
+    config.backends.insert(
+        "bailian-embeddings".to_owned(),
+        AiBackendConfig {
+            protocol: AiBackendProtocol::OpenAiEmbeddingsV1,
+            endpoint: format!("{bailian}/compatible-mode/v1/embeddings"),
+            auth: AiAuthConfig::Bearer {
+                secret: environment_secret("BAILIAN_API_KEY"),
+            },
+            headers: BTreeMap::new(),
+        },
+    );
+    config.backends.insert(
+        "deepseek-chat".to_owned(),
+        AiBackendConfig {
+            protocol: AiBackendProtocol::OpenAiChatCompletionsV1,
+            endpoint: "https://api.deepseek.com/chat/completions".to_owned(),
+            auth: AiAuthConfig::Bearer {
+                secret: environment_secret("DEEPSEEK_API_KEY"),
+            },
+            headers: BTreeMap::new(),
+        },
+    );
+    config.backends.insert(
+        "cohere-rerank".to_owned(),
+        AiBackendConfig {
+            protocol: AiBackendProtocol::CohereRerankV2,
+            endpoint: "https://api.cohere.com/v2/rerank".to_owned(),
+            auth: AiAuthConfig::Bearer {
+                secret: environment_secret("COHERE_API_KEY"),
+            },
+            headers: BTreeMap::new(),
+        },
+    );
+    config.backends.insert(
+        "bailian-rerank".to_owned(),
+        AiBackendConfig {
+            protocol: AiBackendProtocol::RerankV1,
+            endpoint: format!("{bailian}/compatible-api/v1/reranks"),
+            auth: AiAuthConfig::Bearer {
+                secret: environment_secret("BAILIAN_API_KEY"),
+            },
+            headers: BTreeMap::new(),
+        },
+    );
+    let profile = "qualification/qwen3.7";
+    config.embedding_profiles.insert(
+        profile.to_owned(),
+        AiEmbeddingProfileConfig {
+            dimensions: 1_024,
+            max_input_tokens: 8_192,
+            send_dimensions: true,
+            tokenizer: AiTokenizerConfig {
+                kind: AiTokenizer::Qwen3,
+                revision: "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3".to_owned(),
+                artifact: AiTokenizerArtifactConfig {
+                    path: tokenizer_path,
+                    sha256: tokenizer_sha256,
+                },
+            },
+        },
+    );
+    config.embedding_models.insert(
+        EMBEDDING_ALIAS.to_owned(),
+        AiEmbeddingModelConfig {
+            backend: "bailian-embeddings".to_owned(),
+            remote_model: "qwen3.7-text-embedding".to_owned(),
+            provider_revision: None,
+            profile: profile.to_owned(),
+        },
+    );
+    config.default_embedding_model = Some(EMBEDDING_ALIAS.to_owned());
+    config.generation_models.insert(
+        GENERATION_ALIAS.to_owned(),
+        AiGenerationModelConfig {
+            backend: "deepseek-chat".to_owned(),
+            remote_model: "deepseek-chat".to_owned(),
+            provider_revision: None,
+            max_context_tokens: 8_192,
+            capabilities: BTreeSet::from([
+                AiGenerationCapability::Chat,
+                AiGenerationCapability::Rewrite,
+            ]),
+        },
+    );
+    config.default_generation_model = Some(GENERATION_ALIAS.to_owned());
+    config.reranking_models.insert(
+        COHERE_RERANK_ALIAS.to_owned(),
+        AiRerankingModelConfig {
+            backend: "cohere-rerank".to_owned(),
+            remote_model: "rerank-v4.0-fast".to_owned(),
+            provider_revision: None,
+        },
+    );
+    config.reranking_models.insert(
+        GENERIC_RERANK_ALIAS.to_owned(),
+        AiRerankingModelConfig {
+            backend: "bailian-rerank".to_owned(),
+            remote_model: "qwen3-rerank".to_owned(),
+            provider_revision: None,
+        },
+    );
+    config.default_reranking_model = Some(COHERE_RERANK_ALIAS.to_owned());
+    config.validate().unwrap();
+    config
+}
+
+fn environment_secret(name: &str) -> SecretReference {
+    assert!(
+        std::env::var(name).is_ok_and(|value| !value.is_empty()),
+        "AI provider qualification credential is missing"
+    );
+    SecretReference {
+        env: Some(name.to_owned()),
+        file: None,
+    }
+}
+
+fn provider_authority(name: &str) -> String {
+    let value = std::env::var(name)
+        .ok()
+        .filter(|value| !value.is_empty())
+        .expect("AI provider qualification host is missing");
+    let authority = if value.starts_with("https://") {
+        value
+    } else {
+        format!("https://{value}")
+    };
+    let url = url::Url::parse(&authority).expect("AI provider qualification host is invalid");
+    assert!(
+        url.scheme() == "https"
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.query().is_none()
+            && url.fragment().is_none()
+            && url.path() == "/",
+        "AI provider qualification host must be an HTTPS base authority"
+    );
+    url.origin().ascii_serialization()
 }
 
 fn tokenizer_artifact() -> (PathBuf, String) {
@@ -568,16 +758,31 @@ fn fixture_embedding(text: &str) -> Vec<f32> {
 
 pub(super) async fn spawn_chat_fixture() -> (
     String,
+    Arc<AtomicUsize>,
     tokio::sync::oneshot::Sender<()>,
     tokio::task::JoinHandle<()>,
 ) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+    let rerank_calls = Arc::new(AtomicUsize::new(0));
+    let fixture_calls = rerank_calls.clone();
     let task = tokio::spawn(async move {
         axum::serve(
             listener,
-            Router::new().route("/v1/chat/completions", post(chat_fixture)),
+            Router::new()
+                .route("/v1/chat/completions", post(chat_fixture))
+                .route(
+                    "/v2/rerank",
+                    post({
+                        let calls = fixture_calls.clone();
+                        move |headers, body| rerank_fixture(headers, body, calls, true)
+                    }),
+                )
+                .route(
+                    "/v1/rerank",
+                    post(move |headers, body| rerank_fixture(headers, body, fixture_calls, false)),
+                ),
         )
         .with_graceful_shutdown(async move {
             let _ = shutdown_rx.await;
@@ -585,7 +790,72 @@ pub(super) async fn spawn_chat_fixture() -> (
         .await
         .unwrap();
     });
-    (format!("http://{address}/v1"), shutdown_tx, task)
+    (format!("http://{address}"), rerank_calls, shutdown_tx, task)
+}
+
+async fn rerank_fixture(
+    headers: HeaderMap,
+    body: Bytes,
+    calls: Arc<AtomicUsize>,
+    cohere: bool,
+) -> axum::http::Response<String> {
+    if headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        != Some("application/json")
+    {
+        return axum::http::Response::builder()
+            .status(StatusCode::UNSUPPORTED_MEDIA_TYPE)
+            .body(String::new())
+            .unwrap();
+    }
+    let request: serde_json::Value = match serde_json::from_slice(&body) {
+        Ok(request) => request,
+        Err(_) => {
+            return axum::http::Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(String::new())
+                .unwrap();
+        }
+    };
+    let documents = request
+        .get("documents")
+        .and_then(serde_json::Value::as_array);
+    let expected_model = if cohere {
+        "fixture-cohere-rerank"
+    } else {
+        "fixture-generic-rerank"
+    };
+    if request.get("model") != Some(&serde_json::json!(expected_model))
+        || request.get("query") != Some(&serde_json::json!("cobalt retrieval marker"))
+        || documents.is_none_or(Vec::is_empty)
+        || (cohere
+            && request.get("top_n").and_then(serde_json::Value::as_u64)
+                != documents.map(|values| values.len() as u64))
+        || (!cohere && request.get("top_n").is_some())
+    {
+        return axum::http::Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(String::new())
+            .unwrap();
+    }
+    calls.fetch_add(1, Ordering::SeqCst);
+    let results = (0..documents.unwrap().len())
+        .rev()
+        .enumerate()
+        .map(|(rank, index)| {
+            let relevance_score = match (cohere, rank) {
+                (true, 0) => 0.85,
+                (false, 0) => 0.5,
+                _ => 0.3,
+            };
+            serde_json::json!({ "index": index, "relevance_score": relevance_score })
+        })
+        .collect::<Vec<_>>();
+    axum::http::Response::builder()
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(serde_json::json!({ "results": results }).to_string())
+        .unwrap()
 }
 
 pub(super) async fn chat_fixture(body: Bytes) -> axum::http::Response<String> {

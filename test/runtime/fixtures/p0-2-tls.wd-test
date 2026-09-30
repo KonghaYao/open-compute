@@ -13,7 +13,7 @@ const unitTests :Workerd.Config = (
       ],
     )),
     (name = "internet", network = (
-      allow = ["public"],
+      allow = ["network"],
       tlsOptions = (
         trustBrowserCas = true,
         trustedCertificates = [embed "ca.pem"],

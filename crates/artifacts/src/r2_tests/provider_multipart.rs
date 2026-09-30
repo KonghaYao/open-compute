@@ -3,6 +3,7 @@ use super::*;
 #[tokio::test]
 async fn r2_provider_preflight_verifies_required_capabilities_and_cleans_up() {
     let mock = crate::MockS3::spawn("bucket").await;
+    mock.set_strict_multipart_minimum(true);
     let config = open_compute_core::S3Config {
         endpoint: mock.endpoint.clone(),
         bucket: "bucket".to_owned(),
@@ -12,17 +13,76 @@ async fn r2_provider_preflight_verifies_required_capabilities_and_cleans_up() {
         .with("S3_ACCESS_KEY_ID", "test-access")
         .with("S3_SECRET_ACCESS_KEY", "test-secret");
     let credentials = crate::resolve_s3_credentials_with(&config, &env).unwrap();
-    let client = ObjectBackend::connect_s3(&config, &credentials, 1024 * 1024).unwrap();
+    let client = ObjectBackend::connect_s3(
+        &config,
+        &credentials,
+        2 * crate::R2_MIN_MULTIPART_PART_BYTES,
+    )
+    .unwrap();
     let outcome = crate::preflight_r2(
         &client,
         InstanceId::generate(),
         open_compute_core::StartupId::generate(),
     )
     .await
-    .unwrap();
+    .unwrap_or_else(|error| panic!("{error:?}; requests: {:?}", mock.recorded()));
     assert_eq!(outcome.objects, 4);
     assert!(outcome.multi_delete);
     assert!(mock.keys().is_empty());
+    let part_sizes = mock
+        .recorded()
+        .into_iter()
+        .filter(|request| request.method == "PUT" && request.query.contains("partNumber="))
+        .map(|request| request.body_len)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        part_sizes,
+        vec![crate::R2_MIN_MULTIPART_PART_BYTES as usize, 6]
+    );
+}
+
+#[tokio::test]
+async fn strict_provider_rejects_an_undersized_non_final_part() {
+    let mock = crate::MockS3::spawn("bucket").await;
+    mock.set_strict_multipart_minimum(true);
+    let config = open_compute_core::S3Config {
+        endpoint: mock.endpoint.clone(),
+        bucket: "bucket".to_owned(),
+        ..open_compute_core::S3Config::default()
+    };
+    let env = crate::MapEnv::new()
+        .with("S3_ACCESS_KEY_ID", "test-access")
+        .with("S3_SECRET_ACCESS_KEY", "test-secret");
+    let credentials = crate::resolve_s3_credentials_with(&config, &env).unwrap();
+    let backend = ObjectBackend::connect_s3(&config, &credentials, 1024 * 1024).unwrap();
+    let key = ObjectKey::new("strict-multipart").unwrap();
+    let upload_id = backend
+        .create_multipart(&key, ObjectMetadata::default(), None)
+        .await
+        .unwrap();
+    let mut parts = Vec::new();
+    for number in 1..=2 {
+        parts.push(
+            backend
+                .upload_part(
+                    &key,
+                    &upload_id,
+                    number,
+                    crate::backend::ObjectSource::Bytes(bytes::Bytes::from_static(b"small")),
+                    None,
+                )
+                .await
+                .unwrap(),
+        );
+    }
+    assert!(
+        backend
+            .complete_multipart(&key, &upload_id, &parts, None)
+            .await
+            .is_err()
+    );
+    backend.abort_multipart(&key, &upload_id).await.unwrap();
+    assert_eq!(mock.multipart_upload_count(), 0);
 }
 
 #[tokio::test]

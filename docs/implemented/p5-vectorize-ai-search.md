@@ -1,7 +1,6 @@
 # P5：Vectorize 与 AI Search
 
-状态：**implemented（2026-09-02）**。本地核心和定向验收完成；跨平台、parser process matrix 和正式发行见
-[P5 资格](../acceptance/p5-release-acceptance.md)。
+状态：**implemented（2026-09-02）**。
 
 ## 用户结果
 

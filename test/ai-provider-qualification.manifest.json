@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "retrievedAt": "2026-09-29",
+  "cases": [
+    {
+      "id": "bailian-embedding-deepseek-chat",
+      "providers": ["Alibaba Cloud Model Studio", "DeepSeek"],
+      "protocols": ["openai_embeddings_v1", "openai_chat_completions_v1"],
+      "models": ["qwen3.7-text-embedding", "deepseek-chat"],
+      "endpointSuffixes": [
+        "/compatible-mode/v1/embeddings",
+        "/chat/completions"
+      ],
+      "responseSchemaSha256": "c3b282770ab2584dd87d9c9232b84404cd3993af7977e51b07f0239844456870"
+    },
+    {
+      "id": "bailian-embedding-cohere-rerank-deepseek-chat",
+      "providers": ["Alibaba Cloud Model Studio", "Cohere", "DeepSeek"],
+      "protocols": [
+        "openai_embeddings_v1",
+        "cohere_rerank_v2",
+        "openai_chat_completions_v1"
+      ],
+      "models": ["qwen3.7-text-embedding", "rerank-v4.0-fast", "deepseek-chat"],
+      "endpointSuffixes": [
+        "/compatible-mode/v1/embeddings",
+        "/v2/rerank",
+        "/chat/completions"
+      ],
+      "responseSchemaSha256": "0be38acea4a936eace29ce2603cefd2923982a4078fdd281523cf2ce21c8158e"
+    },
+    {
+      "id": "bailian-embedding-bailian-rerank-deepseek-chat",
+      "providers": ["Alibaba Cloud Model Studio", "DeepSeek"],
+      "protocols": [
+        "openai_embeddings_v1",
+        "rerank_v1",
+        "openai_chat_completions_v1"
+      ],
+      "models": ["qwen3.7-text-embedding", "qwen3-rerank", "deepseek-chat"],
+      "endpointSuffixes": [
+        "/compatible-mode/v1/embeddings",
+        "/compatible-api/v1/reranks",
+        "/chat/completions"
+      ],
+      "responseSchemaSha256": "e4a79c4665a9ad2743b5c09878626b910d19fc3580472be3fc30e602e8e695e2"
+    }
+  ]
+}

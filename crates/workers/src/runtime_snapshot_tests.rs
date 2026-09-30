@@ -165,7 +165,10 @@ async fn version_pipeline_uploads_validates_promotes_and_replays() {
         BundleLimits::default(),
     );
     let mut request = version_request(account, worker.id, "deploy-key", "pipeline-secret-value");
-    let artifact_namespace = open_compute_storage::CloudflareArtifactsRepository::new(storage.db())
+    let artifact_namespace =
+        open_compute_storage::cloudflare_artifacts::CloudflareArtifactsRepository::new(
+            storage.db(),
+        )
         .ensure_namespace(account, "pipeline-artifacts", None, 2)
         .unwrap();
     request.bindings.insert(
@@ -181,7 +184,7 @@ async fn version_pipeline_uploads_validates_promotes_and_replays() {
     request.services.insert(
         "CATALOG".to_owned(),
         VersionServiceInput {
-            target: open_compute_storage::ServiceTarget::Worker {
+            target: open_compute_storage::services::ServiceTarget::Worker {
                 worker_id: target.id,
             },
             entrypoint: Some("CatalogApi".to_owned()),
@@ -271,7 +274,7 @@ async fn version_pipeline_uploads_validates_promotes_and_replays() {
     assert_eq!(snapshot.services[0].descriptor.name, "CATALOG");
     assert_eq!(
         snapshot.services[0].descriptor.target,
-        open_compute_storage::ServiceTarget::Worker {
+        open_compute_storage::services::ServiceTarget::Worker {
             worker_id: target.id
         }
     );

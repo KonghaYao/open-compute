@@ -69,51 +69,31 @@ export const INTERNAL_HEADERS = Object.freeze([
   "x-forwarded-proto",
 ]);
 
-/** Select the one public-only outbound capability for tenant code, or disable it for validation. */
+/** Select the one host-network capability for tenant code, or disable it for validation. */
 export function tenantGlobalOutbound(
   env: LoaderEnv,
   validation: boolean,
 ): Fetcher | null {
   if (validation) return null;
-  if (env.PUBLIC_NETWORK == null)
+  if (env.OUTBOUND_NETWORK == null)
     throw bindingError("VERSION_INVARIANT_VIOLATION");
-  return env.PUBLIC_NETWORK;
-}
-
-/** Formal-lock date and tenant-required flags from private system bindings. */
-export function lockWorkerCode(env: LoaderEnv): {
-  compatibilityDate: string;
-  compatibilityFlags: string[];
-} {
-  if (
-    typeof env.COMPATIBILITY_DATE !== "string" ||
-    env.COMPATIBILITY_DATE.length === 0 ||
-    !Array.isArray(env.REQUIRED_COMPATIBILITY_FLAGS) ||
-    !env.REQUIRED_COMPATIBILITY_FLAGS.every(
-      (flag): flag is string => typeof flag === "string",
-    )
-  ) {
-    throw bindingError("VERSION_INVARIANT_VIOLATION");
-  }
-  return {
-    compatibilityDate: env.COMPATIBILITY_DATE,
-    compatibilityFlags: [...env.REQUIRED_COMPATIBILITY_FLAGS],
-  };
+  return env.OUTBOUND_NETWORK;
 }
 
 /** Select compatibility metadata and resource limits only from the immutable snapshot. */
 export function snapshotWorkerCode(snapshot: RuntimeSnapshot): {
   compatibilityDate: string;
   compatibilityFlags: string[];
+  allowExperimental: true;
   limits: { cpuMs: number; subRequests: number };
 } {
   if (
-    snapshot.compatibilityDate !== "2026-09-08" ||
+    typeof snapshot.compatibilityDate !== "string" ||
+    snapshot.compatibilityDate.length > 32 ||
     !Array.isArray(snapshot.compatibilityFlags) ||
-    !(
-      snapshot.compatibilityFlags.length === 0 ||
-      (snapshot.compatibilityFlags.length === 1 &&
-        snapshot.compatibilityFlags[0] === "nodejs_compat")
+    snapshot.compatibilityFlags.length > 64 ||
+    !snapshot.compatibilityFlags.every(
+      (flag) => typeof flag === "string" && flag.length <= 128,
     ) ||
     !Number.isSafeInteger(snapshot.limits?.cpuMs) ||
     !Number.isSafeInteger(snapshot.limits?.subRequests)
@@ -123,6 +103,7 @@ export function snapshotWorkerCode(snapshot: RuntimeSnapshot): {
   return {
     compatibilityDate: snapshot.compatibilityDate,
     compatibilityFlags: [...snapshot.compatibilityFlags],
+    allowExperimental: true,
     limits: {
       cpuMs: snapshot.limits.cpuMs,
       subRequests: snapshot.limits.subRequests,
@@ -188,9 +169,10 @@ export async function resolveSnapshot(
       headers: {
         "content-type": "application/json",
         [TOKEN_HEADER]: internalToken,
+        "x-open-compute-startup-generation":
+          currentStartupGeneration(internalToken),
       },
       body: JSON.stringify({
-        startupGeneration: currentStartupGeneration(internalToken),
         key: envelope.loaderKey,
         expectedWorkerCodeSha256: envelope.expected,
         scope: validation ? (probe ? "probe" : "validation") : "runtime",

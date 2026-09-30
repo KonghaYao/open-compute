@@ -1,0 +1,17 @@
+{
+  "name": "@open-compute/postgres-driver-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json --noEmit && tsc --project tsconfig.worker.json --noEmit && bun build.ts"
+  },
+  "dependencies": {
+    "pg": "8.20.0"
+  },
+  "devDependencies": {
+    "@open-compute/workers-types": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

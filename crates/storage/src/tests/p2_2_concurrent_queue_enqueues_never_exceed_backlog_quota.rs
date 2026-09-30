@@ -6,19 +6,24 @@ fn p2_2_concurrent_queue_enqueues_never_exceed_backlog_quota() {
     let storage = PlatformStorage::bootstrap(&storage_config(&root), &SystemClock).unwrap();
     let scheduler_path = storage.data_dir().ensure_scheduler_db().unwrap();
     let scheduler = Arc::new(
-        crate::SchedulerStore::open(&scheduler_path, 5_000, 1, storage.identity().instance_id)
-            .unwrap(),
+        crate::scheduler::SchedulerStore::open(
+            &scheduler_path,
+            5_000,
+            1,
+            storage.identity().instance_id,
+        )
+        .unwrap(),
     );
     let queue_id = open_compute_core::QueueId::generate();
     scheduler
-        .create_queue_projection(&crate::QueueProjection {
+        .create_queue_projection(&crate::scheduler::QueueProjection {
             queue_id,
             instance_id: storage.identity().instance_id,
             lifecycle_generation: 1,
             config_generation: 1,
-            config: crate::QueueConfig {
+            config: crate::queues::QueueConfig {
                 max_backlog_bytes: 10,
-                ..crate::QueueConfig::default()
+                ..crate::queues::QueueConfig::default()
             },
             created_at_ms: 1,
             updated_at_ms: 1,
@@ -32,15 +37,15 @@ fn p2_2_concurrent_queue_enqueues_never_exceed_backlog_quota() {
         threads.push(thread::spawn(move || {
             barrier.wait();
             scheduler.enqueue_queue(
-                &crate::QueueEnqueueRequest {
+                &crate::scheduler::QueueEnqueueRequest {
                     queue_id,
                     request_id: uuid::Uuid::now_v7(),
                     output_gate: false,
                     lifecycle_generation: 1,
                     config_generation: 1,
                     batch_delay_seconds: None,
-                    messages: vec![crate::QueueMessageInput {
-                        content_type: crate::QueueContentType::Bytes,
+                    messages: vec![crate::scheduler::QueueMessageInput {
+                        content_type: crate::scheduler::QueueContentType::Bytes,
                         body: vec![1, 2, 3],
                         delay_seconds: Some(0),
                     }],

@@ -6,7 +6,7 @@ use crate::instance_registry::{
 };
 use crate::service_manager::ServiceManager;
 use open_compute_core::{ErrorCode, InstanceSelector, PlatformError};
-use open_compute_storage::InspectLock;
+use open_compute_storage::lock::InspectLock;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{BufRead, IsTerminal, Write};

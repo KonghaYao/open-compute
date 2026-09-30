@@ -17,6 +17,8 @@ pub struct RankedCandidate {
     pub chunk_id: String,
     /// Normalized finite branch score in the inclusive range `0..=1`.
     pub score: f32,
+    /// Original branch score exposed in public scoring diagnostics.
+    pub reported_score: f32,
 }
 
 /// One fused candidate with branch diagnostics.
@@ -24,8 +26,14 @@ pub struct RankedCandidate {
 pub struct ScoredCandidate {
     /// Stable chunk identity.
     pub chunk_id: String,
-    /// Final finite fusion score.
-    pub score: f32,
+    /// Finite retrieval/fusion score before query-time boosting or reranking.
+    pub retrieval_score: f32,
+    /// Query-time metadata boost score, when boosting ran.
+    pub boosting_score: Option<f32>,
+    /// Dedicated provider relevance score, when reranking ran.
+    pub reranking_score: Option<f32>,
+    /// Shared score projected into public responses and namespace merging.
+    pub public_score: f32,
     /// One-based position in the vector branch, if present.
     pub vector_rank: Option<usize>,
     /// Vector branch score, if present.

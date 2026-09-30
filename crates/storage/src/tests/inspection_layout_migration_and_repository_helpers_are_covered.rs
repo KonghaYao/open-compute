@@ -18,11 +18,11 @@ fn inspection_layout_migration_and_repository_helpers_are_covered() {
         data.lock().filesystem_durability()
     );
 
-    let busy = crate::inspect_data_root(&config).unwrap();
+    let busy = crate::inspect::inspect_data_root(&config).unwrap();
     assert!(!busy.lock_available);
     assert!(!busy.holds_inspect_lock());
     drop(storage);
-    let available = crate::inspect_data_root(&config).unwrap();
+    let available = crate::inspect::inspect_data_root(&config).unwrap();
     assert!(available.lock_available);
     assert!(available.holds_inspect_lock());
     assert_eq!(available.root, root);
@@ -31,19 +31,21 @@ fn inspection_layout_migration_and_repository_helpers_are_covered() {
     let mut relative = config.clone();
     relative.path = PathBuf::from("relative");
     assert_eq!(
-        crate::inspect_data_root(&relative).unwrap_err().code(),
+        crate::inspect::inspect_data_root(&relative)
+            .unwrap_err()
+            .code(),
         ErrorCode::PathInvalid
     );
     let (_missing_tmp, missing_root) = unique_root();
-    assert!(crate::inspect_data_root(&storage_config(&missing_root)).is_err());
+    assert!(crate::inspect::inspect_data_root(&storage_config(&missing_root)).is_err());
     assert_eq!(
-        crate::inspect_control_db(Path::new("relative.sqlite"), 100)
+        crate::inspect::inspect_control_db(Path::new("relative.sqlite"), 100)
             .unwrap_err()
             .code(),
         ErrorCode::PathInvalid
     );
     assert_eq!(
-        crate::inspect_control_db(&root.join("missing.sqlite"), 100)
+        crate::inspect::inspect_control_db(&root.join("missing.sqlite"), 100)
             .unwrap_err()
             .code(),
         ErrorCode::PathInvalid
@@ -75,9 +77,9 @@ fn inspection_layout_migration_and_repository_helpers_are_covered() {
     );
     let uri = crate::control_db::sqlite_readonly_uri(Path::new("/tmp/a b?#%.sqlite"));
     assert_eq!(uri, "file:/tmp/a%20b%3F%23%25.sqlite?mode=ro&immutable=1");
-    assert!(crate::ControlDb::open(Path::new("/"), 100).is_err());
+    assert!(crate::control_db::ControlDb::open(Path::new("/"), 100).is_err());
 
-    use crate::workers::{
+    use crate::worker_repository::{
         array32, db_error, idempotency_ref_id, invariant, route_not_found, validate_referrer,
         validate_worker_name, version_not_found, worker_not_found,
     };
@@ -103,11 +105,17 @@ fn inspection_layout_migration_and_repository_helpers_are_covered() {
     assert!(validate_referrer("kind", "bad value").is_err());
     let account = InstanceId::generate();
     assert_eq!(
-        crate::local_worker_hostname(account, "worker-1").unwrap(),
+        crate::worker_repository::local_worker_hostname(account, "worker-1").unwrap(),
         format!("worker-1.{account}.localhost")
     );
-    assert!(crate::local_worker_hostname(account, "Upper").is_err());
-    assert_eq!(idempotency_ref_id(account, "scope", "key").len(), 64);
+    assert!(crate::worker_repository::local_worker_hostname(account, "Upper").is_err());
+    let fixed_account = "01890f7e7bcd7cc0b2996b2cc0d93e9e"
+        .parse::<InstanceId>()
+        .unwrap();
+    assert_eq!(
+        idempotency_ref_id(fixed_account, "scope", "key"),
+        "ad62cdfc6e7070bb3d0a40a1e02ce99654ce2dff0b237315e124a0ade54eb69b"
+    );
     assert!(array32(&[0_u8; 32]).is_ok());
     assert!(array32(&[0_u8; 31]).is_err());
     assert_eq!(worker_not_found().code(), ErrorCode::WorkerNotFound);

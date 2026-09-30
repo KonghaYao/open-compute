@@ -1,7 +1,9 @@
 //! Generation-local Service invocation budgets, authority, and version leases.
 
 use open_compute_core::{ErrorCode, PlatformError, VersionId};
-use open_compute_storage::{ResolvedServiceDestination, ResolvedServiceTarget, ServiceRepository};
+use open_compute_storage::services::{
+    ResolvedServiceDestination, ResolvedServiceTarget, ServiceRepository,
+};
 use open_compute_workers::{ServiceDescriptor, VersionPin, VersionPins};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -125,7 +127,7 @@ pub enum ServiceTargetPayload {
         /// Target route generation.
         route_generation: u64,
         /// Target content discriminator.
-        content_kind: open_compute_storage::VersionContentKind,
+        content_kind: open_compute_storage::worker_repository::VersionContentKind,
         /// Persisted optional named entrypoint.
         #[serde(skip_serializing_if = "Option::is_none")]
         entrypoint: Option<String>,

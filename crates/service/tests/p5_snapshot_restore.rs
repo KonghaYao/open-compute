@@ -7,10 +7,10 @@ use open_compute_artifacts::{AiSearchObjectStore, MockS3, ObjectBackend, resolve
 use open_compute_core::SystemClock;
 use open_compute_service::backup_cli::{backup_create, backup_inspect, backup_restore};
 use open_compute_service::config_load::load_platform_config;
-use open_compute_storage::{
-    AiSearchParseCache, AiSearchParseCacheKey, AiSearchPaths, PlatformStorage, SchedulerStore,
-    inspect_control_inventory,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::ai_search::{AiSearchParseCache, AiSearchParseCacheKey, AiSearchPaths};
+use open_compute_storage::inspect::inspect_control_inventory;
+use open_compute_storage::scheduler::SchedulerStore;
 use sha2::{Digest as _, Sha256};
 use std::fs;
 use std::os::unix::fs::PermissionsExt as _;

@@ -19,10 +19,11 @@ use open_compute_document_parser::{
     ParseSuccess, ParsedContentKind, VisionCandidate, decode_output_frame, encode_input_frame,
     markdown_conversion_formats, materialize_tessdata,
 };
+use open_compute_images::ImageEngine;
 use open_compute_runtime::VerifiedLaunchImage;
-use open_compute_storage::{
-    BuiltinBindingKind, PlatformStorage, WorkerRepository, version_runtime_features,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::runtime_features::{BuiltinBindingKind, version_runtime_features};
+use open_compute_storage::worker_repository::WorkerRepository;
 use process::run_parser_child;
 use protocol::*;
 use sha2::{Digest as _, Sha256};
@@ -69,6 +70,7 @@ pub struct DocumentParserBindingService {
     vlm_contract: Option<ResolvedVlmModelContract>,
     vlm: Option<OpenAiVisionClient>,
     vlm_semaphore: Arc<Semaphore>,
+    image_engine: ImageEngine,
     global: Arc<Semaphore>,
     versions: Mutex<HashMap<VersionId, Weak<Semaphore>>>,
 }
@@ -180,6 +182,7 @@ impl DocumentParserBindingService {
             vlm_contract,
             vlm,
             vlm_semaphore: Arc::new(Semaphore::new(max_vlm_in_flight)),
+            image_engine: ImageEngine::new(open_compute_core::ImagesConfig::default()),
             config,
         })
     }
@@ -573,7 +576,7 @@ impl DocumentParserBindingService {
         let mut descriptions = Vec::with_capacity(candidates.len());
         for candidate in candidates {
             remaining(deadline)?;
-            let candidate = fit_vision_candidate(candidate, contract)?;
+            let candidate = fit_vision_candidate(&self.image_engine, candidate, contract)?;
             let _permit = self
                 .vlm_semaphore
                 .clone()
@@ -601,6 +604,7 @@ impl DocumentParserBindingService {
 }
 
 fn fit_vision_candidate(
+    engine: &ImageEngine,
     candidate: VisionCandidate,
     contract: &ResolvedVlmModelContract,
 ) -> Result<VisionCandidate, ErrorCode> {
@@ -617,52 +621,35 @@ fn fit_vision_candidate(
     if dimensions_fit && encoded_image_fits_request(bytes.len(), contract) {
         return Ok(candidate);
     }
-    let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Jpeg)
-        .map_err(|_| ErrorCode::DocumentProtocolError)?;
-    let width = image.width();
-    let height = image.height();
-    let pixel_scale =
-        (contract.max_input_pixels as f64 / f64::from(width) / f64::from(height)).sqrt();
-    let scale = 1_f64
-        .min(f64::from(contract.max_input_width) / f64::from(width))
-        .min(f64::from(contract.max_input_height) / f64::from(height))
-        .min(pixel_scale);
-    let mut target_width = (f64::from(width) * scale).floor().max(1.0) as u32;
-    let mut target_height = (f64::from(height) * scale).floor().max(1.0) as u32;
-    loop {
-        let resized = image.resize_exact(
-            target_width,
-            target_height,
-            image::imageops::FilterType::Lanczos3,
-        );
-        let rgb = resized.to_rgb8();
-        let mut encoded = Vec::new();
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut encoded, 90)
-            .encode(
-                rgb.as_raw(),
-                rgb.width(),
-                rgb.height(),
-                image::ExtendedColorType::Rgb8,
-            )
-            .map_err(|_| ErrorCode::DocumentInputInvalid)?;
-        if encoded_image_fits_request(encoded.len(), contract) {
-            return Ok(VisionCandidate {
-                data_base64: base64::engine::general_purpose::STANDARD.encode(&encoded),
-                mime_type: "image/jpeg".to_owned(),
-                width: target_width,
-                height: target_height,
-                sha256: hex::encode(Sha256::digest(&encoded)),
-                source_page: candidate.source_page,
-                ocr_performed: candidate.ocr_performed,
-                ocr_confidence_milli: candidate.ocr_confidence_milli,
-            });
-        }
-        if target_width == 1 && target_height == 1 {
-            return Err(ErrorCode::DocumentVisionInputTooLarge);
-        }
-        target_width = (target_width.saturating_mul(3) / 4).max(1);
-        target_height = (target_height.saturating_mul(3) / 4).max(1);
-    }
+    let request_encoded_limit = contract
+        .max_request_bytes
+        .saturating_sub(2_048)
+        .saturating_div(4)
+        .saturating_mul(3);
+    let output = engine
+        .fit_jpeg(
+            &bytes,
+            contract.max_input_width,
+            contract.max_input_height,
+            contract.max_input_pixels,
+            contract.max_encoded_image_bytes.min(request_encoded_limit),
+            90,
+        )
+        .map_err(|error| match error.code() {
+            ErrorCode::ImageLimitExceeded => ErrorCode::DocumentVisionInputTooLarge,
+            ErrorCode::ImageInputInvalid => ErrorCode::DocumentProtocolError,
+            _ => ErrorCode::DocumentInputInvalid,
+        })?;
+    Ok(VisionCandidate {
+        data_base64: base64::engine::general_purpose::STANDARD.encode(&output.bytes),
+        mime_type: "image/jpeg".to_owned(),
+        width: output.width,
+        height: output.height,
+        sha256: hex::encode(Sha256::digest(&output.bytes)),
+        source_page: candidate.source_page,
+        ocr_performed: candidate.ocr_performed,
+        ocr_confidence_milli: candidate.ocr_confidence_milli,
+    })
 }
 
 fn encoded_image_fits_request(encoded_bytes: usize, contract: &ResolvedVlmModelContract) -> bool {

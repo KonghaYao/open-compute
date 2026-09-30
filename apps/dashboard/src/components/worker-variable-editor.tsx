@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 
 type Binding = { name?: string; type: string; text?: string; json?: unknown };
 type Secret = { name: string };
@@ -96,22 +97,14 @@ export function WorkerVariableEditor({
       setDeleteName(null);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: [
-            "cloudflare-v4",
-            "workers",
+          queryKey: queryKeys.workers(
             selectedInstanceId,
             workerId,
             "version-settings",
-          ],
+          ),
         }),
         queryClient.invalidateQueries({
-          queryKey: [
-            "cloudflare-v4",
-            "workers",
-            selectedInstanceId,
-            workerId,
-            "secrets",
-          ],
+          queryKey: queryKeys.workers(selectedInstanceId, workerId, "secrets"),
         }),
       ]);
       feedback.success("Worker version saved. It is not live yet.");

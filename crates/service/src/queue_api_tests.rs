@@ -1,9 +1,9 @@
 use super::*;
-use open_compute_storage::QueueConfig;
+use open_compute_storage::queues::QueueConfig;
 
 #[test]
 fn readiness_and_internal_errors_are_fail_closed() {
-    let mut queue = open_compute_storage::QueueRecord {
+    let mut queue = open_compute_storage::queues::QueueRecord {
         id: QueueId::generate(),
         instance_id: InstanceId::generate(),
         name: "queue".to_owned(),

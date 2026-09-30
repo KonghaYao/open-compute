@@ -3,9 +3,9 @@
 use super::*;
 use open_compute_artifacts::{R2ObjectMetadata, R2SsecKey, UserObjectKey};
 use open_compute_core::SecretBytes;
-use open_compute_storage::{
+use open_compute_storage::crypto::SecretEnvelope;
+use open_compute_storage::r2_objects::{
     R2ObjectMutationKind, R2ObjectMutationRecord, R2ObjectRecord, R2ObjectRepository,
-    SecretEnvelope,
 };
 
 impl R2BindingService {
@@ -347,7 +347,7 @@ async fn reconcile_committed_or_fail(
 pub(crate) async fn reconcile_bucket_objects(
     storage: &Arc<PlatformStorage>,
     objects: &R2ObjectStore,
-    bucket: &open_compute_storage::R2BucketRecord,
+    bucket: &open_compute_storage::r2::R2BucketRecord,
     timeout: Duration,
 ) -> Result<u64, PlatformError> {
     let service = R2BindingService::new(

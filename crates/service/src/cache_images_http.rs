@@ -6,8 +6,9 @@ use crate::run::gc_worker_artifacts;
 use crate::snapshot_pins::SnapshotPins;
 use open_compute_artifacts::ArtifactStore;
 use open_compute_core::{PlatformError, WorkersConfig};
-use open_compute_storage::CacheStats;
-use open_compute_storage::{CacheManager, PlatformStorage};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::cache::CacheManager;
+use open_compute_storage::cache::CacheStats;
 use std::sync::Arc;
 
 /// Composed operator-only P3.3 authority.

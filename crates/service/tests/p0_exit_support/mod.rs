@@ -28,9 +28,10 @@ use open_compute_service::{
     D1ApiState, D1BindingService, HealthCoordinator, KvApiState, MetricsRegistry, R2ApiState,
     R2BindingService, SqliteKvBindingExecutor, bind_binding_backend, serve_binding_backend,
 };
-use open_compute_storage::{
-    D1DatabaseRepository, D1Paths, DeploymentSource, PlatformStorage, SchedulerStore, VersionRecord,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::d1::{D1DatabaseRepository, D1Paths};
+use open_compute_storage::scheduler::SchedulerStore;
+use open_compute_storage::worker_repository::{DeploymentSource, VersionRecord};
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateVersionOutcome, CreateVersionRequest, ModuleInput,
     ModuleType, ResourcePins, RuntimeSource, VersionBindingInput, VersionController,
@@ -525,7 +526,10 @@ pub(super) fn version_request(
         secrets: BTreeMap::new(),
         bindings: resources,
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
         deployment_source: promote.then_some(DeploymentSource::VersionsApi),

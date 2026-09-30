@@ -1,7 +1,7 @@
 //! Install receipt for formal `ocd` binary ownership.
 
 use open_compute_core::{ErrorCode, PlatformError};
-use open_compute_storage::{atomic_write, ensure_dir_secure};
+use open_compute_storage::fs::{atomic_write, ensure_dir_secure};
 use rustix::fs::{Mode, OFlags};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

@@ -138,7 +138,7 @@ fn durable_operation_rejection_requires_a_non_null_code_on_insert_update_and_ins
     );
     drop(conn);
     assert_eq!(
-        crate::inspect_scheduler_db(&_temp.path().join("scheduler.sqlite"), 5000, 2)
+        crate::scheduler::inspect_scheduler_db(&_temp.path().join("scheduler.sqlite"), 5000, 2)
             .unwrap_err()
             .code(),
         ErrorCode::WorkflowInvariantViolation

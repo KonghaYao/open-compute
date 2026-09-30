@@ -4,7 +4,7 @@ use super::*;
 fn p1_control_inventory_returns_only_fixed_aggregate_counts() {
     let (_tmp, root) = unique_root();
     let storage = PlatformStorage::bootstrap(&storage_config(&root), &SystemClock).unwrap();
-    let empty = crate::inspect_control_inventory(storage.db()).unwrap();
+    let empty = crate::inspect::inspect_control_inventory(storage.db()).unwrap();
     assert_eq!(empty.instances, 1);
     assert_eq!(empty.workers, 0);
     assert_eq!(empty.versions, 0);
@@ -20,7 +20,7 @@ fn p1_control_inventory_returns_only_fixed_aggregate_counts() {
             1_000_000,
         )
         .unwrap();
-    let populated = crate::inspect_control_inventory(storage.db()).unwrap();
+    let populated = crate::inspect::inspect_control_inventory(storage.db()).unwrap();
     assert_eq!(populated.instances, 1);
     assert_eq!(populated.workers, 1);
     assert_eq!(populated.routes, 1);
