@@ -85,6 +85,7 @@ if (args.length === 1 && args[0] === "--list") {
       "TMP",
       "TEMP",
       "OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE",
+      "OPEN_COMPUTE_BUILD_CADDY",
     ].flatMap((name) =>
       process.env[name] === undefined ? [] : [[name, process.env[name]!]],
     ),
