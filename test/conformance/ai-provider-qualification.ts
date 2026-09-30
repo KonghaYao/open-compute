@@ -77,6 +77,30 @@ if (args.length === 1 && args[0] === "--list") {
   if (providerVariables.some((name) => !process.env[name]))
     throw new Error("AI provider qualification environment is incomplete");
 
+  // Diagnostics must stay useful without ever echoing provider credentials:
+  // every configured provider value and any bearer-like token is replaced.
+  const secretValues = providerVariables
+    .map((name) => [name, process.env[name]!] as const)
+    .sort(([, left], [, right]) => right.length - left.length);
+  const redact = (text: string): string => {
+    let result = text;
+    for (const [name, value] of secretValues)
+      result = result.split(value).join(`[redacted:${name}]`);
+    return result
+      .replace(/(bearer\s+)[^\s"',;]+/gi, "$1[redacted]")
+      .replace(/\bsk-[A-Za-z0-9_-]{8,}/g, "[redacted:sk-token]");
+  };
+  const DIAGNOSTIC_BYTES = 64 * 1024;
+  const tail = (text: string): string =>
+    text.length > DIAGNOSTIC_BYTES
+      ? `[... ${text.length - DIAGNOSTIC_BYTES} earlier characters omitted ...]\n${text.slice(-DIAGNOSTIC_BYTES)}`
+      : text;
+  const report = (label: string, text: string): void => {
+    process.stderr.write(
+      `::group::${label}\n${tail(redact(text)).trimEnd()}\n::endgroup::\n`,
+    );
+  };
+
   const buildEnvironment = Object.fromEntries(
     [
       "PATH",
@@ -113,7 +137,12 @@ if (args.length === 1 && args[0] === "--list") {
         encoding: "utf8",
       },
     ));
-  } catch {
+  } catch (error) {
+    const { stderr, code } = error as { stderr?: string; code?: unknown };
+    report(
+      `AI provider qualification build failed (exit ${String(code)})`,
+      stderr ?? String(error),
+    );
     throw new Error("AI provider qualification build failed");
   }
   const executable = buildOutput
@@ -146,19 +175,48 @@ if (args.length === 1 && args[0] === "--list") {
       ].map((name) => [name, process.env[name]!] as const),
     );
     environment.OPEN_COMPUTE_AI_QUALIFICATION_CASE = id;
-    const exitCode = await new Promise<number>((accept) => {
+    const outcome = await new Promise<{
+      exitCode: number;
+      signal: string | null;
+      output: string;
+    }>((accept) => {
+      const chunks: Buffer[] = [];
       const child = spawn(
         executable,
         [
           "--exact",
           "p5_real_vectorize_ai_search_and_markdown_matrix",
           "--test-threads=1",
+          "--nocapture",
         ],
-        { cwd: ROOT, env: environment, stdio: "ignore" },
+        { cwd: ROOT, env: environment, stdio: ["ignore", "pipe", "pipe"] },
       );
-      child.once("error", () => accept(-1));
-      child.once("exit", (code) => accept(code ?? -1));
+      child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+      child.stderr.on("data", (chunk: Buffer) => chunks.push(chunk));
+      let settled = false;
+      const settle = (
+        exitCode: number,
+        signal: string | null,
+        extra = "",
+      ): void => {
+        if (settled) return;
+        settled = true;
+        child.stdout.destroy();
+        child.stderr.destroy();
+        accept({
+          exitCode,
+          signal,
+          output: Buffer.concat(chunks).toString("utf8") + extra,
+        });
+      };
+      child.once("error", (error) => settle(-1, null, `\n${String(error)}`));
+      child.once("close", (code, signal) => settle(code ?? -1, signal));
+      // A leaked grandchild can keep the pipes open; never wait on it forever.
+      child.once("exit", (code, signal) => {
+        setTimeout(() => settle(code ?? -1, signal), 5_000).unref();
+      });
     });
+    const exitCode = outcome.exitCode;
     const status = exitCode === 0 ? "passed" : "failed";
     results.push({
       id,
@@ -171,8 +229,17 @@ if (args.length === 1 && args[0] === "--list") {
         status === "passed" ? "2xx" : "non-2xx-or-contract-failure",
       durationMs: Math.round(performance.now() - started),
       responseSchemaSha256: definition.responseSchemaSha256,
+      ...(status === "failed"
+        ? { exitCode: outcome.exitCode, signal: outcome.signal }
+        : {}),
     });
-    if (status === "failed") break;
+    if (status === "failed") {
+      report(
+        `AI provider qualification case ${id} failed (exit ${outcome.exitCode}, signal ${outcome.signal ?? "none"})`,
+        outcome.output,
+      );
+      break;
+    }
   }
   const status =
     results.length === requested.length &&

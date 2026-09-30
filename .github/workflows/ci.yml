@@ -270,6 +270,32 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
         run: ./test/gate.py p5-ai-provider-qualification --jobs 1
+      # The harness redacts provider credentials from captured case output, and
+      # Actions masks registered secrets; retained tmp/ evidence is never uploaded.
+      - name: Show AI provider qualification diagnostics
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for log in .temp/gate-run/failed/*/round-*/p5-ai-provider-qualification/output.log \
+            .temp/gate-run/failed/*/prepare/p5-ai-provider-qualification/output.log; do
+            echo "=== $log"
+            cat "$log"
+          done
+          for report in .temp/gate-run/failed/*/report.json; do
+            echo "=== $report"
+            jq '{status, error, results}' "$report"
+          done
+      - name: Upload AI provider qualification evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ai-provider-qualification-failed-${{ github.run_attempt }}
+          path: |
+            .temp/gate-run/failed/*/*.json
+            .temp/gate-run/failed/*/*.log
+            .temp/gate-run/failed/*/*/*/output.log
+          if-no-files-found: ignore
+          retention-days: 14
 
   s3-provider-qualification:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
