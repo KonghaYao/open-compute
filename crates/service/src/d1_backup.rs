@@ -4,9 +4,12 @@ use crate::D1ApiState;
 use open_compute_core::{
     BindingKind, ErrorCode, InstanceId, PlatformError, RequestId, ResourceId, ResourceState,
 };
-use open_compute_storage::{
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::d1::{
     D1_DATABASE_SCHEMA_VERSION, D1BackupState, D1DatabaseRepository, D1Engine, D1Paths,
-    PlatformStorage, ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
+};
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
 };
 use open_compute_workers::{CreateResourceOutcome, CreateResourceResult};
 use serde::{Deserialize, Serialize};
@@ -38,7 +41,7 @@ pub(crate) async fn create_backup(
     resource_id: ResourceId,
     key: String,
     now_ms: i64,
-) -> Result<open_compute_storage::D1BackupRecord, PlatformError> {
+) -> Result<open_compute_storage::d1::D1BackupRecord, PlatformError> {
     let _admission = api
         .storage
         .reserve_mutation(api.config.database_quota_bytes)?;
@@ -429,7 +432,7 @@ fn restore_downloaded_database(
 fn create_restored_staging(
     source: &std::path::Path,
     operation: &RestoreOperation,
-    resource: &open_compute_storage::ResourceRecord,
+    resource: &open_compute_storage::resources::ResourceRecord,
     paths: &D1Paths,
 ) -> Result<std::path::PathBuf, PlatformError> {
     let staging = paths.create_database_staging(resource.id)?;
@@ -462,7 +465,7 @@ async fn fail_backup(
     .await;
 }
 
-fn replayed_backup_failure(backup: &open_compute_storage::D1BackupRecord) -> PlatformError {
+fn replayed_backup_failure(backup: &open_compute_storage::d1::D1BackupRecord) -> PlatformError {
     let code = backup
         .error_code
         .as_deref()

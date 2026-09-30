@@ -2740,8 +2740,8 @@
         "required": [
           "release",
           "wrangler_version",
-          "compatibility_date",
-          "compatibility_flags",
+          "compatibility",
+          "system_workers",
           "endpoints",
           "deviations",
           "configuration",
@@ -2756,26 +2756,119 @@
             "type": "string",
             "const": "4.143.0"
           },
-          "compatibility_date": {
+          "compatibility": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["minimum", "maximum"],
+            "required": [
+              "validation",
+              "binary_maximum_date",
+              "future_dates_allowed",
+              "experimental_enabled",
+              "features",
+              "catalog_sha256"
+            ],
             "properties": {
-              "minimum": {
+              "validation": {
+                "type": "string",
+                "const": "workerd_code_version"
+              },
+              "binary_maximum_date": {
                 "type": "string",
                 "format": "date"
               },
-              "maximum": {
+              "future_dates_allowed": {
+                "type": "boolean",
+                "const": false
+              },
+              "experimental_enabled": {
+                "type": "boolean"
+              },
+              "features": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "field",
+                    "enabled_for_all_dates",
+                    "experimental",
+                    "python_snapshot_release"
+                  ],
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "enable_flag": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "disable_flag": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "default_on_date": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "enabled_for_all_dates": {
+                      "type": "boolean"
+                    },
+                    "experimental": {
+                      "type": "boolean"
+                    },
+                    "python_snapshot_release": {
+                      "type": "boolean"
+                    },
+                    "implied_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["flags", "after_date"],
+                        "properties": {
+                          "flags": {
+                            "type": "array",
+                            "minItems": 1,
+                            "uniqueItems": true,
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "after_date": {
+                            "type": "string",
+                            "format": "date"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "catalog_sha256": {
                 "type": "string",
-                "format": "date"
+                "pattern": "^[a-f0-9]{64}$"
               }
             }
           },
-          "compatibility_flags": {
-            "type": "array",
-            "uniqueItems": true,
-            "items": {
-              "type": "string"
+          "system_workers": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["compatibility_date", "compatibility_flags"],
+            "properties": {
+              "compatibility_date": {
+                "type": "string",
+                "format": "date"
+              },
+              "compatibility_flags": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
             }
           },
           "endpoints": {

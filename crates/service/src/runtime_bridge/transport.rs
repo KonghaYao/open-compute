@@ -133,6 +133,7 @@ impl WorkerdTransport {
     }
 
     /// Deliver one scheduler claim through the generation-authenticated private alarm path.
+    #[cfg(any(test, feature = "test-support"))]
     pub async fn dispatch_alarm(
         &self,
         job: &ClaimedJob,
@@ -174,30 +175,6 @@ impl WorkerdTransport {
         validate_alarm_dispatch_result(result)
     }
 
-    /// Probe one live object for bounded projection repair without exposing arbitrary SQL.
-    pub async fn repair_alarm(
-        &self,
-        namespace_resource_id: open_compute_core::ResourceId,
-        object_id: open_compute_core::DurableObjectId,
-        object_generation: u64,
-        timeout: Duration,
-    ) -> Result<AlarmRepairResult, PlatformError> {
-        let result = self
-            .alarm_request(
-                "/internal/do-alarm-repair",
-                &AlarmObjectRequest {
-                    namespace_resource_id,
-                    object_id,
-                    object_generation,
-                    row_token: None,
-                    retry_count: None,
-                },
-                timeout,
-            )
-            .await?;
-        validate_alarm_repair_result(result)
-    }
-
     /// Probe an Alarm projection while the scheduler clock owns the timeout.
     pub(crate) async fn repair_alarm_unbounded(
         &self,
@@ -220,6 +197,7 @@ impl WorkerdTransport {
         validate_alarm_repair_result(result)
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     async fn alarm_request<T: for<'de> Deserialize<'de>>(
         &self,
         path: &str,
@@ -667,7 +645,7 @@ impl RuntimeValidator for WorkerdTransport {
 
     fn validate_workflow(
         &self,
-        target: open_compute_storage::WorkflowTarget,
+        target: open_compute_storage::workflows::WorkflowTarget,
     ) -> Pin<Box<dyn Future<Output = Result<(), PlatformError>> + Send + '_>> {
         Box::pin(async move { self.probe_workflow(&target).await })
     }

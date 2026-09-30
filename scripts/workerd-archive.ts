@@ -64,20 +64,12 @@ export async function loadPin(target = hostTarget()) {
   const sourceRepository = string(source.repository);
   const upstreamBase = string(source.upstreamBase);
   const buildInputs = record(source.buildInputs);
-  for (const name of [
-    "bazel",
-    "target",
-    "mode",
-    "ioBackend",
-    "strip",
-    "macosExecRustStrip",
-  ])
+  for (const name of ["bazel", "target", "mode", "strip", "macosExecRustStrip"])
     string(buildInputs[name]);
   if (
     sourceRepository !== "https://github.com/elliothux/workerd" ||
     buildInputs.target !== "//src/workerd/server:workerd" ||
     buildInputs.mode !== "opt" ||
-    buildInputs.ioBackend !== "cxx" ||
     buildInputs.strip !== "always" ||
     buildInputs.macosExecRustStrip !== "none" ||
     !/^[a-f0-9]{40}$/.test(upstreamBase) ||
@@ -106,7 +98,7 @@ export async function loadPin(target = hostTarget()) {
   const expectedVersion = string(lock.expectedVersionOutput);
   const expectedName = `workerd-${target.replace("-x64", "-64")}.gz`;
   if (
-    lock.schemaVersion !== 3 ||
+    lock.schemaVersion !== 4 ||
     !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(release) ||
     archiveName !== expectedName ||
     (archiveUrl !== undefined &&
@@ -119,6 +111,19 @@ export async function loadPin(target = hostTarget()) {
       "formal workerd pin does not match the target/source contract",
     );
   }
+  const catalog = record(lock.compatibilityCatalog);
+  const catalogSchemaVersion = catalog.schemaVersion;
+  const catalogSha256 = string(catalog.sha256);
+  const binaryMaximumCompatibilityDate = string(
+    lock.binaryMaximumCompatibilityDate,
+  );
+  if (
+    catalogSchemaVersion !== 1 ||
+    !/^[a-f0-9]{64}$/.test(catalogSha256) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(binaryMaximumCompatibilityDate)
+  ) {
+    throw new Error("formal workerd compatibility catalog pin is invalid");
+  }
   return {
     target,
     release,
@@ -127,6 +132,9 @@ export async function loadPin(target = hostTarget()) {
     archiveSha256,
     binarySha256,
     expectedVersion,
+    binaryMaximumCompatibilityDate,
+    catalogSchemaVersion,
+    catalogSha256,
     lockSha256: sha256(bytes),
   };
 }
@@ -145,7 +153,7 @@ export async function loadPyodidePin() {
   const pyodideVersion =
     versionSeparator > 0 ? version.slice(0, versionSeparator) : "";
   if (
-    lock.schemaVersion !== 3 ||
+    lock.schemaVersion !== 4 ||
     !/^[A-Za-z0-9._-]{1,128}$/.test(version) ||
     !/^\d+\.\d+\.\d+$/.test(pyodideVersion) ||
     fileName !== `pyodide_${version}.capnp.bin` ||

@@ -70,13 +70,14 @@ pub fn worker_loader_namespace_key(
 
 /// Whether a persisted Version declares a native Loader binding.
 pub fn version_has_worker_loader(
-    db: &open_compute_storage::ControlDb,
+    db: &open_compute_storage::control_db::ControlDb,
     version_id: VersionId,
 ) -> Result<bool, PlatformError> {
-    let (_, bindings) = open_compute_storage::version_runtime_features(db, version_id)?;
-    Ok(bindings
-        .iter()
-        .any(|binding| binding.kind == open_compute_storage::BuiltinBindingKind::WorkerLoader))
+    let (_, bindings) =
+        open_compute_storage::runtime_features::version_runtime_features(db, version_id)?;
+    Ok(bindings.iter().any(|binding| {
+        binding.kind == open_compute_storage::runtime_features::BuiltinBindingKind::WorkerLoader
+    }))
 }
 
 #[cfg(test)]

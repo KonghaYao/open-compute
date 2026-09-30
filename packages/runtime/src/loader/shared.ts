@@ -80,40 +80,20 @@ export function tenantGlobalOutbound(
   return env.OUTBOUND_NETWORK;
 }
 
-/** Formal-lock date and tenant-required flags from private system bindings. */
-export function lockWorkerCode(env: LoaderEnv): {
-  compatibilityDate: string;
-  compatibilityFlags: string[];
-} {
-  if (
-    typeof env.COMPATIBILITY_DATE !== "string" ||
-    env.COMPATIBILITY_DATE.length === 0 ||
-    !Array.isArray(env.REQUIRED_COMPATIBILITY_FLAGS) ||
-    !env.REQUIRED_COMPATIBILITY_FLAGS.every(
-      (flag): flag is string => typeof flag === "string",
-    )
-  ) {
-    throw bindingError("VERSION_INVARIANT_VIOLATION");
-  }
-  return {
-    compatibilityDate: env.COMPATIBILITY_DATE,
-    compatibilityFlags: [...env.REQUIRED_COMPATIBILITY_FLAGS],
-  };
-}
-
 /** Select compatibility metadata and resource limits only from the immutable snapshot. */
 export function snapshotWorkerCode(snapshot: RuntimeSnapshot): {
   compatibilityDate: string;
   compatibilityFlags: string[];
+  allowExperimental: true;
   limits: { cpuMs: number; subRequests: number };
 } {
   if (
-    snapshot.compatibilityDate !== "2026-09-08" ||
+    typeof snapshot.compatibilityDate !== "string" ||
+    snapshot.compatibilityDate.length > 32 ||
     !Array.isArray(snapshot.compatibilityFlags) ||
-    !(
-      snapshot.compatibilityFlags.length === 0 ||
-      (snapshot.compatibilityFlags.length === 1 &&
-        snapshot.compatibilityFlags[0] === "nodejs_compat")
+    snapshot.compatibilityFlags.length > 64 ||
+    !snapshot.compatibilityFlags.every(
+      (flag) => typeof flag === "string" && flag.length <= 128,
     ) ||
     !Number.isSafeInteger(snapshot.limits?.cpuMs) ||
     !Number.isSafeInteger(snapshot.limits?.subRequests)
@@ -123,6 +103,7 @@ export function snapshotWorkerCode(snapshot: RuntimeSnapshot): {
   return {
     compatibilityDate: snapshot.compatibilityDate,
     compatibilityFlags: [...snapshot.compatibilityFlags],
+    allowExperimental: true,
     limits: {
       cpuMs: snapshot.limits.cpuMs,
       subRequests: snapshot.limits.subRequests,

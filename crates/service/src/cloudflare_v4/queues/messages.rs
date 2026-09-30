@@ -8,9 +8,9 @@ use axum::http::header;
 use axum::response::Response;
 use axum::routing::post;
 use open_compute_core::{ErrorCode, PlatformError};
-use open_compute_storage::{
-    QueueAvailability, QueueContentType, QueueEnqueueRequest, QueueMessageInput, QueueMetrics,
-    QueueState,
+use open_compute_storage::queues::{QueueAvailability, QueueState};
+use open_compute_storage::scheduler::{
+    QueueContentType, QueueEnqueueRequest, QueueMessageInput, QueueMetrics,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -238,7 +238,8 @@ mod tests {
         DeterministicSchedulerClock, QueueId, SchedulerConfig, SecretString, WorkflowsConfig,
     };
     use open_compute_runtime::GenerationAuthRegistry;
-    use open_compute_storage::{QueueConfig, QueueProjection, QueueRepository, SchedulerStore};
+    use open_compute_storage::queues::{QueueConfig, QueueRepository};
+    use open_compute_storage::scheduler::{QueueProjection, SchedulerStore};
     use std::sync::{Arc, Mutex};
     use tower::ServiceExt as _;
 

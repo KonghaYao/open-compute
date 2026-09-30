@@ -30,7 +30,7 @@ import { RowActionsMenu } from "../../../components/row-actions-menu";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
 import { formatBytes } from "../../../lib/format";
-import { r2BucketQuery } from "../../../lib/query-options";
+import { queryKeys, r2BucketQuery } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/r2/$bucketId")({
   validateSearch: (
@@ -70,15 +70,13 @@ function R2DetailPage() {
 
   const bucket = useQuery(r2BucketQuery(client, selectedInstanceId, bucketId));
   const objects = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "r2",
+    queryKey: queryKeys.r2(
       selectedInstanceId,
       bucketId,
       "objects",
       prefix,
       showFolders,
-    ],
+    ),
     queryFn: ({ signal }) =>
       client!.r2.buckets.objects.list(
         bucketId,

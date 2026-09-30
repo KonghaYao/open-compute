@@ -3,7 +3,7 @@
 use super::{add_seconds, protocol, put_rejected};
 use axum::http::{HeaderMap, HeaderValue, header};
 use open_compute_core::PlatformError;
-use open_compute_storage::{CacheHeader, CacheMethod, CacheStoredResponse, CacheSurface};
+use open_compute_storage::cache::{CacheHeader, CacheMethod, CacheStoredResponse, CacheSurface};
 use std::collections::BTreeMap;
 
 pub(super) fn canonical_header_map(

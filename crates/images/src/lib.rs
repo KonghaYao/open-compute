@@ -302,6 +302,60 @@ impl ImageEngine {
         })
     }
 
+    /// Bound a JPEG to caller-supplied dimensions, pixels, and encoded bytes.
+    pub fn fit_jpeg(
+        &self,
+        bytes: &[u8],
+        max_width: u32,
+        max_height: u32,
+        max_pixels: u64,
+        max_output_bytes: u64,
+        quality: u8,
+    ) -> Result<ImageOutput, PlatformError> {
+        if max_width == 0
+            || max_height == 0
+            || max_pixels == 0
+            || max_output_bytes == 0
+            || !(1..=100).contains(&quality)
+        {
+            return Err(option());
+        }
+        let image = self.decode(bytes)?;
+        let width = image.width();
+        let height = image.height();
+        let pixel_scale = (max_pixels as f64 / f64::from(width) / f64::from(height)).sqrt();
+        let scale = 1_f64
+            .min(f64::from(max_width) / f64::from(width))
+            .min(f64::from(max_height) / f64::from(height))
+            .min(pixel_scale);
+        let mut target_width = (f64::from(width) * scale).floor().max(1.0) as u32;
+        let mut target_height = (f64::from(height) * scale).floor().max(1.0) as u32;
+        loop {
+            let resized = image.resize_exact(target_width, target_height, FilterType::Lanczos3);
+            let encoded = encode(
+                &resized,
+                OutputOptions {
+                    format: RasterFormat::Jpeg,
+                    quality: Some(quality),
+                    anim: false,
+                },
+            )?;
+            if encoded.len() as u64 <= max_output_bytes {
+                return Ok(ImageOutput {
+                    bytes: encoded,
+                    format: RasterFormat::Jpeg,
+                    width: target_width,
+                    height: target_height,
+                });
+            }
+            if target_width == 1 && target_height == 1 {
+                return Err(limit());
+            }
+            target_width = (target_width.saturating_mul(3) / 4).max(1);
+            target_height = (target_height.saturating_mul(3) / 4).max(1);
+        }
+    }
+
     fn probe(&self, bytes: &[u8]) -> Result<(RasterFormat, u32, u32, Orientation), PlatformError> {
         if bytes.is_empty() || bytes.len() as u64 > self.limits.max_input_bytes {
             return Err(limit());

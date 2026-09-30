@@ -2,7 +2,7 @@
 
 use super::{Inner, write_help};
 use open_compute_core::{SchedulerKind, SchedulerPoolState, WorkloadSummary};
-use open_compute_storage::SchedulerSummary;
+use open_compute_storage::scheduler::SchedulerSummary;
 use std::fmt::Write as _;
 use std::time::Duration;
 

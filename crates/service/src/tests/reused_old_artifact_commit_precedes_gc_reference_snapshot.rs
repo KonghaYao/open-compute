@@ -33,7 +33,7 @@ async fn reused_old_artifact_commit_precedes_gc_reference_snapshot() {
         .unwrap();
     tokio::time::sleep(Duration::from_millis(2)).await;
 
-    let repo = open_compute_storage::WorkerRepository::new(storage.db());
+    let repo = open_compute_storage::worker_repository::WorkerRepository::new(storage.db());
     let account = storage.identity().instance_id;
     let (worker, _) = repo
         .create_worker(
@@ -68,11 +68,11 @@ async fn reused_old_artifact_commit_precedes_gc_reference_snapshot() {
     );
     let version = open_compute_core::VersionId::generate();
     repo.insert_staging_version(
-        &open_compute_storage::NewVersion {
+        &open_compute_storage::worker_repository::NewVersion {
             id: version,
             instance_id: account,
             worker_id: worker.id,
-            content_kind: open_compute_storage::VersionContentKind::Worker,
+            content_kind: open_compute_storage::worker_repository::VersionContentKind::Worker,
             artifact_sha256: Some(digest),
             artifact_size: Some(payload.len() as u64),
             artifact_schema_version: Some(1),
@@ -80,13 +80,15 @@ async fn reused_old_artifact_commit_precedes_gc_reference_snapshot() {
             worker_code_sha256: [7; 32],
             compatibility_date: "2026-09-08".into(),
             compatibility_flags: Vec::new(),
-            resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+            resource_limits:
+                open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(
+                ),
             vars: std::collections::BTreeMap::new(),
             secrets: std::collections::BTreeMap::new(),
             request_id: open_compute_core::RequestId::generate(),
             now_ms: 2,
         },
-        &open_compute_storage::NewVersionProducts::default(),
+        &open_compute_storage::worker_repository::NewVersionProducts::default(),
         1_000_000,
     )
     .unwrap();

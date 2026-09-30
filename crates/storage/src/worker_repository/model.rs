@@ -545,23 +545,23 @@ pub struct VersionSnapshot {
     /// Immutable closed Cloudflare Version annotations.
     pub annotations: BTreeMap<String, String>,
     /// Static-asset authority when the version declares assets.
-    pub assets: Option<crate::VersionAssetsRecord>,
+    pub assets: Option<crate::assets::VersionAssetsRecord>,
     /// Canonical JSON vars keyed by env name.
     pub vars: BTreeMap<String, Vec<u8>>,
     /// Encrypted secrets keyed by env name.
     pub secrets: BTreeMap<String, StoredVersionSecret>,
     /// Immutable typed resource bindings ordered by env name.
-    pub bindings: Vec<crate::VersionBindingRecord>,
+    pub bindings: Vec<crate::bindings::VersionBindingRecord>,
     /// Immutable Queue producer bindings ordered by env name.
-    pub queue_bindings: Vec<crate::QueueProducerBindingRecord>,
+    pub queue_bindings: Vec<crate::queues::QueueProducerBindingRecord>,
     /// Immutable Workflow caller bindings ordered by env name.
-    pub workflow_bindings: Vec<crate::WorkflowBindingRecord>,
+    pub workflow_bindings: Vec<crate::workflows::WorkflowBindingRecord>,
     /// Immutable cross-Worker Service declarations ordered by env name.
-    pub services: Vec<crate::VersionServiceRecord>,
+    pub services: Vec<crate::services::VersionServiceRecord>,
     /// Immutable default and named-entrypoint automatic-cache policies.
-    pub cache_policies: Vec<crate::VersionCachePolicyRecord>,
+    pub cache_policies: Vec<crate::runtime_features::VersionCachePolicyRecord>,
     /// Immutable platform-provided environment bindings.
-    pub builtin_bindings: Vec<crate::VersionBuiltinBindingRecord>,
+    pub builtin_bindings: Vec<crate::runtime_features::VersionBuiltinBindingRecord>,
 }
 
 /// Trusted listener selected for a Worker origin.
@@ -629,7 +629,7 @@ pub struct RouteSnapshot {
     /// Active ready version.
     pub version: VersionRecord,
     /// Static-asset authority frozen with the same active version.
-    pub assets: Option<crate::VersionAssetsRecord>,
+    pub assets: Option<crate::assets::VersionAssetsRecord>,
 }
 
 /// Registered reason a version must remain reachable.
@@ -680,7 +680,7 @@ pub struct NewVersion {
     pub worker_code_sha256: [u8; 32],
     /// Immutable validated compatibility date.
     pub compatibility_date: String,
-    /// Immutable validated and sorted compatibility flags.
+    /// Immutable validated compatibility flags in submitted order.
     pub compatibility_flags: Vec<String>,
     /// Immutable Standard resource limits materialized at creation.
     pub resource_limits: EffectiveResourceLimits,

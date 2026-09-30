@@ -25,6 +25,7 @@ import {
 import { openConfirmDeleteDialog } from "../../../components/resource-dialog";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../lib/query-options";
 
 export function KvPairs({ namespaceId }: { namespaceId: string }) {
   const { client, instanceId: selectedInstanceId } = useAuth();
@@ -39,14 +40,7 @@ export function KvPairs({ namespaceId }: { namespaceId: string }) {
   const [draftKey, setDraftKey] = useState("");
   const [draftValue, setDraftValue] = useState("");
   const keys = useInfiniteQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "kv",
-      selectedInstanceId,
-      namespaceId,
-      "keys",
-      prefix,
-    ],
+    queryKey: queryKeys.kv(selectedInstanceId, namespaceId, "keys", prefix),
     queryFn: async ({ signal, pageParam }) => {
       const page = await client!.kv.namespaces.keys.list(
         namespaceId,
@@ -79,14 +73,12 @@ export function KvPairs({ namespaceId }: { namespaceId: string }) {
     enabled,
   });
   const value = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "kv",
+    queryKey: queryKeys.kv(
       selectedInstanceId,
       namespaceId,
       "value",
       selectedKey,
-    ],
+    ),
     queryFn: async ({ signal }) =>
       (
         await client!.kv.namespaces.values.get(
@@ -108,13 +100,7 @@ export function KvPairs({ namespaceId }: { namespaceId: string }) {
       setDraftKey("");
       setDraftValue("");
       await queryClient.invalidateQueries({
-        queryKey: [
-          "cloudflare-v4",
-          "kv",
-          selectedInstanceId,
-          namespaceId,
-          "keys",
-        ],
+        queryKey: queryKeys.kv(selectedInstanceId, namespaceId, "keys"),
       });
       feedback.success("KV pair added.");
     },
@@ -139,23 +125,15 @@ export function KvPairs({ namespaceId }: { namespaceId: string }) {
       setEditing(false);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: [
-            "cloudflare-v4",
-            "kv",
-            selectedInstanceId,
-            namespaceId,
-            "keys",
-          ],
+          queryKey: queryKeys.kv(selectedInstanceId, namespaceId, "keys"),
         }),
         queryClient.invalidateQueries({
-          queryKey: [
-            "cloudflare-v4",
-            "kv",
+          queryKey: queryKeys.kv(
             selectedInstanceId,
             namespaceId,
             "value",
             selectedKey,
-          ],
+          ),
         }),
       ]);
       feedback.success("KV pair saved.");
@@ -177,13 +155,7 @@ export function KvPairs({ namespaceId }: { namespaceId: string }) {
         }
         if (selectedKey === key) setSelectedKey(null);
         await queryClient.invalidateQueries({
-          queryKey: [
-            "cloudflare-v4",
-            "kv",
-            selectedInstanceId,
-            namespaceId,
-            "keys",
-          ],
+          queryKey: queryKeys.kv(selectedInstanceId, namespaceId, "keys"),
         });
         feedback.success("KV pair deleted.");
       },

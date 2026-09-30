@@ -2,7 +2,8 @@
 
 use crate::d1_protocol::D1SessionConstraint;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, ResourceId};
-use open_compute_storage::{D1Engine, SecretCrypto};
+use open_compute_storage::crypto::SecretCrypto;
+use open_compute_storage::d1::D1Engine;
 
 /// Stable sanitized error for invalid D1 session bookmarks.
 pub(crate) fn session_error() -> PlatformError {

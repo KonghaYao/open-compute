@@ -370,7 +370,7 @@ fn ownership_transfer_accepts_only_the_fresh_bootstrap_layout() {
     assign_initialized_data_ownership(&options.roots.data_dir, &service_user).unwrap();
 
     let unknown = options.roots.data_dir.join("unknown.txt");
-    open_compute_storage::atomic_write(&unknown, b"retain this").unwrap();
+    open_compute_storage::fs::atomic_write(&unknown, b"retain this").unwrap();
     assert_eq!(
         assign_initialized_data_ownership(&options.roots.data_dir, &service_user)
             .unwrap_err()

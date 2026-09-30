@@ -3,12 +3,14 @@
 //! Namespace and object transactions remain together because they share one SQLite authority
 //! boundary and must be audited as a single generation-fencing protocol.
 
+use crate::PlatformStorage;
+use crate::bindings::BindingRepository;
 use crate::catalog_page::{CatalogColumns, build_catalog_sql, record_catalog_cursor};
-use crate::{
-    BindingRepository, CatalogCursor, CatalogDirection, CatalogListPage, CatalogSort,
-    PlatformStorage, ResourceRecord, ResourceRepository, normalize_catalog_limit,
+use crate::catalog_page::{
+    CatalogCursor, CatalogDirection, CatalogListPage, CatalogSort, normalize_catalog_limit,
     search_as_resource_id,
 };
+use crate::resources::{ResourceRecord, ResourceRepository};
 use open_compute_core::{
     BindingId, BindingKind, DurableObjectId, DurableObjectState, ErrorCode, InstanceId,
     PlatformError, ResourceId, ResourceState, VersionId, WorkerId, durable_object_namespace_prefix,

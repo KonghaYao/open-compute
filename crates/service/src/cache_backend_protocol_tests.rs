@@ -161,7 +161,7 @@ fn request_policy_and_error_helpers_cover_the_complete_protocol_matrix() {
     ] {
         assert!(!lookup_status(status).is_empty());
     }
-    let lookup = open_compute_storage::CacheLookup {
+    let lookup = open_compute_storage::cache::CacheLookup {
         status: CacheLookupStatus::Updating,
         response: None,
         fence_generation: 7,

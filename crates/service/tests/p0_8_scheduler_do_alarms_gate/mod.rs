@@ -27,10 +27,12 @@ use open_compute_service::{
     HealthCoordinator, MetricsRegistry, SqliteKvBindingExecutor, bind_binding_backend,
     serve_binding_backend,
 };
-use open_compute_storage::{
-    AlarmProjection, ClaimResult, DO_NAMESPACE_SCHEMA_VERSION, DurableObjectRepository,
-    PlatformStorage, SchedulerStore, SchedulerSummary, VersionRecord, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::durable_objects::{DO_NAMESPACE_SCHEMA_VERSION, DurableObjectRepository};
+use open_compute_storage::scheduler::{
+    AlarmProjection, ClaimResult, SchedulerStore, SchedulerSummary,
 };
+use open_compute_storage::worker_repository::{VersionRecord, WorkerRepository};
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateResourceOutcome, CreateResourceRequest,
     CreateVersionOutcome, CreateVersionRequest, DurableObjectResourceDriver, ModuleInput,
@@ -152,10 +154,14 @@ fn version_request(
         secrets: BTreeMap::new(),
         bindings,
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: promote.then_some(open_compute_storage::DeploymentSource::ScriptUpload),
+        deployment_source: promote
+            .then_some(open_compute_storage::worker_repository::DeploymentSource::ScriptUpload),
         observability: None,
         request_id: RequestId::generate(),
         now_ms,

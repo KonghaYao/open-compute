@@ -20,9 +20,6 @@ const products = [
   "Static Assets",
   "Service Bindings",
   "Artifacts",
-  "Browser Run",
-  "Containers",
-  "Sandbox",
   "LogTail",
 ] as const satisfies readonly CloudflareProductName[];
 

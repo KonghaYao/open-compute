@@ -59,7 +59,7 @@ fn queue_and_cron_projections_reject_another_instance() {
                 instance_id: other,
                 lifecycle_generation: 1,
                 config_generation: 1,
-                config: crate::QueueConfig::default(),
+                config: crate::queues::QueueConfig::default(),
                 created_at_ms: 1,
                 updated_at_ms: 1,
             })

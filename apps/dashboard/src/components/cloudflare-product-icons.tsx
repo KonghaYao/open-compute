@@ -17,9 +17,6 @@ export type CloudflareProductName =
   | "Static Assets"
   | "Service Bindings"
   | "Artifacts"
-  | "Browser Run"
-  | "Containers"
-  | "Sandbox"
   | "LogTail";
 
 export interface CloudflareProductIconProps {
@@ -184,61 +181,6 @@ function VectorizeIcon(props: CloudflareProductIconProps) {
   );
 }
 
-function ContainersIcon(props: CloudflareProductIconProps) {
-  return (
-    <ProductSvg {...props}>
-      <path
-        d="M21.5 16.002V7.997a1.5 1.5 0 0 0-.745-1.294L13.63 2.557a2.25 2.25 0 0 0-2.261 0L4.245 6.703A1.5 1.5 0 0 0 3.5 7.997v8.005a1.5 1.5 0 0 0 .745 1.295l7.125 4.146a2.25 2.25 0 0 0 2.261 0l7.125-4.146a1.5 1.5 0 0 0 .744-1.295Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.5"
-      />
-      <path
-        d="m3.734 7.218 8.766 5.157 8.766-5.157M12.5 12.375v9.375"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.5"
-      />
-    </ProductSvg>
-  );
-}
-
-function SandboxIcon(props: CloudflareProductIconProps) {
-  return (
-    <ProductSvg {...props} viewBox="-2 -2 28 28">
-      {[
-        "M8.4 3H4.6C3.48 3 3 3.48 3 4.6v3.8C3 9.52 3.48 10 4.6 10h3.8C9.52 10 10 9.52 10 8.4V4.6C10 3.48 9.52 3 8.4 3Z",
-        "M19.4 3h-3.8C14.48 3 14 3.48 14 4.6v3.8c0 1.12.48 1.6 1.6 1.6h3.8c1.12 0 1.6-.48 1.6-1.6V4.6C21 3.48 20.52 3 19.4 3Z",
-        "M19.4 14h-3.8c-1.12 0-1.6.48-1.6 1.6v3.8c0 1.12.48 1.6 1.6 1.6h3.8c1.12 0 1.6-.48 1.6-1.6v-3.8c0-1.12-.48-1.6-1.6-1.6Z",
-        "M8.4 14H4.6c-1.12 0-1.6.48-1.6 1.6v3.8C3 20.52 3.48 21 4.6 21h3.8c1.12 0 1.6-.48 1.6-1.6v-3.8c0-1.12-.48-1.6-1.6-1.6Z",
-      ].map((path) => (
-        <path
-          d={path}
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="1.5"
-          key={path}
-        />
-      ))}
-    </ProductSvg>
-  );
-}
-
-function BrowserRunIcon(props: CloudflareProductIconProps) {
-  return (
-    <ProductSvg {...props}>
-      <path
-        fill="currentColor"
-        d="M9.287 6.72a.775.775 0 1 1-1.55 0 .775.775 0 0 1 1.55 0Zm-2.473 0a.775.775 0 1 1-1.551 0 .775.775 0 0 1 1.55 0Zm4.91-.225a.775.775 0 1 0 0 .45v-.45ZM22.1 5.904V4.689l-.739-.738h-.513v1.953H22.1Zm0 3.57V7.632h-1.252v1.842H22.1Zm0 3.571v-1.843h-1.252v1.843H22.1Zm0 3.57v-1.842h-1.252v1.842H22.1Zm-1.252 3.545h.513l.739-.739V18.34h-1.252v1.82Zm-6.61-1.477h1.585v1.477h-1.584v-1.477Zm3.31 0h1.583v1.477h-1.584v-1.477Zm-3.31-10.708h1.585v1.477h-1.584V7.975Zm3.31 0h1.583v1.477h-1.584V7.975Zm1.583-2.547h-1.584V3.951h1.584v1.477Zm-3.308 0h-1.584V3.951h1.584v1.477Zm-3.308-1.477H3.653l-.738.738v14.732l.738.739h8.862v-1.477H4.39V9.452h8.124V7.975H4.391V5.428h8.124V3.95Z"
-      />
-    </ProductSvg>
-  );
-}
-
 function ImagesIcon(props: CloudflareProductIconProps) {
   return (
     <ProductSvg {...props}>
@@ -390,12 +332,8 @@ export function CloudflareProductIcon({
       return <AiSearchIcon {...props} />;
     case "Artifacts":
       return <ArtifactsIcon {...props} />;
-    case "Browser Run":
-      return <BrowserRunIcon {...props} />;
     case "Cache":
       return <CacheIcon {...props} />;
-    case "Containers":
-      return <ContainersIcon {...props} />;
     case "Cron Triggers":
       return <CronIcon {...props} />;
     case "KV":
@@ -414,8 +352,6 @@ export function CloudflareProductIcon({
       return <R2Icon {...props} />;
     case "Queues":
       return <QueuesIcon {...props} />;
-    case "Sandbox":
-      return <SandboxIcon {...props} />;
     case "Service Bindings":
       return <ServiceBindingsIcon {...props} />;
     case "Static Assets":

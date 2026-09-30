@@ -468,7 +468,7 @@ fn published_account_rows_become_one_instance_or_fail_atomically() {
             assert!(!db.table_exists("accounts").unwrap());
             assert!(db.table_exists("instance_identity").unwrap());
             assert_eq!(
-                crate::CronRepository::new(&db)
+                crate::cron::CronRepository::new(&db)
                     .stage_activations(
                         InstanceId::generate(),
                         open_compute_core::WorkerId::generate(),
@@ -817,7 +817,7 @@ fn r2_size_migration_preserves_existing_objects_as_unknown() {
     let db = ControlDb::open(&path, 100).unwrap();
     apply(&db, &DeterministicClock::new(UNIX_EPOCH)).unwrap();
     assert_eq!(inspect_schema(&db).unwrap(), current_schema_version());
-    let usage = crate::R2ObjectRepository::new(&db)
+    let usage = crate::r2_objects::R2ObjectRepository::new(&db)
         .bucket_usage(instance, bucket)
         .unwrap();
     assert_eq!(usage.object_count, 1);

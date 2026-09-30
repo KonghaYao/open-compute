@@ -7,13 +7,13 @@ fn queue_consumer_claim_completion_recovery_and_dlq_are_token_fenced() {
     let account_id = store.instance_id();
     let source_id = QueueId::generate();
     let dlq_id = QueueId::generate();
-    let queue_config = crate::QueueConfig {
+    let queue_config = crate::queues::QueueConfig {
         retention_seconds: 60,
         max_message_bytes: 1024,
         max_batch_messages: 100,
         max_batch_bytes: 4096,
         max_backlog_bytes: 4096,
-        ..crate::QueueConfig::default()
+        ..crate::queues::QueueConfig::default()
     };
     for queue_id in [source_id, dlq_id] {
         store
@@ -39,7 +39,7 @@ fn queue_consumer_claim_completion_recovery_and_dlq_are_token_fenced() {
         worker_id,
         execution_generation: 1,
         entrypoint: None,
-        config: crate::QueueConsumerConfig {
+        config: crate::queue_consumers::QueueConsumerConfig {
             max_batch_size: 2,
             max_batch_timeout_seconds: 0,
             max_retries: 1,

@@ -1,6 +1,6 @@
 use super::*;
 use open_compute_core::{InstanceId, VersionId, WorkerId};
-use open_compute_storage::VersionSnapshot;
+use open_compute_storage::worker_repository::VersionSnapshot;
 
 pub(super) type ResolvedAssets = Option<(AssetManifestV1, AssetRoutingConfigV1)>;
 
@@ -29,7 +29,7 @@ pub(super) struct ResolvedQueueBindings {
 }
 
 pub(super) struct ResolvedWorkflowBindings {
-    pub(super) descriptors: Vec<open_compute_storage::WorkflowBindingDescriptor>,
+    pub(super) descriptors: Vec<open_compute_storage::workflows::WorkflowBindingDescriptor>,
     pub(super) runtime: Vec<RuntimeWorkflowBinding>,
 }
 
@@ -215,8 +215,10 @@ pub(super) fn resolve_resource_bindings(
             durable_object_identity: resolve_durable_object_identity(source, binding, scope)?,
         });
     }
-    for binding in open_compute_storage::CloudflareArtifactsRepository::new(source.storage.db())
-        .version_bindings(snapshot.version.id)?
+    for binding in open_compute_storage::cloudflare_artifacts::CloudflareArtifactsRepository::new(
+        source.storage.db(),
+    )
+    .version_bindings(snapshot.version.id)?
     {
         let descriptor = BindingDescriptorV1::new(
             binding.id,
@@ -247,7 +249,7 @@ pub(super) fn resolve_resource_bindings(
 
 fn resolve_durable_object_identity(
     source: &RuntimeSource,
-    binding: &open_compute_storage::VersionBindingRecord,
+    binding: &open_compute_storage::bindings::VersionBindingRecord,
     scope: RuntimeScope,
 ) -> Result<Option<DurableObjectFacadeIdentity>, PlatformError> {
     if binding.kind != BindingKind::DoNamespace || scope != RuntimeScope::Runtime {
@@ -323,7 +325,7 @@ pub(super) fn resolve_scheduled_targets(
     if snapshot.version.content_kind != VersionContentKind::Worker {
         return Ok(Vec::new());
     }
-    let cron = open_compute_storage::CronRepository::new(source.storage.db())
+    let cron = open_compute_storage::cron::CronRepository::new(source.storage.db())
         .version_config(version_id)?;
     for declaration in &cron.declarations {
         for name in &declaration.workflow_bindings {
@@ -477,7 +479,7 @@ fn builtin_descriptor_kind(kind: BuiltinBindingKind) -> BuiltinBindingDescriptor
 
 fn resolve_builtin_runtime(
     resolved: &mut ResolvedBuiltins,
-    binding: &open_compute_storage::VersionBuiltinBindingRecord,
+    binding: &open_compute_storage::runtime_features::VersionBuiltinBindingRecord,
     digest: [u8; 32],
     bundle: Option<&CanonicalBundle>,
     identity: ResolutionIdentity,
@@ -528,7 +530,7 @@ fn resolve_builtin_runtime(
 }
 
 fn resolve_module_binding(
-    binding: &open_compute_storage::VersionBuiltinBindingRecord,
+    binding: &open_compute_storage::runtime_features::VersionBuiltinBindingRecord,
     bundle: Option<&CanonicalBundle>,
 ) -> Result<RuntimeModuleBinding, PlatformError> {
     let module_type = match binding.kind {

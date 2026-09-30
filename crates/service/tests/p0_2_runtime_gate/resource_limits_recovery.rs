@@ -463,7 +463,10 @@ async fn assert_startup_limit_rejected(
             secrets: BTreeMap::new(),
             bindings: BTreeMap::new(),
             services: BTreeMap::new(),
-            runtime_features: VersionRuntimeFeatures::default(),
+            runtime_features: VersionRuntimeFeatures {
+                compatibility_date: "2026-09-08".to_owned(),
+                ..VersionRuntimeFeatures::default()
+            },
             queue_consumers: Vec::new(),
             crons: Vec::new(),
             deployment_source: None,
@@ -490,8 +493,8 @@ async fn deploy(
     source: &str,
     limits: Option<VersionResourceLimitsInput>,
 ) -> (
-    open_compute_storage::WorkerRecord,
-    open_compute_storage::VersionRecord,
+    open_compute_storage::worker_repository::WorkerRecord,
+    open_compute_storage::worker_repository::VersionRecord,
 ) {
     let (worker, _) = repo
         .create_worker(account, name, RequestId::generate(), 1, 1_000_000)
@@ -519,6 +522,7 @@ async fn deploy(
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
         runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
             limits,
             ..Default::default()
         },

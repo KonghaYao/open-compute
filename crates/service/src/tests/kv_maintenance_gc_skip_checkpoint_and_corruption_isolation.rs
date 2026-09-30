@@ -39,18 +39,19 @@ async fn kv_maintenance_gc_skip_checkpoint_and_corruption_isolation() {
         open_compute_workers::CreateResourceOutcome::Applied(value) => value.resource_id,
         open_compute_workers::CreateResourceOutcome::Replay(_) => unreachable!(),
     };
-    let catalog = open_compute_storage::KvNamespaceRepository::new(storage.db());
+    let catalog = open_compute_storage::kv::KvNamespaceRepository::new(storage.db());
     let record = catalog.get(account, resource).unwrap();
-    let database = open_compute_storage::KvPaths::open(storage.data_dir().root())
+    let database = open_compute_storage::kv::KvPaths::open(storage.data_dir().root())
         .unwrap()
         .resolve_storage_key(&record.storage_key, account, resource)
         .unwrap();
-    let engine = open_compute_storage::KvEngine::from_record(database.clone(), &record).unwrap();
+    let engine =
+        open_compute_storage::kv::KvEngine::from_record(database.clone(), &record).unwrap();
     engine
         .put(
             "expired",
             b"value",
-            &open_compute_storage::KvPutOptions {
+            &open_compute_storage::kv::KvPutOptions {
                 expires_at_ms: Some(60_001),
                 metadata_json: None,
             },
@@ -91,7 +92,7 @@ async fn kv_maintenance_gc_skip_checkpoint_and_corruption_isolation() {
         &metrics,
     )
     .await;
-    let isolated = open_compute_storage::ResourceRepository::new(storage.db())
+    let isolated = open_compute_storage::resources::ResourceRepository::new(storage.db())
         .get(account, resource)
         .unwrap();
     assert_eq!(

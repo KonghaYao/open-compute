@@ -13,10 +13,11 @@ use open_compute_artifacts::MockS3;
 use open_compute_core::config::DataConfig;
 use open_compute_core::{Redactor, RequestId, SecretBytes, SystemClock, VersionId};
 use open_compute_runtime::verify_runtime_binary;
-use open_compute_storage::{
-    NewVersion, NewVersionProducts, PlatformStorage, StoredVersionSecret, VersionContentKind,
-    WorkerRepository, WorkflowRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::worker_repository::{
+    NewVersion, NewVersionProducts, StoredVersionSecret, VersionContentKind, WorkerRepository,
 };
+use open_compute_storage::workflows::WorkflowRepository;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fs;
@@ -202,7 +203,7 @@ fn seed_worker_and_workflow(storage: &PlatformStorage) {
                 worker_code_sha256: [2; 32],
                 compatibility_date: "2026-09-08".into(),
                 compatibility_flags: Vec::new(),
-                resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+                resource_limits: open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
                 vars: Default::default(),
                 secrets,
                 request_id: RequestId::generate(),

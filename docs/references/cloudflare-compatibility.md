@@ -9,20 +9,20 @@
 [P6 实现与验证](../implemented/p6-cloudflare-v4-wrangler-compatibility.md)。当前账号权限不足以运行真实 Cloudflare
 Workflow 与完整 P6 management 对照，因此不声明这两部分的托管端一致性。
 
-固定契约输入见 [`baseline.json`](../../test/conformance/baseline.json)。当前 formal pin 是
-`workerd v1.20260918.1-open-compute-i102.1c7b89be`，revision
-`1c7b89bea323a39a8511271913820f9fcf39306d`，唯一
-`effectiveCompatibilityDate` 为 `2026-09-08`；stable types 是
-`@cloudflare/workers-types@5.20260830.1`。普通 Script/Version 配置不得选择其它 compatibility date 或任意 flags，也不保留旧
-open-compute schema、descriptor、runtime 或 API 的兼容路径。官方在 compatibility date `2026-08-04`
-起默认启用 Node.js compatibility，并明确此日期后的 `nodejs_compat` 是被 Wrangler/runtime 忽略的冗余
-正向 flag（[官方 changelog](https://developers.cloudflare.com/changelog/post/2026-08-04-nodejs-compat-default/)、
-[Compatibility Flags](https://developers.cloudflare.com/workers/configuration/compatibility-flags/)）。因此 P6 wire
-只额外接受并逐 Version 原样持久化精确的单值 `["nodejs_compat"]`，其与空数组在 pinned
-上述 fork 下使用同一平台语义；其它 flag、组合与所有其它日期继续 fail closed。对应
-multipart、descriptor、runtime-source/loader 回归防止它扩成普通 Script 的可选历史模式。
-`2026-09-08` 同时是官方 Python 3.14 / Pyodide 314.0.6 默认日期（[官方 changelog](https://developers.cloudflare.com/changelog/?product=workers)）；
-正式 lock 内嵌该日期对应的唯一 bundle。
+固定契约输入见 [`baseline.json`](../../test/conformance/baseline.json)，正式 runtime 身份见
+[`workerd.lock.json`](../../packages/runtime/workerd.lock.json)。每个普通 Script/Version 持久化上传的
+`compatibility_date` 与 `compatibility_flags` 原值；正式 pinned workerd 以
+`CompatibilityDateValidation::CODE_VERSION` 作为唯一 admission authority。平台不维护日期最小值、离散日期列表、flag
+allowlist、alias 或默认改写。唯一 boundary default 是官方 Workers upload API 明确规定的行为：省略
+`compatibility_date` 时使用 oldest date `2021-11-02`（[Compatibility dates](https://developers.cloudflare.com/workers/configuration/compatibility-dates/)）；该值在进入 immutable Version 前物化，之后仍由 workerd 验证。日期不得超过 binary 编译的 maximum 或当前 UTC 日期；格式、未知/重复/冲突 flag、日期默认值、显式
+enable/disable、implication 和 experimental 条件都由同一个 workerd compile path 判断。Cloudflare 对日期与 flag 的公开语义见
+[Compatibility flags](https://developers.cloudflare.com/workers/configuration/compatibility-flags/)。
+
+构建从 exact binary 的 schema reflection 生成 deterministic compatibility catalog，并把 catalog digest、binary maximum、fork
+revision 与四目标 binary/archive digest 一起固定。`ocd capabilities --json` 与
+`GET /client/v4/open-compute/capabilities` 投影同一份内嵌 catalog；该输出用于发现，不替代候选 Version 的真实 workerd validation。
+平台 system Workers 继续使用 formal lock 中独立的 `systemCompatibilityDate` / `systemCompatibilityFlags`，这些值不会注入 tenant
+Version。compatibility date 只选择当前 binary 内的运行时行为，不选择旧 binary、旧 schema、旧 artifact 或旧持久化模型。
 
 管理合同冻结于 Cloudflare OpenAPI revision `780de88d0324b007c907a1782259b1a0e5e87c7d`（blob
 `a37bda40bc108c44c135ee69ff83fe666ce4e25d`）、官方 SDK `cloudflare@7.2.0` 与 Wrangler `4.143.0`。Script/Version
@@ -31,10 +31,12 @@ Artifacts binding。当前 scanner 已发现 revision `01a855ec4bd180a1173f1b458
 保持 `blocked`，不改变上述 formal pin。
 
 Dynamic Worker 的 `WorkerCode.compatibilityDate` / `compatibilityFlags` 是独立的官方
-[Loader API 合同](https://developers.cloudflare.com/dynamic-workers/api-reference/)，由固定 fork 的
-原生校验执行；它们只影响该 child，不改写 parent Version、平台 schema 或正式 pin。原生 upstream
-日期/flag 分支继续保留，公开 child 不获 experimental trust。类型 fixture、原生 Loader 日期变体与
-专用产品用例覆盖这一例外；不引入 open-compute 历史版本选择。
+[Loader API 合同](https://developers.cloudflare.com/dynamic-workers/api-reference/)，并经过与普通 Version 相同的 pinned workerd
+原生校验；它们只影响该 child，不改写 parent Version、平台 schema 或正式 pin。catalog 会标出 experimental input，而正式进程的
+`--experimental` 决定该 binary 是否接受它；平台不再额外过滤。类型 fixture、原生 Loader 日期/flag 矩阵与专用产品用例覆盖该合同，
+不引入 open-compute 历史版本选择。官方 [Dynamic Workers API reference](https://developers.cloudflare.com/dynamic-workers/api-reference/) 说明
+`allowExperimental` 需要调用方自身的 `experimental` flag，且 experimental flags 不能在 hosted production 启用；当前 self-host formal pin
+显式运行 experimental mode，因此其 catalog 可发现并由 binary 接受的 experimental 输入是本地 superset，不声明 hosted-production availability。
 
 ## 当前结论
 

@@ -3,8 +3,8 @@
 use super::*;
 use crate::metrics::SchedulerClaimOutcome;
 use crate::runtime_bridge::{WorkflowOutcome, WorkflowRunRequest};
-use open_compute_storage::WorkflowRepository;
 use open_compute_storage::scheduler::{ClaimedWorkflowRun, WorkflowCompletion, WorkflowState};
+use open_compute_storage::workflows::WorkflowRepository;
 use open_compute_workers::WorkflowController;
 
 impl SchedulerService {

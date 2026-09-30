@@ -2,7 +2,9 @@ use super::*;
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode, header};
 use open_compute_core::SecretString;
-use open_compute_storage::{NewObservabilityEvent, NewObservabilityInvocation, ObservabilityField};
+use open_compute_storage::observability::{
+    NewObservabilityEvent, NewObservabilityInvocation, ObservabilityField,
+};
 use tower::ServiceExt as _;
 
 async fn json(response: Response) -> Value {

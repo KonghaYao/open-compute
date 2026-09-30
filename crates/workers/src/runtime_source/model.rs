@@ -1,5 +1,5 @@
 use super::*;
-use open_compute_storage::EffectiveResourceLimits;
+use open_compute_storage::worker_repository::EffectiveResourceLimits;
 
 /// `RuntimeSource` authorization scope.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -108,7 +108,7 @@ impl std::fmt::Debug for RuntimeModuleBinding {
 pub struct RuntimeWorkflowBinding {
     /// Frozen catalog binding identity.
     #[serde(flatten)]
-    pub descriptor: open_compute_storage::WorkflowBindingDescriptor,
+    pub descriptor: open_compute_storage::workflows::WorkflowBindingDescriptor,
     /// Canonical digest used by the trusted private binding backend.
     pub descriptor_sha256: String,
 }

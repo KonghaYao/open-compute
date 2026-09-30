@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import {
   createManagementClient,
   type ManagementClient,
-} from "../../lib/cloudflare";
+} from "../../lib/management-client";
 import {
   clearAuthSession,
   exchangeLoginCode,

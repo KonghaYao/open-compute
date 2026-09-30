@@ -91,22 +91,24 @@ pub(super) async fn snapshot_restore_gate() {
     let worker_id = WorkerId::generate();
     let version_id = VersionId::generate();
     scheduler
-        .ensure_queue_consumer_projection(&open_compute_storage::QueueConsumerProjection {
-            consumer_id,
-            queue_id: snapshot_queue,
-            consumer_generation: 1,
-            version_id,
-            worker_id,
-            execution_generation: 1,
-            entrypoint: None,
-            config: open_compute_storage::QueueConsumerConfig {
-                max_batch_size: 1,
-                ..open_compute_storage::QueueConsumerConfig::default()
+        .ensure_queue_consumer_projection(
+            &open_compute_storage::scheduler::QueueConsumerProjection {
+                consumer_id,
+                queue_id: snapshot_queue,
+                consumer_generation: 1,
+                version_id,
+                worker_id,
+                execution_generation: 1,
+                entrypoint: None,
+                config: open_compute_storage::queue_consumers::QueueConsumerConfig {
+                    max_batch_size: 1,
+                    ..open_compute_storage::queue_consumers::QueueConsumerConfig::default()
+                },
+                dead_letter_queue: None,
+                descriptor_sha256: [7; 32],
+                updated_at_ms: 1_002,
             },
-            dead_letter_queue: None,
-            descriptor_sha256: [7; 32],
-            updated_at_ms: 1_002,
-        })
+        )
         .expect("stage snapshot Queue consumer");
     scheduler
         .activate_queue_consumer(consumer_id, 1, 1_002)
@@ -120,7 +122,7 @@ pub(super) async fn snapshot_restore_gate() {
 
     let activation_id = CronActivationId::generate();
     scheduler
-        .ensure_cron_schedule_projection(&open_compute_storage::CronScheduleProjection {
+        .ensure_cron_schedule_projection(&open_compute_storage::scheduler::CronScheduleProjection {
             activation_id,
             instance_id: account_id,
             worker_id,
@@ -654,9 +656,9 @@ pub(super) async fn snapshot_restore_gate() {
         let stale_queue = restored_scheduler
             .complete_queue_batch(
                 &claimed_queue,
-                &[open_compute_storage::QueueCompletionDecision {
+                &[open_compute_storage::scheduler::QueueCompletionDecision {
                     message_id: claimed_queue.messages[0].id,
-                    action: open_compute_storage::QueueCompletionAction::Ack,
+                    action: open_compute_storage::scheduler::QueueCompletionAction::Ack,
                 }],
                 61_001,
             )
@@ -672,12 +674,12 @@ pub(super) async fn snapshot_restore_gate() {
             restored_scheduler
                 .complete_cron_run(
                     &claimed_cron,
-                    open_compute_storage::CronCompletion::Success,
+                    open_compute_storage::scheduler::CronCompletion::Success,
                     61_001,
                     2,
                 )
                 .expect("old Cron completion is classified"),
-            open_compute_storage::CronCompletionResult::Stale
+            open_compute_storage::scheduler::CronCompletionResult::Stale
         );
         let metrics = restored_scheduler
             .queue_metrics(
@@ -747,9 +749,9 @@ pub(super) async fn snapshot_restore_gate() {
     });
     let restore_scope_root = root.join("restore-ocd");
     let restore_ocd = restore_scope_root.join("user");
-    open_compute_storage::ensure_dir_secure(&restore_scope_root).expect("restore scope root");
-    open_compute_storage::ensure_dir_secure(&restore_ocd).expect("restore OCD root");
-    open_compute_storage::ensure_dir_secure(&restore_ocd.join("keys"))
+    open_compute_storage::fs::ensure_dir_secure(&restore_scope_root).expect("restore scope root");
+    open_compute_storage::fs::ensure_dir_secure(&restore_ocd).expect("restore OCD root");
+    open_compute_storage::fs::ensure_dir_secure(&restore_ocd.join("keys"))
         .expect("restore shared keys");
     write_mode(
         &restore_ocd.join("keys/admin.token"),

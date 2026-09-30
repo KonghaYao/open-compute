@@ -2,7 +2,8 @@
 
 use super::*;
 use open_compute_core::{BindingKind, CanonicalBindingConfig, WorkflowId};
-use open_compute_storage::{DO_NAMESPACE_SCHEMA_VERSION, WorkerRepository};
+use open_compute_storage::durable_objects::{DO_NAMESPACE_SCHEMA_VERSION};
+use open_compute_storage::worker_repository::{WorkerRepository};
 use open_compute_workers::{
     CreateResourceOutcome, CreateResourceRequest, DurableObjectResourceDriver, ResourceController,
 };

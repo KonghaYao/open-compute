@@ -4,11 +4,13 @@ use super::*;
 pub(super) struct PreparedBindings {
     pub(super) descriptors: Vec<BindingDescriptorV1>,
     pub(super) rows: Vec<NewVersionBinding>,
-    pub(super) artifact_rows: Vec<open_compute_storage::NewVersionArtifactBinding>,
+    pub(super) artifact_rows:
+        Vec<open_compute_storage::cloudflare_artifacts::NewVersionArtifactBinding>,
     pub(super) queue_descriptors: Vec<QueueProducerBindingDescriptorV1>,
     pub(super) queue_rows: Vec<NewQueueProducerBinding>,
-    pub(super) workflow_descriptors: Vec<open_compute_storage::WorkflowBindingDescriptor>,
-    pub(super) workflow_rows: Vec<open_compute_storage::WorkflowBindingRecord>,
+    pub(super) workflow_descriptors:
+        Vec<open_compute_storage::workflows::WorkflowBindingDescriptor>,
+    pub(super) workflow_rows: Vec<open_compute_storage::workflows::WorkflowBindingRecord>,
     pub(super) durable_object_classes: Vec<String>,
     pub(super) service_descriptors: Vec<ServiceDescriptor>,
     pub(super) service_rows: Vec<NewVersionService>,
@@ -111,8 +113,10 @@ impl VersionController<'_> {
                     ));
                 }
                 let namespace =
-                    open_compute_storage::CloudflareArtifactsRepository::new(self.storage.db())
-                        .namespace(request.instance_id, input.id)?;
+                    open_compute_storage::cloudflare_artifacts::CloudflareArtifactsRepository::new(
+                        self.storage.db(),
+                    )
+                    .namespace(request.instance_id, input.id)?;
                 let descriptor = BindingDescriptorV1::new(
                     BindingId::generate(),
                     name.clone(),
@@ -123,15 +127,17 @@ impl VersionController<'_> {
                     input.permissions,
                     CanonicalBindingConfig::default(),
                 )?;
-                artifact_rows.push(open_compute_storage::NewVersionArtifactBinding {
-                    id: descriptor.binding_id,
-                    name: descriptor.name.clone(),
-                    namespace_id: namespace.id,
-                    namespace_generation: 1,
-                    capability_version: descriptor.capability_version,
-                    permissions: descriptor.permissions,
-                    descriptor_sha256: descriptor.sha256()?,
-                });
+                artifact_rows.push(
+                    open_compute_storage::cloudflare_artifacts::NewVersionArtifactBinding {
+                        id: descriptor.binding_id,
+                        name: descriptor.name.clone(),
+                        namespace_id: namespace.id,
+                        namespace_generation: 1,
+                        capability_version: descriptor.capability_version,
+                        permissions: descriptor.permissions,
+                        descriptor_sha256: descriptor.sha256()?,
+                    },
+                );
                 descriptors.push(descriptor);
                 continue;
             }
@@ -194,7 +200,9 @@ impl VersionController<'_> {
         durable_object_classes.sort();
         durable_object_classes.dedup();
         for (name, input) in &request.services {
-            if let open_compute_storage::ServiceTarget::Worker { worker_id } = &input.target {
+            if let open_compute_storage::services::ServiceTarget::Worker { worker_id } =
+                &input.target
+            {
                 WorkerRepository::new(self.storage.db())
                     .get_worker(request.instance_id, *worker_id)
                     .map_err(|_| {

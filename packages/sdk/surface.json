@@ -9,7 +9,7 @@
     "cloudflareSdkVersion": "7.2.0",
     "cloudflareSdkNpmIntegrity": "sha512-Y0ieFi/VOGsUeJmOWwuzztTQZ5HgvNqa7I6IaGBf9wS4Q2xjNmRfyHls741HlveI4DSTribs7YHaTjhKvNcRsw==",
     "subsetSha256": "965a22c6fa5823c7a8580edff2506d193803eb0d21207f2df2aa88b9b23be41a",
-    "extensionSha256": "4681426da99e0533d9f0da6add63427fe675fb24d42df0bd81f8a017b9a9ae05",
+    "extensionSha256": "d7998a88b3132c95516f8330f303638b0b9c73b1b072a5339e3d9e46723000e0",
     "observedStandardSha256": "f7f365a0c3033166fd6263da179943040e00a58363bd74e0f8d1ccdd7090adde"
   },
   "operations": [

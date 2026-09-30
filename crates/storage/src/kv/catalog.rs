@@ -1,10 +1,12 @@
 //! Durable KV product rows in `control.sqlite`.
 
 use crate::catalog_page::{CatalogColumns, build_catalog_sql, record_catalog_cursor};
-use crate::{
-    CatalogCursor, CatalogDirection, CatalogListPage, CatalogSort, ControlDb, ResourceRecord,
-    normalize_catalog_limit, search_as_resource_id,
+use crate::catalog_page::{
+    CatalogCursor, CatalogDirection, CatalogListPage, CatalogSort, normalize_catalog_limit,
+    search_as_resource_id,
 };
+use crate::control_db::ControlDb;
+use crate::resources::ResourceRecord;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, ResourceId, ResourceState};
 use rusqlite::{OptionalExtension, params, params_from_iter};
 use serde::Serialize;

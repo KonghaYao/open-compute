@@ -1,6 +1,6 @@
 //! P1 host-disk admission and process-local reservation ownership.
 
-use crate::DataDir;
+use crate::data_dir::DataDir;
 use open_compute_core::{
     AdmissionReservation, AdmissionReservations, AdmissionSnapshotV1, DataConfig, ErrorCode,
     HardeningConfig, PlatformError, PlatformMode,

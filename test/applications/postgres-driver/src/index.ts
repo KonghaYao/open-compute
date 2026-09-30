@@ -1,7 +1,10 @@
 import { Client } from "./pg-runtime.js";
 
 export default {
-  async fetch(_request: Request, env: { POSTGRES_HOST: string; POSTGRES_PORT: string }) {
+  async fetch(
+    _request: Request,
+    env: { POSTGRES_HOST: string; POSTGRES_PORT: string },
+  ) {
     const client = new Client({
       host: env.POSTGRES_HOST,
       port: Number(env.POSTGRES_PORT),

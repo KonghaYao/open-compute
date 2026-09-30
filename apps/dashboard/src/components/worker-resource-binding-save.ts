@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { OpenComputeJsonValue } from "@open-compute/sdk";
-import type { ManagementClient } from "../lib/cloudflare";
+import type { ManagementClient } from "../lib/management-client";
+import { queryKeys } from "../lib/query-options";
 
 type ResourceBindingUpsert =
   | {
@@ -89,13 +90,7 @@ export function invalidateWorkerBindingQueries(
   return Promise.all(
     ["version-settings", "versions", "deployments"].map((key) =>
       queryClient.invalidateQueries({
-        queryKey: [
-          "cloudflare-v4",
-          "workers",
-          selectedInstanceId,
-          workerId,
-          key,
-        ],
+        queryKey: queryKeys.workers(selectedInstanceId, workerId, key),
       }),
     ),
   );

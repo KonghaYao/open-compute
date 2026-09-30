@@ -8,8 +8,8 @@ const doMaxFetchBodyBytes :Text = "__OPEN_COMPUTE_DO_MAX_FETCH_BODY_BYTES__";
 const doDispatchTimeoutMs :Text = "__OPEN_COMPUTE_DO_DISPATCH_TIMEOUT_MS__";
 const doMaxInFlightDispatches :Text = "__OPEN_COMPUTE_DO_MAX_IN_FLIGHT_DISPATCHES__";
 const doDiskStopWritesPercent :Text = "__OPEN_COMPUTE_DO_DISK_STOP_WRITES_PERCENT__";
-const compatibilityDate :Text = "__OPEN_COMPUTE_COMPATIBILITY_DATE__";
-const requiredCompatibilityFlagsJson :Text = "__OPEN_COMPUTE_REQUIRED_COMPATIBILITY_FLAGS_JSON__";
+const systemCompatibilityDate :Text = "__OPEN_COMPUTE_SYSTEM_COMPATIBILITY_DATE__";
+const systemCompatibilityFlagsJson :Text = "__OPEN_COMPUTE_SYSTEM_COMPATIBILITY_FLAGS_JSON__";
 
 const config :Workerd.Config = (
   structuredLogging = true,
@@ -37,7 +37,7 @@ const config :Workerd.Config = (
 );
 
 const ingressWorker :Workerd.Worker = (
-  compatibilityDate = .compatibilityDate,
+  compatibilityDate = .systemCompatibilityDate,
   compatibilityFlags = __OPEN_COMPUTE_SYSTEM_COMPATIBILITY_FLAGS__,
   modules = [
     (name = "gateway/ingress.js", esModule = embed "dist/gateway/ingress.js"),
@@ -51,7 +51,7 @@ const ingressWorker :Workerd.Worker = (
 );
 
 const loaderHostWorker :Workerd.Worker = (
-  compatibilityDate = .compatibilityDate,
+  compatibilityDate = .systemCompatibilityDate,
   compatibilityFlags = __OPEN_COMPUTE_SYSTEM_COMPATIBILITY_FLAGS__,
   modules = [
     (name = "loader/host.js", esModule = embed "dist/loader/host.js"),
@@ -144,14 +144,14 @@ const loaderHostWorker :Workerd.Worker = (
     (name = "DO_MAX_FETCH_BODY_BYTES", text = .doMaxFetchBodyBytes),
     (name = "DO_DISPATCH_TIMEOUT_MS", text = .doDispatchTimeoutMs),
     (name = "DO_MAX_IN_FLIGHT_DISPATCHES", text = .doMaxInFlightDispatches),
-    (name = "COMPATIBILITY_DATE", text = .compatibilityDate),
-    (name = "REQUIRED_COMPATIBILITY_FLAGS", json = .requiredCompatibilityFlagsJson),
+    (name = "SYSTEM_COMPATIBILITY_DATE", text = .systemCompatibilityDate),
+    (name = "SYSTEM_COMPATIBILITY_FLAGS", json = .systemCompatibilityFlagsJson),
   ],
   globalOutbound = "outbound-network",
 );
 
 const doHostWorker :Workerd.Worker = (
-  compatibilityDate = .compatibilityDate,
+  compatibilityDate = .systemCompatibilityDate,
   compatibilityFlags = __OPEN_COMPUTE_SYSTEM_COMPATIBILITY_FLAGS__,
   modules = [
     (name = "durable-objects/router.js", esModule = embed "dist/durable-objects/router.js"),
@@ -249,8 +249,8 @@ const doHostWorker :Workerd.Worker = (
     (name = "DO_DISPATCH_TIMEOUT_MS", text = .doDispatchTimeoutMs),
     (name = "DO_MAX_IN_FLIGHT_DISPATCHES", text = .doMaxInFlightDispatches),
     (name = "DO_DISK_STOP_WRITES_PERCENT", text = .doDiskStopWritesPercent),
-    (name = "COMPATIBILITY_DATE", text = .compatibilityDate),
-    (name = "REQUIRED_COMPATIBILITY_FLAGS", json = .requiredCompatibilityFlagsJson),
+    (name = "SYSTEM_COMPATIBILITY_DATE", text = .systemCompatibilityDate),
+    (name = "SYSTEM_COMPATIBILITY_FLAGS", json = .systemCompatibilityFlagsJson),
   ],
   durableObjectNamespaces = [
     (

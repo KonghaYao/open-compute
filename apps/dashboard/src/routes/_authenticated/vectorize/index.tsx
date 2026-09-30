@@ -17,6 +17,7 @@ import {
 } from "../../../components/dashboard-page";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/vectorize/")({
   validateSearch: (search: Record<string, unknown>): { q?: string } =>
@@ -38,7 +39,7 @@ function VectorizePage() {
   const [metric, setMetric] = useState<Metric>("cosine");
 
   const indexes = useQuery({
-    queryKey: ["vectorize", selectedInstanceId],
+    queryKey: queryKeys.vectorize(selectedInstanceId),
     queryFn: async ({ signal }) => {
       const page = await client!.vectorize.indexes.list(
         { account_id: selectedInstanceId! },
@@ -58,7 +59,7 @@ function VectorizePage() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["vectorize", selectedInstanceId],
+        queryKey: queryKeys.vectorize(selectedInstanceId),
       });
       setOpen(false);
       setName("");

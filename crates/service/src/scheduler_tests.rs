@@ -9,8 +9,9 @@ use open_compute_core::{
     VersionId, durable_object_namespace_prefix,
 };
 use open_compute_runtime::GenerationAuthRegistry;
-use open_compute_storage::{
-    AlarmProjection, ClaimedQueueBatch, ClaimedQueueMessage, QueueCompletionAction, QueueConfig,
+use open_compute_storage::queues::QueueConfig;
+use open_compute_storage::scheduler::{
+    AlarmProjection, ClaimedQueueBatch, ClaimedQueueMessage, QueueCompletionAction,
     QueueContentType, QueueEnqueueRequest, QueueMessageInput, QueueProjection,
 };
 use std::path::Path;

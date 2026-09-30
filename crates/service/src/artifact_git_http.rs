@@ -319,7 +319,7 @@ fn authorize<'a>(
     write: bool,
 ) -> Option<(
     &'a crate::artifact_api::ArtifactApiState,
-    open_compute_storage::ArtifactRepositoryRecord,
+    open_compute_storage::cloudflare_artifacts::ArtifactRepositoryRecord,
     tokio::sync::OwnedSemaphorePermit,
     crate::artifact_api::leases::RepositoryLease,
 )> {

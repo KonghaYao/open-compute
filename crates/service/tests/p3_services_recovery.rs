@@ -10,7 +10,8 @@ use futures::StreamExt;
 use open_compute_core::RequestId;
 use open_compute_runtime::SupervisorState;
 use open_compute_service::runtime_bridge::DispatchTarget;
-use open_compute_storage::{ServiceTarget, WorkerRepository};
+use open_compute_storage::services::ServiceTarget;
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateVersionOutcome, CreateVersionRequest, ModuleInput,
     ModuleType, RuntimeValidator, VersionContent, VersionController, VersionServiceInput,
@@ -202,10 +203,15 @@ fn version_request(
         secrets: BTreeMap::new(),
         bindings: BTreeMap::new(),
         services,
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: Some(
+            open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+        ),
         observability: None,
         request_id: RequestId::generate(),
         now_ms,
@@ -215,7 +221,7 @@ fn version_request(
 async fn deploy(
     controller: &VersionController<'_>,
     request: CreateVersionRequest,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     match controller.create_version(request).await.unwrap() {
         CreateVersionOutcome::Applied(result) => result.version,
         CreateVersionOutcome::Replay(_) => panic!("unexpected version replay"),
@@ -225,7 +231,7 @@ async fn deploy(
 async fn dispatch(
     harness: &Harness,
     worker_id: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     path: &str,
 ) -> axum::response::Response {
     let account_id = harness.storage.identity().instance_id;

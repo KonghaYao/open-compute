@@ -11,6 +11,7 @@ import {
 import { openConfirmDeleteDialog } from "../../../../../components/resource-dialog";
 import { useAuth } from "../../../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../../../lib/query-options";
 
 export const Route = createFileRoute(
   "/_authenticated/ai-search/namespace/$namespaceName/settings",
@@ -27,7 +28,11 @@ function NamespaceSettingsPage() {
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState("");
   const namespace = useQuery({
-    queryKey: ["ai-search", selectedInstanceId, "namespace", namespaceName],
+    queryKey: queryKeys.aiSearch(
+      selectedInstanceId,
+      "namespace",
+      namespaceName,
+    ),
     queryFn: ({ signal }) =>
       client!.aiSearch.namespaces.read(
         namespaceName,
@@ -44,7 +49,7 @@ function NamespaceSettingsPage() {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["ai-search", selectedInstanceId],
+        queryKey: queryKeys.aiSearch(selectedInstanceId),
       });
       setEditing(false);
       feedback.success("Namespace description updated.");
@@ -65,7 +70,7 @@ function NamespaceSettingsPage() {
           throw error;
         }
         await queryClient.invalidateQueries({
-          queryKey: ["ai-search", selectedInstanceId],
+          queryKey: queryKeys.aiSearch(selectedInstanceId),
         });
         feedback.success("Namespace deleted.");
         await navigate({ to: "/ai-search", search: {} });

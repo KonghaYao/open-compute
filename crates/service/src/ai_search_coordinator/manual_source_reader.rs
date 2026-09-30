@@ -125,7 +125,7 @@ impl ManualAiSearchSourceReader {
 
     pub(crate) async fn read_exact(
         &self,
-        source: &open_compute_storage::AiSearchManualObjectReference,
+        source: &open_compute_storage::ai_search::AiSearchManualObjectReference,
         key: &str,
         content_type: &str,
     ) -> Result<Vec<u8>, PlatformError> {
@@ -355,7 +355,7 @@ mod tests {
         assert_eq!(
             reader
                 .read_exact(
-                    &open_compute_storage::AiSearchManualObjectReference {
+                    &open_compute_storage::ai_search::AiSearchManualObjectReference {
                         provider_id: "other".to_owned(),
                         source: "primary".to_owned(),
                         revision: "rev-1".to_owned(),
@@ -372,7 +372,7 @@ mod tests {
         );
         let bytes = reader
             .read_exact(
-                &open_compute_storage::AiSearchManualObjectReference {
+                &open_compute_storage::ai_search::AiSearchManualObjectReference {
                     provider_id: "documents".to_owned(),
                     source: "primary".to_owned(),
                     revision: "rev-1".to_owned(),
@@ -408,7 +408,7 @@ mod tests {
         );
         server.await.expect("drift server");
 
-        let source = open_compute_storage::AiSearchManualObjectReference {
+        let source = open_compute_storage::ai_search::AiSearchManualObjectReference {
             provider_id: "documents".to_owned(),
             source: "primary".to_owned(),
             revision: "rev-1".to_owned(),

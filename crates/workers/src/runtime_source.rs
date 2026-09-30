@@ -15,11 +15,11 @@ use open_compute_artifacts::{ARTIFACT_KEY_VERSION, ArtifactCache, ArtifactRef, A
 use open_compute_core::{
     BindingKind, CanonicalBindingConfig, ErrorCode, PlatformError, SecretString,
 };
-use open_compute_storage::EffectiveResourceLimits;
-use open_compute_storage::{
-    BuiltinBindingKind, DurableObjectRepository, PlatformStorage, VersionContentKind, VersionState,
-    WorkerRepository,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::durable_objects::DurableObjectRepository;
+use open_compute_storage::runtime_features::BuiltinBindingKind;
+use open_compute_storage::worker_repository::EffectiveResourceLimits;
+use open_compute_storage::worker_repository::{VersionContentKind, VersionState, WorkerRepository};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::Arc;

@@ -1,5 +1,5 @@
 use super::*;
-use crate::workers::EffectiveResourceLimits;
+use crate::worker_repository::EffectiveResourceLimits;
 
 #[test]
 fn snapshot_version_artifact_inventory_uses_the_canonical_sharded_key() {
@@ -17,7 +17,7 @@ fn snapshot_version_artifact_inventory_uses_the_canonical_sharded_key() {
             id: VersionId::generate(),
             instance_id: account,
             worker_id: worker.id,
-            content_kind: crate::VersionContentKind::Worker,
+            content_kind: crate::worker_repository::VersionContentKind::Worker,
             artifact_sha256: Some([1; 32]),
             artifact_size: Some(123),
             artifact_schema_version: Some(1),
@@ -31,13 +31,13 @@ fn snapshot_version_artifact_inventory_uses_the_canonical_sharded_key() {
             request_id: request,
             now_ms: 2,
         },
-        &crate::NewVersionProducts::default(),
+        &crate::worker_repository::NewVersionProducts::default(),
         1_000_000,
     )
     .unwrap();
     drop(storage);
 
-    let references = crate::inspect_snapshot_immutable_references(
+    let references = crate::inspect::inspect_snapshot_immutable_references(
         &root.join("control.sqlite"),
         5_000,
         "system/",

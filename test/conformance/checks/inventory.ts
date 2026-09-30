@@ -196,17 +196,17 @@ export function compatibilityCoverage(): void {
     "workerd lock",
   );
   const date = string(
-    lock.effectiveCompatibilityDate,
-    "lock.effectiveCompatibilityDate",
+    lock.binaryMaximumCompatibilityDate,
+    "lock.binaryMaximumCompatibilityDate",
   );
   if (
     string(
-      baseline().effectiveCompatibilityDate,
-      "baseline.effectiveCompatibilityDate",
+      baseline().binaryMaximumCompatibilityDate,
+      "baseline.binaryMaximumCompatibilityDate",
     ) !== date
   ) {
     throw new Error(
-      "baseline effective compatibility date does not match the formal lock",
+      "baseline binary maximum compatibility date does not match the formal lock",
     );
   }
   for (const contract of contracts()) {

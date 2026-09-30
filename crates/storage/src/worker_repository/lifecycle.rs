@@ -76,7 +76,7 @@ impl<'a> WorkerRepository<'a> {
         &self,
         version_id: VersionId,
         worker_id: WorkerId,
-        plan: &crate::DurableObjectMigrationPlan,
+        plan: &crate::durable_objects::DurableObjectMigrationPlan,
         now_ms: i64,
     ) -> Result<(), PlatformError> {
         self.db.with_immediate(|tx| {

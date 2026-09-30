@@ -5,9 +5,9 @@ use open_compute_core::{
     BindingKind, ErrorCode, InstanceId, PlatformError, RequestId, ResourceAvailability, ResourceId,
     ResourceState,
 };
-use open_compute_storage::{
-    PlatformStorage, ReserveResourceCreate, ResourceCreateReservation, ResourceRecord,
-    ResourceRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRecord, ResourceRepository,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

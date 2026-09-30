@@ -44,7 +44,7 @@ fn workflow_metric_guards_count_all_outcomes_without_sensitive_labels() {
         0.5,
     );
     f.metrics.workflow_operations(
-        &open_compute_storage::WorkflowOperationInspection {
+        &open_compute_storage::workflows::WorkflowOperationInspection {
             pending_restarts: 1,
             pending_purges: 2,
             oldest_operation_at_ms: Some(1000),

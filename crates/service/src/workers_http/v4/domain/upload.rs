@@ -412,7 +412,7 @@ impl UploadInput {
                 }
                 WorkerUploadBinding::Artifacts { namespace, .. } => {
                     let namespace =
-                        open_compute_storage::CloudflareArtifactsRepository::new(api.storage.db())
+                        open_compute_storage::cloudflare_artifacts::CloudflareArtifactsRepository::new(api.storage.db())
                             .namespace_by_name(account, namespace)?;
                     self.bindings.insert(
                         name,

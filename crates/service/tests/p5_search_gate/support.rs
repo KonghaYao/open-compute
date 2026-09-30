@@ -255,6 +255,7 @@ pub(super) fn version_request(
         bindings,
         services: BTreeMap::new(),
         runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
             ai: Some(VersionAiInput {
                 binding: "AI".to_owned(),
             }),
@@ -262,7 +263,9 @@ pub(super) fn version_request(
         },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: Some(
+            open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+        ),
         observability: None,
         request_id: RequestId::generate(),
         now_ms: 10,
@@ -273,7 +276,7 @@ pub(super) async fn deploy(
     controller: &VersionController<'_>,
     request: CreateVersionRequest,
     supervisor: &WorkerdSupervisor,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     match controller
         .create_version(request)
         .await
@@ -294,7 +297,7 @@ pub(super) async fn dispatch(
     workers: &WorkerRepository<'_>,
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     uri: &str,
 ) -> (u16, String) {
     let route_generation = i64::try_from(

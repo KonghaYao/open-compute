@@ -9,7 +9,7 @@ use open_compute_core::{
 use open_compute_storage::scheduler::{
     WorkflowInstanceAction, WorkflowStepAttempt, WorkflowStepGrant, WorkflowStepOutcome,
 };
-use open_compute_storage::{WorkflowOperationKind, WorkflowOperationResult};
+use open_compute_storage::workflows::{WorkflowOperationKind, WorkflowOperationResult};
 
 const DURABLE_CHILD: &str =
     "workflows::workflow_tests::crash_matrix::durable::workflow_durable_crash_child";

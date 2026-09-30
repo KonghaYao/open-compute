@@ -6,11 +6,10 @@ use crate::cloudflare_v4::{V4ResultInfo, paginated_response, success_response};
 use axum::extract::{Path, Request, State};
 use axum::response::Response;
 use open_compute_core::{ErrorCode, InstanceId, WorkflowOperationId, WorkflowVersionId};
+use open_compute_storage::catalog_page::decode_catalog_cursor;
 use open_compute_storage::scheduler::WorkflowInstanceInspection;
-use open_compute_storage::{
-    VersionState, WorkerRepository, WorkflowDefinitionReservation, WorkflowVersion,
-    decode_catalog_cursor,
-};
+use open_compute_storage::worker_repository::{VersionState, WorkerRepository};
+use open_compute_storage::workflows::{WorkflowDefinitionReservation, WorkflowVersion};
 use open_compute_workers::WorkflowController;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

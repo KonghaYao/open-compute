@@ -7,7 +7,7 @@ mod read_snapshot;
 pub use read_snapshot::VectorizeReadSnapshot;
 
 use open_compute_core::PlatformError;
-use open_compute_search::FilterExpr;
+use open_compute_search::{FilterExpr, MAX_METADATA_BYTES};
 use persistence::*;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 use serde::Serialize;
@@ -21,7 +21,6 @@ pub const VECTORIZE_SCHEMA_VERSION: u32 = 1;
 const MAX_BATCH_ITEMS: usize = 1_000;
 const MAX_ID_BYTES: usize = 64;
 const MAX_NAMESPACE_BYTES: usize = 64;
-const MAX_METADATA_BYTES: usize = 10 * 1_024;
 type EncodedMutationItem = (String, Option<String>, Option<Vec<u8>>, Option<Vec<u8>>);
 
 /// Durable Vectorize mutation kind.

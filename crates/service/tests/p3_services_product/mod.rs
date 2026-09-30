@@ -12,7 +12,8 @@ use open_compute_artifacts::ArtifactStore;
 use open_compute_core::{BindingKind, CanonicalBindingConfig, CanonicalPermissions, RequestId};
 use open_compute_service::runtime_bridge::{DispatchTarget, WorkerdTransport};
 use open_compute_service::service_invocations::ServiceInvocationRegistry;
-use open_compute_storage::{ServiceTarget, WorkerRepository};
+use open_compute_storage::services::ServiceTarget;
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{
     AssetEntryV1, AssetManifestV1, AssetRoutingConfigV1, BundleLimits, CanonicalBundle,
     CreateVersionOutcome, CreateVersionRequest, HtmlHandling, ModuleInput, ModuleType,
@@ -210,13 +211,16 @@ fn worker_request(
         secrets: BTreeMap::new(),
         bindings: options.bindings,
         services: options.services,
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
         observability: None,
         deployment_source: options
             .promote
-            .then_some(open_compute_storage::DeploymentSource::VersionsApi),
+            .then_some(open_compute_storage::worker_repository::DeploymentSource::VersionsApi),
         request_id: RequestId::generate(),
         now_ms: options.now_ms,
     }
@@ -247,10 +251,15 @@ fn assets_request(
         secrets: BTreeMap::new(),
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: Some(
+            open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+        ),
         observability: None,
         request_id: RequestId::generate(),
         now_ms,
@@ -292,7 +301,7 @@ async fn single_asset(artifacts: &ArtifactStore, path: &str, content: &[u8]) -> 
 async fn deploy(
     controller: &VersionController<'_>,
     request: CreateVersionRequest,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     match controller.create_version(request).await.unwrap() {
         CreateVersionOutcome::Applied(result) => result.version,
         CreateVersionOutcome::Replay(_) => panic!("unexpected version replay"),
@@ -304,7 +313,7 @@ async fn dispatch(
     repository: &WorkerRepository<'_>,
     account_id: open_compute_core::InstanceId,
     worker_id: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     path: &str,
 ) -> axum::response::Response {
     let route_generation = i64::try_from(
@@ -341,7 +350,7 @@ async fn assert_body(
     repository: &WorkerRepository<'_>,
     account_id: open_compute_core::InstanceId,
     worker_id: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     path: &str,
     expected: &str,
 ) {

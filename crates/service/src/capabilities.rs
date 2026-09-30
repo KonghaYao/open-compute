@@ -11,7 +11,7 @@ use open_compute_core::{
     WorkersObservabilityCapabilitiesV1, WranglerCapabilitiesV1,
 };
 use open_compute_runtime::{embedded_runtime_assets_sha256, embedded_runtime_lock};
-use open_compute_storage::{
+use open_compute_storage::queues::{
     QUEUE_MAX_BATCH_BYTES, QUEUE_MAX_BATCH_MESSAGES, QUEUE_MAX_DELAY_SECONDS,
     QUEUE_MAX_MESSAGE_BYTES,
 };
@@ -59,6 +59,7 @@ pub fn platform_capabilities(
     config: &PlatformConfig,
 ) -> Result<PlatformCapabilitiesV1, PlatformError> {
     let (runtime_lock, lock_bytes) = embedded_runtime_lock()?;
+    let (compatibility, system_workers) = open_compute_runtime::embedded_runtime_compatibility()?;
     let lock_sha256 = hex::encode(Sha256::digest(lock_bytes));
     let assets_sha256 = embedded_runtime_assets_sha256().to_owned();
     let release = PlatformReleaseIdentityV1 {
@@ -82,7 +83,8 @@ pub fn platform_capabilities(
         schema_version: 1,
         release,
         runtime: RuntimeCapabilityV1 {
-            effective_compatibility_date: runtime_lock.effective_compatibility_date.clone(),
+            compatibility,
+            system_workers,
             workerd_lock_sha256: lock_sha256,
             workers_types_version: type_source.workers_types_version,
             workers_types_git_head: type_source.git_head,
@@ -176,6 +178,27 @@ pub fn write_capabilities(
             capabilities.release.platform_version, capabilities.release.workerd_version
         )
         .map_err(|_| capability_invalid())?;
+        let compatibility = &capabilities.runtime.compatibility;
+        let input_flags = compatibility
+            .features
+            .iter()
+            .map(|feature| {
+                usize::from(feature.enable_flag.is_some())
+                    + usize::from(feature.disable_flag.is_some())
+            })
+            .sum::<usize>();
+        writeln!(
+            out,
+            "compatibility maximum={} validation={} features={} input_flags={} experimental={}",
+            compatibility.binary_maximum_date,
+            compatibility.validation,
+            compatibility.features.len(),
+            input_flags,
+            compatibility.experimental_enabled,
+        )
+        .map_err(|_| capability_invalid())?;
+        writeln!(out, "use --json for the complete compatibility catalog")
+            .map_err(|_| capability_invalid())?;
         for (name, capability) in &capabilities.products {
             writeln!(
                 out,

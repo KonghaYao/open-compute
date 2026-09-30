@@ -9,27 +9,27 @@ pub struct NewVersionProducts<'a> {
     /// Immutable closed Cloudflare Version annotations.
     pub annotations: Option<&'a BTreeMap<String, String>>,
     /// Optional immutable static-asset metadata.
-    pub assets: Option<&'a crate::NewVersionAssets>,
+    pub assets: Option<&'a crate::assets::NewVersionAssets>,
     /// Static manifest/blob object references derived from the canonical manifest.
-    pub asset_object_refs: &'a [crate::NewVersionObjectRef],
+    pub asset_object_refs: &'a [crate::assets::NewVersionObjectRef],
     /// Frozen KV/R2/D1/Durable Object resource bindings.
-    pub bindings: &'a [crate::NewVersionBinding],
+    pub bindings: &'a [crate::bindings::NewVersionBinding],
     /// Frozen Cloudflare Artifacts namespace bindings.
-    pub artifact_bindings: &'a [crate::NewVersionArtifactBinding],
+    pub artifact_bindings: &'a [crate::cloudflare_artifacts::NewVersionArtifactBinding],
     /// Frozen Queue producer bindings.
-    pub queue_bindings: &'a [crate::NewQueueProducerBinding],
+    pub queue_bindings: &'a [crate::queues::NewQueueProducerBinding],
     /// Frozen Workflow caller bindings.
-    pub workflow_bindings: &'a [crate::WorkflowBindingRecord],
+    pub workflow_bindings: &'a [crate::workflows::WorkflowBindingRecord],
     /// Frozen cross-Worker Service declarations.
-    pub services: &'a [crate::NewVersionService],
+    pub services: &'a [crate::services::NewVersionService],
     /// Immutable automatic-cache policies.
-    pub cache_policies: &'a [crate::VersionCachePolicyRecord],
+    pub cache_policies: &'a [crate::runtime_features::VersionCachePolicyRecord],
     /// Platform-provided Images and Version Metadata bindings.
-    pub builtin_bindings: &'a [crate::VersionBuiltinBindingRecord],
+    pub builtin_bindings: &'a [crate::runtime_features::VersionBuiltinBindingRecord],
     /// Queue push-consumer declarations.
-    pub queue_consumers: &'a [crate::NewQueueConsumerDeclaration],
+    pub queue_consumers: &'a [crate::queue_consumers::NewQueueConsumerDeclaration],
     /// Optional immutable Cron declaration set.
-    pub cron: Option<&'a crate::NewCronConfig>,
+    pub cron: Option<&'a crate::cron::NewCronConfig>,
 }
 
 impl WorkerRepository<'_> {
@@ -280,11 +280,11 @@ fn validate_version_shape(
                 || products
                     .asset_object_refs
                     .iter()
-                    .filter(|object| object.kind == crate::VersionObjectKind::AssetManifest)
+                    .filter(|object| object.kind == crate::assets::VersionObjectKind::AssetManifest)
                     .count()
                     != 1
                 || !products.asset_object_refs.iter().any(|object| {
-                    object.kind == crate::VersionObjectKind::AssetManifest
+                    object.kind == crate::assets::VersionObjectKind::AssetManifest
                         && object.sha256 == assets.manifest_sha256
                         && object.size == manifest_size
                 })

@@ -2,7 +2,7 @@
 
 use super::{MANIFEST_NAME, MAX_MANIFEST_BYTES, OcdManifest, ensure_ocd_root, manifest_invalid};
 use open_compute_core::PlatformError;
-use open_compute_storage::atomic_write;
+use open_compute_storage::fs::atomic_write;
 use rustix::fs::{Mode, OFlags};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};

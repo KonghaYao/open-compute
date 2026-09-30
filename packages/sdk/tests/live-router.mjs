@@ -95,8 +95,14 @@ async function identityContract() {
 
   const capabilities = await client.openCompute.capabilities.get();
   assert.equal(capabilities.wrangler_version, "4.143.0");
-  assert.equal(capabilities.compatibility_date.minimum, "2026-09-08");
-  assert.equal(capabilities.compatibility_date.maximum, "2026-09-08");
+  assert.equal(capabilities.compatibility.validation, "workerd_code_version");
+  assert.match(
+    capabilities.compatibility.binary_maximum_date,
+    /^\d{4}-\d{2}-\d{2}$/,
+  );
+  assert.match(capabilities.compatibility.catalog_sha256, /^[a-f0-9]{64}$/);
+  assert.ok(capabilities.compatibility.features.length > 0);
+  assert.equal(capabilities.system_workers.compatibility_date, "2026-09-08");
   assert.ok(Object.keys(capabilities.endpoints).length > 0);
   const system = await client.openCompute.system.status();
   assert.match(system.state, /^[A-Z][A-Z_]*$/);

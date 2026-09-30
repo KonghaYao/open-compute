@@ -34,7 +34,7 @@ import {
   formatDate,
   formatDateTime as formatTimestamp,
 } from "../../../lib/format";
-import { queueQuery } from "../../../lib/query-options";
+import { queryKeys, queueQuery } from "../../../lib/query-options";
 
 type Tab = "metrics" | "settings";
 
@@ -63,13 +63,7 @@ function QueueDetailPage() {
 
   const queue = useQuery(queueQuery(client, selectedInstanceId, queueId));
   const metrics = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "queues",
-      selectedInstanceId,
-      queueId,
-      "metrics",
-    ],
+    queryKey: queryKeys.queues(selectedInstanceId, queueId, "metrics"),
     queryFn: ({ signal }) =>
       client!.queues.getMetrics(
         queueId,
@@ -82,10 +76,10 @@ function QueueDetailPage() {
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: ["cloudflare-v4", "queues", selectedInstanceId, queueId],
+        queryKey: queryKeys.queues(selectedInstanceId, queueId),
       }),
       queryClient.invalidateQueries({
-        queryKey: ["open-compute", "queues", selectedInstanceId, queueId],
+        queryKey: queryKeys.queues(selectedInstanceId, queueId),
       }),
     ]);
   };

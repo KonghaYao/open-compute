@@ -1,7 +1,7 @@
 use super::super::*;
-use crate::{
-    PlatformStorage, ReserveResourceCreate, ResourceCreateReservation, ResourceRecord,
-    ResourceRepository,
+use crate::PlatformStorage;
+use crate::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRecord, ResourceRepository,
 };
 use open_compute_core::config::DataConfig;
 use open_compute_core::{BindingKind, ErrorCode, RequestId, ResourceId, SystemClock};
@@ -170,7 +170,7 @@ fn r2_source_identity_is_frozen_and_blocks_bucket_deletion() {
 
     let bucket = reserve(&storage, BindingKind::R2Bucket, "documents");
     let prefix = format!("r2/v1/{}/", bucket.id);
-    crate::R2BucketRepository::new(storage.db())
+    crate::r2::R2BucketRepository::new(storage.db())
         .ensure_bucket(&bucket, &prefix, 1024, &[9; 32])
         .unwrap();
     resources.mark_ready(bucket.id, 21).unwrap();

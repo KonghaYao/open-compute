@@ -1,5 +1,5 @@
 use super::*;
-use crate::workers::EffectiveResourceLimits;
+use crate::worker_repository::EffectiveResourceLimits;
 use sha2::Digest;
 
 #[test]
@@ -52,7 +52,7 @@ fn worker_repository_rejects_invalid_state_and_ownership_operations() {
             id: staging,
             instance_id: account,
             worker_id: worker.id,
-            content_kind: crate::VersionContentKind::Worker,
+            content_kind: crate::worker_repository::VersionContentKind::Worker,
             artifact_sha256: Some([4; 32]),
             artifact_size: Some(100),
             artifact_schema_version: Some(1),
@@ -66,7 +66,7 @@ fn worker_repository_rejects_invalid_state_and_ownership_operations() {
             request_id: request,
             now_ms: 14,
         },
-        &crate::NewVersionProducts::default(),
+        &crate::worker_repository::NewVersionProducts::default(),
         1_000_000,
     )
     .unwrap();
@@ -131,7 +131,7 @@ fn worker_repository_rejects_invalid_state_and_ownership_operations() {
         .code(),
         ErrorCode::VersionInvariantViolation
     );
-    let expected_ref = crate::workers::idempotency_ref_id(account, "scope", "missing");
+    let expected_ref = crate::worker_repository::idempotency_ref_id(account, "scope", "missing");
     assert_eq!(
         repo.complete_idempotency_with_version_ref(
             account,
@@ -191,7 +191,7 @@ fn worker_repository_rejects_invalid_routes_retention_and_deletion() {
             id: staging,
             instance_id: account,
             worker_id: worker.id,
-            content_kind: crate::VersionContentKind::Worker,
+            content_kind: crate::worker_repository::VersionContentKind::Worker,
             artifact_sha256: Some([4; 32]),
             artifact_size: Some(100),
             artifact_schema_version: Some(1),
@@ -205,7 +205,7 @@ fn worker_repository_rejects_invalid_routes_retention_and_deletion() {
             request_id: request,
             now_ms: 14,
         },
-        &crate::NewVersionProducts::default(),
+        &crate::worker_repository::NewVersionProducts::default(),
         1_000_000,
     )
     .unwrap();
@@ -383,7 +383,7 @@ fn deleted_worker_revokes_asset_backend_reads_even_if_its_version_is_ready() {
     let version = VersionId::generate();
     let manifest = b"{}".to_vec();
     let manifest_digest: [u8; 32] = sha2::Sha256::digest(&manifest).into();
-    let assets_record = crate::NewVersionAssets {
+    let assets_record = crate::assets::NewVersionAssets {
         manifest_sha256: manifest_digest,
         manifest_json: manifest,
         routing_config_json: b"{}".to_vec(),
@@ -392,13 +392,13 @@ fn deleted_worker_revokes_asset_backend_reads_even_if_its_version_is_ready() {
         logical_total_bytes: 4,
     };
     let refs = [
-        crate::NewVersionObjectRef {
-            kind: crate::VersionObjectKind::AssetManifest,
+        crate::assets::NewVersionObjectRef {
+            kind: crate::assets::VersionObjectKind::AssetManifest,
             sha256: manifest_digest,
             size: 2,
         },
-        crate::NewVersionObjectRef {
-            kind: crate::VersionObjectKind::AssetBlob,
+        crate::assets::NewVersionObjectRef {
+            kind: crate::assets::VersionObjectKind::AssetBlob,
             sha256: blob,
             size: 4,
         },
@@ -408,7 +408,7 @@ fn deleted_worker_revokes_asset_backend_reads_even_if_its_version_is_ready() {
             id: version,
             instance_id: account,
             worker_id: worker.id,
-            content_kind: crate::VersionContentKind::Worker,
+            content_kind: crate::worker_repository::VersionContentKind::Worker,
             artifact_sha256: Some([6; 32]),
             artifact_size: Some(100),
             artifact_schema_version: Some(1),
@@ -422,17 +422,17 @@ fn deleted_worker_revokes_asset_backend_reads_even_if_its_version_is_ready() {
             request_id: request,
             now_ms: 2,
         },
-        &crate::NewVersionProducts {
+        &crate::worker_repository::NewVersionProducts {
             assets: Some(&assets_record),
             asset_object_refs: &refs,
-            ..crate::NewVersionProducts::default()
+            ..crate::worker_repository::NewVersionProducts::default()
         },
         1_000_000,
     )
     .unwrap();
     repo.begin_validation(version).unwrap();
     repo.mark_ready(version, 2).unwrap();
-    let assets = crate::VersionAssetsRepository::new(storage.db());
+    let assets = crate::assets::VersionAssetsRepository::new(storage.db());
     assert!(
         repo.authorize_runtime_version(account, worker.id, version)
             .is_ok()

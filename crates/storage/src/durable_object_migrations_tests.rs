@@ -1,6 +1,6 @@
 use super::*;
-use crate::workers::EffectiveResourceLimits;
-use crate::{NewVersion, WorkerRepository};
+use crate::worker_repository::EffectiveResourceLimits;
+use crate::worker_repository::{NewVersion, WorkerRepository};
 use open_compute_core::config::DataConfig;
 use open_compute_core::{ErrorCode, RequestId, SystemClock};
 use std::collections::BTreeMap;
@@ -31,7 +31,7 @@ fn insert_validating_version(
                 id: version_id,
                 instance_id,
                 worker_id,
-                content_kind: crate::VersionContentKind::Worker,
+                content_kind: crate::worker_repository::VersionContentKind::Worker,
                 artifact_sha256: Some([7; 32]),
                 artifact_size: Some(1),
                 artifact_schema_version: Some(1),
@@ -45,7 +45,7 @@ fn insert_validating_version(
                 request_id: RequestId::generate(),
                 now_ms,
             },
-            &crate::NewVersionProducts::default(),
+            &crate::worker_repository::NewVersionProducts::default(),
             1_000_000,
         )
         .unwrap();
@@ -331,7 +331,7 @@ fn version_ready_and_migration_publish_are_atomic_across_failure_and_restart() {
             .get_worker_version(account, worker.id, version)
             .unwrap()
             .state,
-        crate::VersionState::Validating
+        crate::worker_repository::VersionState::Validating
     );
     assert!(
         DurableObjectRepository::new(&storage)
@@ -361,7 +361,7 @@ fn version_ready_and_migration_publish_are_atomic_across_failure_and_restart() {
             .get_worker_version(account, worker.id, version)
             .unwrap()
             .state,
-        crate::VersionState::Validating
+        crate::worker_repository::VersionState::Validating
     );
     assert!(
         DurableObjectRepository::new(&storage)
@@ -383,7 +383,7 @@ fn version_ready_and_migration_publish_are_atomic_across_failure_and_restart() {
     let ready = WorkerRepository::new(storage.db())
         .get_worker_version(account, worker.id, version)
         .unwrap();
-    assert_eq!(ready.state, crate::VersionState::Ready);
+    assert_eq!(ready.state, crate::worker_repository::VersionState::Ready);
     let repository = DurableObjectRepository::new(&storage);
     let head = repository
         .current_worker_migration(worker.id)
@@ -447,7 +447,7 @@ fn version_ready_and_migration_publish_are_atomic_across_failure_and_restart() {
             .get_worker_version(account, worker.id, second_version)
             .unwrap()
             .state,
-        crate::VersionState::Validating
+        crate::worker_repository::VersionState::Validating
     );
     assert_eq!(
         repository

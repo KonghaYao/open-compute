@@ -39,18 +39,22 @@ pub(super) fn build(
         secrets: std::collections::BTreeMap::new(),
         bindings: std::collections::BTreeMap::new(),
         services: std::collections::BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: vec![QueueConsumerInput {
             queue: target.queue,
             entrypoint: None,
-            config: open_compute_storage::QueueConsumerConfig {
+            config: open_compute_storage::queue_consumers::QueueConsumerConfig {
                 max_batch_size: batch_size,
-                ..open_compute_storage::QueueConsumerConfig::default()
+                ..open_compute_storage::queue_consumers::QueueConsumerConfig::default()
             },
             dead_letter_queue: None,
         }],
         crons: vec![cron.to_owned()],
-        deployment_source: promote.then_some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: promote
+            .then_some(open_compute_storage::worker_repository::DeploymentSource::VersionsApi),
         observability: None,
         request_id: open_compute_core::RequestId::generate(),
         now_ms: 60_000,
@@ -70,7 +74,7 @@ pub(super) async fn remove_all_products(
         CreateVersionOutcome::Applied(result) => result.version.id,
         CreateVersionOutcome::Replay(_) => panic!("empty P2.3 version replayed"),
     };
-    let workers = open_compute_storage::WorkerRepository::new(storage.db());
+    let workers = open_compute_storage::worker_repository::WorkerRepository::new(storage.db());
     assert_eq!(
         workers
             .get_worker(target.account, target.worker)
@@ -79,24 +83,24 @@ pub(super) async fn remove_all_products(
         Some(emptied_id)
     );
     assert!(
-        open_compute_storage::QueueConsumerRepository::new(storage.db())
+        open_compute_storage::queue_consumers::QueueConsumerRepository::new(storage.db())
             .live_for_queue(target.queue)
             .unwrap()
             .is_none()
     );
     assert!(
-        open_compute_storage::CronRepository::new(storage.db())
+        open_compute_storage::cron::CronRepository::new(storage.db())
             .live_for_worker(target.worker)
             .unwrap()
             .is_empty()
     );
     assert_eq!(
-        open_compute_storage::inspect_p23_cross_database(
+        open_compute_storage::scheduler::inspect_p23_cross_database(
             &storage.data_dir().control_db_path(),
             scheduler_path,
             100,
         )
         .unwrap(),
-        open_compute_storage::P23CrossDatabaseInspection::default()
+        open_compute_storage::scheduler::P23CrossDatabaseInspection::default()
     );
 }

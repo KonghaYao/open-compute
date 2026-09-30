@@ -4,9 +4,10 @@ use crate::{ReconcileOutcome, ResourceDriver, ResourceHealth};
 use open_compute_core::{
     BindingKind, ErrorCode, PlatformError, ResourceAvailability, ResourceState,
 };
-use open_compute_storage::{
-    PlatformStorage, ResourceRecord, VECTORIZE_SCHEMA_VERSION, VectorizeEngine,
-    VectorizeIndexRepository, VectorizePaths,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::resources::ResourceRecord;
+use open_compute_storage::vectorize::{
+    VECTORIZE_SCHEMA_VERSION, VectorizeEngine, VectorizeIndexRepository, VectorizePaths,
 };
 
 /// Frozen product specification used for one create operation.

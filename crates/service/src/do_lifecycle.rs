@@ -6,10 +6,11 @@
 use crate::metrics::{DoFacetReloadReason, DoReconcileState, MetricsRegistry};
 use crate::runtime_bridge::WorkerdTransport;
 use open_compute_core::{DurableObjectState, DurableObjectsConfig, InstanceId, PlatformError};
-use open_compute_storage::{
-    AuthorizedDurableObjectDelete, DurableObjectRecord, DurableObjectRepository, PlatformStorage,
-    SchedulerStore,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::durable_objects::{
+    AuthorizedDurableObjectDelete, DurableObjectRecord, DurableObjectRepository,
 };
+use open_compute_storage::scheduler::SchedulerStore;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;

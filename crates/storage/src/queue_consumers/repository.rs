@@ -179,7 +179,7 @@ impl<'a> QueueConsumerRepository<'a> {
         }
         let id = QueueConsumerId::generate();
         self.db.with_immediate(|tx| {
-            crate::workers::require_instance(tx, instance_id)?;
+            crate::worker_repository::require_instance(tx, instance_id)?;
             tx.execute(
                 "INSERT INTO queue_consumers
                  (id, queue_id, worker_id, declaration_id, version_id,

@@ -9,10 +9,11 @@ use base64::Engine as _;
 use open_compute_core::{
     ErrorCode, PlatformError, QueueMessageId, RequestId, SchedulerKind, SchedulerPoolState,
 };
-use open_compute_storage::{
-    ClaimedQueueBatch, QueueCompletionAction, QueueCompletionDecision, QueueRepository,
-    WorkerRepository,
+use open_compute_storage::queues::QueueRepository;
+use open_compute_storage::scheduler::{
+    ClaimedQueueBatch, QueueCompletionAction, QueueCompletionDecision,
 };
+use open_compute_storage::worker_repository::WorkerRepository;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;

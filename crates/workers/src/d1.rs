@@ -4,10 +4,11 @@ use crate::{ReconcileOutcome, ResourceDriver, ResourceHealth};
 use open_compute_core::{
     BindingKind, ErrorCode, PlatformError, ResourceAvailability, ResourceState,
 };
-use open_compute_storage::{
-    D1_DATABASE_SCHEMA_VERSION, D1DatabaseRepository, D1Engine, D1Paths, PlatformStorage,
-    ResourceRecord,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::d1::{
+    D1_DATABASE_SCHEMA_VERSION, D1DatabaseRepository, D1Engine, D1Paths,
 };
+use open_compute_storage::resources::ResourceRecord;
 
 /// Static filesystem and SQLite driver for `d1_database` resources.
 #[derive(Debug)]
@@ -33,7 +34,7 @@ impl<'a> D1ResourceDriver<'a> {
     fn catalog(
         &self,
         resource: &ResourceRecord,
-    ) -> Result<open_compute_storage::D1DatabaseRecord, PlatformError> {
+    ) -> Result<open_compute_storage::d1::D1DatabaseRecord, PlatformError> {
         D1DatabaseRepository::new(self.storage.db()).get(resource.instance_id, resource.id)
     }
 

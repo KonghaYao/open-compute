@@ -6,7 +6,7 @@ pub(super) struct StoredPlatform {
     pub(super) metrics: Arc<MetricsRegistry>,
     pub(super) health: HealthCoordinator,
     pub(super) storage: Arc<PlatformStorage>,
-    pub(super) scheduler_store: Arc<open_compute_storage::SchedulerStore>,
+    pub(super) scheduler_store: Arc<open_compute_storage::scheduler::SchedulerStore>,
     pub(super) observability: Arc<ObservabilityService>,
     pub(super) local_extensions: Arc<LocalExtensionRegistry>,
 }

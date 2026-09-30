@@ -1,9 +1,10 @@
 //! Fair host-wide coordinator for durable Vectorize mutation frontiers.
 
 use open_compute_core::{ComponentName, ErrorCode, PlatformError, ResourceAvailability};
-use open_compute_storage::{
-    PlatformStorage, ResourceRepository, VectorizeEngine, VectorizeIndexRecord,
-    VectorizeIndexRepository, VectorizePaths,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::resources::ResourceRepository;
+use open_compute_storage::vectorize::{
+    VectorizeEngine, VectorizeIndexRecord, VectorizeIndexRepository, VectorizePaths,
 };
 use open_compute_workers::ResourcePins;
 use std::sync::{Arc, Mutex};

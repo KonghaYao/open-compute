@@ -181,7 +181,7 @@ impl AiSearchBindingService {
                     "ai-search:{}:{}",
                     authority.resource.id, authority.request_id
                 ),
-                driver_schema_version: open_compute_storage::AI_SEARCH_SCHEMA_VERSION,
+                driver_schema_version: open_compute_storage::ai_search::AI_SEARCH_SCHEMA_VERSION,
                 request_id: authority.request_id,
                 now_ms: unix_ms(),
             },

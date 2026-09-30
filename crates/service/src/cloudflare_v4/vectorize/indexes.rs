@@ -9,7 +9,7 @@ use crate::http::HttpState;
 use axum::extract::{Path, Request, State};
 use axum::response::Response;
 use open_compute_core::BindingKind;
-use open_compute_storage::{
+use open_compute_storage::vectorize::{
     VECTORIZE_SCHEMA_VERSION, VectorizeIndexRecord, VectorizeIndexRepository,
 };
 use open_compute_workers::{

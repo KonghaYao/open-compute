@@ -29,11 +29,14 @@ use open_compute_service::{
     SqliteKvBindingExecutor, bind_binding_backend, product_promotion_for_test,
     serve_binding_backend_with_assets,
 };
-use open_compute_storage::{
-    ClaimedQueueBatch, DO_NAMESPACE_SCHEMA_VERSION, PlatformStorage, QueueConfig,
-    QueueConsumerConfig, QueueRepository, SchedulerStore, ServiceTarget, VersionRecord,
-    WorkerRepository, WorkflowTarget,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::durable_objects::DO_NAMESPACE_SCHEMA_VERSION;
+use open_compute_storage::queue_consumers::QueueConsumerConfig;
+use open_compute_storage::queues::{QueueConfig, QueueRepository};
+use open_compute_storage::scheduler::{ClaimedQueueBatch, SchedulerStore};
+use open_compute_storage::services::ServiceTarget;
+use open_compute_storage::worker_repository::{VersionRecord, WorkerRepository};
+use open_compute_storage::workflows::WorkflowTarget;
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateQueueOutcome, CreateQueueRequest, CreateResourceOutcome,
     CreateResourceRequest, CreateVersionRequest, DurableObjectResourceDriver, ModuleInput,
@@ -287,7 +290,10 @@ fn consumer_request(
         secrets: BTreeMap::new(),
         bindings,
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: vec![QueueConsumerInput {
             queue: queue_id,
             entrypoint: None,
@@ -301,7 +307,9 @@ fn consumer_request(
             dead_letter_queue: Some(dlq_id),
         }],
         crons: Vec::new(),
-        deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: Some(
+            open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+        ),
         observability: None,
         request_id: RequestId::generate(),
         now_ms,
@@ -346,10 +354,15 @@ fn caller_request(
                 props: None,
             },
         )]),
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: Some(
+            open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+        ),
         observability: None,
         request_id: RequestId::generate(),
         now_ms,

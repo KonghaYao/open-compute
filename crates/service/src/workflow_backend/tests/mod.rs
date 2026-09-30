@@ -2,9 +2,8 @@ use super::*;
 use crate::workflow_http::tests::{Fixture, fixture};
 use open_compute_core::{RequestId, SecretString, WorkflowId, WorkflowOperationId};
 use open_compute_storage::scheduler::{WorkflowCompletion, WorkflowState};
-use open_compute_storage::{
-    NewVersion, NewVersionProducts, WorkerRepository, WorkflowBindingRecord,
-};
+use open_compute_storage::worker_repository::{NewVersion, NewVersionProducts, WorkerRepository};
+use open_compute_storage::workflows::WorkflowBindingRecord;
 use serde_json::json;
 
 fn ready(f: &Fixture) -> (WorkflowId, WorkflowBindingRecord) {
@@ -53,7 +52,7 @@ fn ready_binding(f: &Fixture, definition: WorkflowId) -> WorkflowBindingRecord {
                 id: version,
                 instance_id: f.account,
                 worker_id: worker.id,
-                content_kind: open_compute_storage::VersionContentKind::Worker,
+                content_kind: open_compute_storage::worker_repository::VersionContentKind::Worker,
                 artifact_sha256: Some([3; 32]),
                 artifact_size: Some(100),
                 artifact_schema_version: Some(1),
@@ -61,7 +60,7 @@ fn ready_binding(f: &Fixture, definition: WorkflowId) -> WorkflowBindingRecord {
                 worker_code_sha256: [4; 32],
                 compatibility_date: "2026-09-08".into(),
                 compatibility_flags: Vec::new(),
-                resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+                resource_limits: open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
                 vars: Default::default(),
                 secrets: Default::default(),
                 request_id: RequestId::generate(),

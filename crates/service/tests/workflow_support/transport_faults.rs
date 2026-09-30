@@ -402,7 +402,7 @@ async fn workflow_production_step_http_known_unknown_commit_matrix() {
                     let reservation = repository.find_instance(definition.id, &id).unwrap();
                     assert_eq!(
                         reservation.state,
-                        open_compute_storage::WorkflowRefState::Live
+                        open_compute_storage::workflows::WorkflowRefState::Live
                     );
                     assert!(
                         repository

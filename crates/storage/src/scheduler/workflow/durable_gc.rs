@@ -1,7 +1,7 @@
 //! Bounded retention enumeration and proof-gated receipt sweeping.
 
 use super::*;
-use crate::{WorkflowGcAcknowledgement, WorkflowGcReceipt};
+use crate::workflows::{WorkflowGcAcknowledgement, WorkflowGcReceipt};
 use open_compute_core::WorkflowOperationId;
 
 impl SchedulerStore {

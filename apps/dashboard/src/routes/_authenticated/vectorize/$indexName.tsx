@@ -22,6 +22,7 @@ import {
 import { openConfirmDeleteDialog } from "../../../components/resource-dialog";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../lib/query-options";
 
 type Tab = "overview" | "vectors" | "metadata";
 
@@ -64,7 +65,7 @@ function VectorizeDetailPage() {
   );
 
   const details = useQuery({
-    queryKey: ["vectorize", selectedInstanceId, indexName, "details"],
+    queryKey: queryKeys.vectorize(selectedInstanceId, indexName, "details"),
     queryFn: ({ signal }) =>
       Promise.all([
         client!.vectorize.indexes.get(
@@ -81,7 +82,12 @@ function VectorizeDetailPage() {
     enabled: client !== null && selectedInstanceId !== null,
   });
   const vectors = useQuery({
-    queryKey: ["vectorize", selectedInstanceId, indexName, "vectors", cursor],
+    queryKey: queryKeys.vectorize(
+      selectedInstanceId,
+      indexName,
+      "vectors",
+      cursor,
+    ),
     queryFn: ({ signal }) =>
       client!.vectorize.indexes.listVectors(
         indexName,
@@ -96,7 +102,7 @@ function VectorizeDetailPage() {
       client !== null && selectedInstanceId !== null && tab === "vectors",
   });
   const metadata = useQuery({
-    queryKey: ["vectorize", selectedInstanceId, indexName, "metadata"],
+    queryKey: queryKeys.vectorize(selectedInstanceId, indexName, "metadata"),
     queryFn: ({ signal }) =>
       client!.vectorize.indexes.metadataIndex.list(
         indexName,
@@ -120,7 +126,7 @@ function VectorizeDetailPage() {
           throw error;
         }
         await queryClient.invalidateQueries({
-          queryKey: ["vectorize", selectedInstanceId],
+          queryKey: queryKeys.vectorize(selectedInstanceId),
         });
         feedback.success("Vectorize index deleted.");
         await navigate({ to: "/vectorize" });
@@ -184,7 +190,7 @@ function VectorizeDetailPage() {
       setCursor(undefined);
       setCursorHistory([]);
       await queryClient.invalidateQueries({
-        queryKey: ["vectorize", selectedInstanceId, indexName],
+        queryKey: queryKeys.vectorize(selectedInstanceId, indexName),
       });
       setUploadOpen(false);
       setUploadFile(null);
@@ -215,7 +221,7 @@ function VectorizeDetailPage() {
           throw error;
         }
         await queryClient.invalidateQueries({
-          queryKey: ["vectorize", selectedInstanceId, indexName],
+          queryKey: queryKeys.vectorize(selectedInstanceId, indexName),
         });
         setVectorId(null);
         setVectorDetail(null);

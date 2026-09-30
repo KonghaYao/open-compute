@@ -1,9 +1,10 @@
 //! Exclusive local storage bootstrap and current resource recovery before serving.
 
 use open_compute_core::{PlatformConfig, PlatformError, RequestId, SystemClock};
-use open_compute_storage::{
-    PlatformStorage, PublicGatewayRepository, SchedulerStore, WorkerRepository,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::public_gateway::PublicGatewayRepository;
+use open_compute_storage::scheduler::SchedulerStore;
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{
     AiSearchInstanceResourceDriver, AiSearchNamespaceResourceDriver, D1ResourceDriver,
     KvResourceDriver, ResourceController, ResourcePins, VectorizeResourceDriver,
@@ -25,9 +26,9 @@ pub(super) fn bootstrap(
         now,
         storage.identity().instance_id,
     )?);
-    open_compute_storage::VectorizePaths::open(storage.data_dir().root())?;
-    open_compute_storage::AiSearchPaths::open(storage.data_dir().root())?;
-    open_compute_storage::inspect_current_schema(
+    open_compute_storage::vectorize::VectorizePaths::open(storage.data_dir().root())?;
+    open_compute_storage::ai_search::AiSearchPaths::open(storage.data_dir().root())?;
+    open_compute_storage::schema_inspection::inspect_current_schema(
         storage.data_dir(),
         storage.db(),
         config.data.sqlite_busy_timeout_ms,
@@ -39,8 +40,8 @@ pub(super) fn bootstrap(
         gateway.disable(now)?;
     }
 
-    open_compute_storage::KvPaths::open(storage.data_dir().root())?.cleanup_write_staging()?;
-    open_compute_storage::R2Staging::open(storage.data_dir().root())?.cleanup()?;
+    open_compute_storage::kv::KvPaths::open(storage.data_dir().root())?.cleanup_write_staging()?;
+    open_compute_storage::r2_staging::R2Staging::open(storage.data_dir().root())?.cleanup()?;
     let workers = WorkerRepository::new(storage.db());
     workers.prune_expired_idempotency(now, config.workers.delete_recovery_batch)?;
     workers.recover_deleting_versions(

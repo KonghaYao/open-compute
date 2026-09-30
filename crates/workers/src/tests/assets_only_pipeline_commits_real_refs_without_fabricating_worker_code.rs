@@ -61,10 +61,15 @@ async fn assets_only_pipeline_commits_real_refs_without_fabricating_worker_code(
         secrets: BTreeMap::new(),
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: Some(
+            open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+        ),
         observability: None,
         request_id: RequestId::generate(),
         now_ms: 10,
@@ -75,11 +80,11 @@ async fn assets_only_pipeline_commits_real_refs_without_fabricating_worker_code(
     };
     assert_eq!(
         result.version.content_kind,
-        open_compute_storage::VersionContentKind::AssetsOnly
+        open_compute_storage::worker_repository::VersionContentKind::AssetsOnly
     );
     assert!(result.version.artifact_sha256.is_none());
     assert!(result.version.main_module.is_none());
-    let stored = open_compute_storage::VersionAssetsRepository::new(storage.db())
+    let stored = open_compute_storage::assets::VersionAssetsRepository::new(storage.db())
         .get(result.version.id)
         .unwrap()
         .unwrap();

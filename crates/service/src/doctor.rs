@@ -14,10 +14,11 @@ use open_compute_core::{
     AiAuthConfig, AiConfig, ErrorCode, ObjectStorageConfig, ObjectStorageKind, PlatformError,
     ResourceAvailability,
 };
-use open_compute_storage::{
-    inspect_control_db, inspect_data_root, inspect_durable_object_storage, inspect_master_key,
-    inspect_p23_cross_database, inspect_resources, inspect_scheduler_db, read_operation_receipt,
+use open_compute_storage::data_dir::{inspect_durable_object_storage, read_operation_receipt};
+use open_compute_storage::inspect::{
+    inspect_control_db, inspect_data_root, inspect_master_key, inspect_resources,
 };
+use open_compute_storage::scheduler::{inspect_p23_cross_database, inspect_scheduler_db};
 use serde::Serialize;
 use std::io::Write;
 

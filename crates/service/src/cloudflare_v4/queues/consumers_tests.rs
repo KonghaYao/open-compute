@@ -6,10 +6,9 @@ use open_compute_core::{
     WorkflowsConfig,
 };
 use open_compute_runtime::GenerationAuthRegistry;
-use open_compute_storage::{
-    NewVersion, NewVersionProducts, QueueConfig, QueueProjection, QueueRepository, SchedulerStore,
-    VersionContentKind,
-};
+use open_compute_storage::queues::{QueueConfig, QueueRepository};
+use open_compute_storage::scheduler::{QueueProjection, SchedulerStore};
+use open_compute_storage::worker_repository::{NewVersion, NewVersionProducts, VersionContentKind};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt as _;
@@ -35,7 +34,7 @@ fn seed_active_worker(storage: &PlatformStorage, account: InstanceId) {
                 worker_code_sha256: [2; 32],
                 compatibility_date: "2026-09-08".to_owned(),
                 compatibility_flags: Vec::new(),
-                resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+                resource_limits: open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
                 vars: BTreeMap::new(),
                 secrets: BTreeMap::new(),
                 request_id: RequestId::generate(),
@@ -143,7 +142,7 @@ async fn consumer_routes_cover_create_read_update_delete_and_validation() {
             .get(account, pending_queue)
             .unwrap()
             .state,
-        open_compute_storage::QueueState::Ready
+        open_compute_storage::queues::QueueState::Ready
     );
     let authority = super::super::super::accounts::V4InstanceContext::new(account, 1);
     let public_account = authority.public_id().to_owned();

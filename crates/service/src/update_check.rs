@@ -4,7 +4,7 @@ use crate::install_receipt::{cmp_stable_semver, is_stable_semver};
 use crate::instance_registry::{InstanceRegistry, ServiceScope};
 use crate::release_upgrade::{DEFAULT_RELEASE_DOWNLOAD_BASE, ReleaseHttp, check_upgrade_available};
 use open_compute_core::{ErrorCode, PlatformError};
-use open_compute_storage::atomic_write;
+use open_compute_storage::fs::atomic_write;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
@@ -115,7 +115,7 @@ pub fn write_cache(path: &Path, cache: &UpdateCheckCache) -> Result<(), Platform
             "update-check cache path must have a parent",
         )
     })?;
-    open_compute_storage::ensure_dir_secure(parent)?;
+    open_compute_storage::fs::ensure_dir_secure(parent)?;
     let bytes = serde_json::to_vec_pretty(cache).map_err(|_| {
         PlatformError::new(
             ErrorCode::Internal,

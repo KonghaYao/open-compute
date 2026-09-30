@@ -4,7 +4,7 @@ use open_compute_core::{
     WorkflowToken, WorkflowVersionId,
 };
 use open_compute_runtime::GenerationAuthRegistry;
-use open_compute_storage::WorkflowTarget;
+use open_compute_storage::workflows::WorkflowTarget;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 
 fn target() -> WorkflowTarget {

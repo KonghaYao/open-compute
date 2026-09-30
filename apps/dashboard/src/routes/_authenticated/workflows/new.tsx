@@ -8,6 +8,7 @@ import { CloudflareProductIcon } from "../../../components/cloudflare-product-ic
 import { CreateStepper } from "../../../components/create-stepper";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/workflows/new")({
   component: CreateWorkflowPage,
@@ -56,7 +57,7 @@ function CreateWorkflowPage() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["cloudflare-v4", "workflows", selectedInstanceId],
+        queryKey: queryKeys.workflows(selectedInstanceId),
       });
       feedback.success("Workflow created.");
       await navigate({

@@ -54,7 +54,7 @@ pub async fn backup_restore(
     }
     verify_snapshot_objects(&objects, &manifest, true).await?;
     ensure_restore_headroom(loaded, manifest.totals.bytes)?;
-    let restore = open_compute_storage::RestoreTarget::acquire(target)
+    let restore = open_compute_storage::platform_restore::RestoreTarget::acquire(target)
         .map_err(|error| restore_stage(&error, "restore target acquisition failed"))?;
     for file in &manifest.files {
         let destination = restore

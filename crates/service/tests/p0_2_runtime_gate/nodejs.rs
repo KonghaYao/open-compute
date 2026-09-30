@@ -190,7 +190,10 @@ async fn exercise(
         secrets,
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
         deployment_source: None,

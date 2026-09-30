@@ -1,8 +1,9 @@
 use crate::cloudflare_v4::V4Error;
 use open_compute_core::ResourceState;
-use open_compute_storage::{
-    CatalogCursor, CatalogDirection, CatalogSort, decode_catalog_cursor, decode_object_list_cursor,
+use open_compute_storage::catalog_page::{
+    CatalogCursor, CatalogDirection, CatalogSort, decode_catalog_cursor,
 };
+use open_compute_storage::durable_objects::decode_object_list_cursor;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::str::FromStr;

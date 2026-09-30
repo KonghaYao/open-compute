@@ -67,12 +67,15 @@
 - Preserve the single-daemon model: one `ocd` owns the selected OCD scope, its shared listeners/Gateway and scope lock; each registered instance owns its explicit data-dir lock, SQLite authority, master key, object authority/cache, and supervised pinned `workerd` child.
 - Keep each concern in its owning crate:
   - `core`: dependency foundation for config, errors, IDs, secrets, health, and clocks;
+  - `search`: pure search contracts, filtering, chunking, and ranking primitives;
+  - `images`: bounded image decode, transform, and encode primitives;
+  - `document-parser`: document format detection and extraction, using `images` for bounded visual preprocessing;
   - `storage`: data directory, locks, SQLite, migrations, identity, and secret crypto;
   - `artifacts`: S3-compatible artifact storage, preflight, and verified cache;
   - `runtime`: workerd pinning, verification, config compilation, process ownership, and supervision;
   - `workers`: immutable bundles/deployments, routing pins, and runtime-source snapshots;
   - `service`: CLI and composition of the production control/data planes.
-- Enforce the dependency direction checked by `test/check-boundaries.sh`: `core`, `storage`, `artifacts`, and `runtime` remain lower-level siblings; `workers` may build on `core`, `storage`, and `artifacts` but not `runtime`; `service` is the composition root.
+- Enforce the dependency direction checked by `test/check-boundaries.sh`: `core`, `search`, `images`, `document-parser`, `storage`, `artifacts`, and `runtime` remain leaf or lower-level crates according to that DAG; `workers` may build on `core`, `storage`, and `artifacts` but not `runtime`; `service` is the composition root.
 - Apply the Day1 policy to every architectural decision. Prior implementations, persisted development state, and past release layouts must not justify retaining obsolete paths.
 - Keep transport handlers thin. Validate and route at HTTP/CLI boundaries; put storage, deployment, artifact, and supervisor workflows in their owning crates.
 - Normalize and validate data once at the authority boundary, then pass structured values forward. Do not repair persisted or untrusted values during reads or presentation.

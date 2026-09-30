@@ -20,7 +20,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use open_compute_core::{BindingKind, RequestId};
-use open_compute_storage::{KV_MAX_LIST_LIMIT, KvNamespaceRecord, KvNamespaceRepository};
+use open_compute_storage::kv::{KV_MAX_LIST_LIMIT, KvNamespaceRecord, KvNamespaceRepository};
 use open_compute_workers::{
     CreateResourceOutcome, CreateResourceRequest, KvResourceDriver, ResourceController,
 };
@@ -139,7 +139,7 @@ async fn create_namespace(
                 kind: BindingKind::KvNamespace,
                 name: body.title,
                 idempotency_key: request_id.to_string(),
-                driver_schema_version: open_compute_storage::KV_SCHEMA_VERSION,
+                driver_schema_version: open_compute_storage::kv::KV_SCHEMA_VERSION,
                 request_id,
                 now_ms: now_ms(),
             })

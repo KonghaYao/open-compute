@@ -4,7 +4,7 @@ use crate::backup_cli::{connect_snapshot_backend, load_manifest};
 use crate::config_load::LoadedConfig;
 use open_compute_artifacts::SnapshotObjectStore;
 use open_compute_core::{ErrorCode, PlatformError};
-use open_compute_storage::{inspect_control_db, inspect_master_key};
+use open_compute_storage::inspect::{inspect_control_db, inspect_master_key};
 use serde::Serialize;
 
 /// One authenticated committed snapshot in a retention dry-run plan.

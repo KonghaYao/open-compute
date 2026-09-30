@@ -270,7 +270,7 @@ pub(super) async fn run() {
 async fn assert_quarantine_and_restart(
     harness: &mut Harness,
     db: &Arc<Mutex<Connection>>,
-    version: &open_compute_storage::WorkflowTarget,
+    version: &open_compute_storage::workflows::WorkflowTarget,
     sleeping: Option<WorkflowRunRequest>,
 ) {
     // Repeated calls after incomplete drain must not grow uncounted background

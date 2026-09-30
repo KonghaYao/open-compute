@@ -3,7 +3,8 @@
 use super::*;
 use open_compute_core::WorkflowCronSchedule;
 use open_compute_service::runtime_bridge::ScheduledDispatchRequest;
-use open_compute_storage::{PlatformStorage, WorkerRepository};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateQueueOutcome, CreateQueueRequest, CreateVersionRequest,
     ModuleInput, ModuleType, QueueController, VersionController,
@@ -82,8 +83,9 @@ async fn workflow_step_uses_kv_d1_r2_do_queue_and_replay_preserves_external_effe
             },
         );
     }
-    let do_repository = open_compute_storage::DurableObjectRepository::new(&storage);
-    let do_plan = open_compute_storage::DurableObjectMigrationPlan {
+    let do_repository =
+        open_compute_storage::durable_objects::DurableObjectRepository::new(&storage);
+    let do_plan = open_compute_storage::durable_objects::DurableObjectMigrationPlan {
         declarative: false,
         old_tag: None,
         new_tag: "workflow-products-v1".to_owned(),
@@ -164,7 +166,10 @@ async fn workflow_step_uses_kv_d1_r2_do_queue_and_replay_preserves_external_effe
             secrets: Default::default(),
             bindings: bindings.clone(),
             services: Default::default(),
-            runtime_features: Default::default(),
+            runtime_features: open_compute_workers::VersionRuntimeFeatures {
+                compatibility_date: "2026-09-08".to_owned(),
+                ..Default::default()
+            },
             queue_consumers: vec![open_compute_workers::QueueConsumerInput {
                 queue: queue.queue.id,
                 entrypoint: None,
@@ -172,7 +177,9 @@ async fn workflow_step_uses_kv_d1_r2_do_queue_and_replay_preserves_external_effe
                 dead_letter_queue: None,
             }],
             crons: Vec::new(),
-            deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+            deployment_source: Some(
+                open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+            ),
             observability: None,
             request_id: RequestId::generate(),
             now_ms: now(),
@@ -231,7 +238,10 @@ async fn workflow_step_uses_kv_d1_r2_do_queue_and_replay_preserves_external_effe
             secrets: Default::default(),
             bindings,
             services: Default::default(),
-            runtime_features: Default::default(),
+            runtime_features: open_compute_workers::VersionRuntimeFeatures {
+                compatibility_date: "2026-09-08".to_owned(),
+                ..Default::default()
+            },
             queue_consumers: vec![open_compute_workers::QueueConsumerInput {
                 queue: queue.queue.id,
                 entrypoint: None,
@@ -239,7 +249,9 @@ async fn workflow_step_uses_kv_d1_r2_do_queue_and_replay_preserves_external_effe
                 dead_letter_queue: None,
             }],
             crons: vec!["* * * * *".into()],
-            deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+            deployment_source: Some(
+                open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+            ),
             observability: None,
             request_id: RequestId::generate(),
             now_ms: now() + 1,

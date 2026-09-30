@@ -1,7 +1,8 @@
 //! Instance-scoped durable R2 multipart upload authority.
 
-use crate::workers::require_instance;
-use crate::{ControlDb, r2::valid_ssec_key_md5};
+use crate::control_db::ControlDb;
+use crate::r2::valid_ssec_key_md5;
+use crate::worker_repository::require_instance;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, ResourceId};
 use rusqlite::{OptionalExtension, params};
 use std::fmt;

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 import { DefinitionList } from "./dashboard-page";
 import { openConfirmDeleteDialog } from "./resource-dialog";
 
@@ -20,14 +21,7 @@ export function R2BucketSettings({
   const queryClient = useQueryClient();
   const feedback = useMutationFeedback();
   const objectCheck = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "r2",
-      selectedInstanceId,
-      name,
-      "objects",
-      "root-check",
-    ],
+    queryKey: queryKeys.r2(selectedInstanceId, name, "objects", "root-check"),
     queryFn: ({ signal }) =>
       client!.r2.buckets.objects.list(
         name,
@@ -50,7 +44,7 @@ export function R2BucketSettings({
           throw error;
         }
         await queryClient.invalidateQueries({
-          queryKey: ["cloudflare-v4", "r2", selectedInstanceId, "buckets"],
+          queryKey: queryKeys.r2(selectedInstanceId, "buckets"),
         });
         feedback.success("R2 bucket deleted.");
         await navigate({ to: "/r2" });

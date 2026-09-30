@@ -8,7 +8,7 @@ mod inspection;
 use helpers::*;
 
 use super::{SchedulerStore, map_sql_error};
-use crate::QueueConsumerConfig;
+use crate::queue_consumers::QueueConsumerConfig;
 use open_compute_core::{
     ErrorCode, InstanceId, PlatformError, QueueBatchId, QueueConsumerId, QueueId, QueueMessageId,
     VersionId, WorkerId, WorkloadSummary,

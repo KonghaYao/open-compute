@@ -6,13 +6,15 @@ import {
   IconCode,
   IconUpload,
 } from "@tabler/icons-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { CloudflareProductIcon } from "../../../components/cloudflare-product-icons";
 import { CodeBlock } from "../../../components/code-block";
 import { CreateStepper } from "../../../components/create-stepper";
 import { useAuth } from "../../../features/auth/auth-atoms";
+import { latestCompatibilityDate } from "../../../lib/compatibility";
+import { capabilityQuery, queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/workers/new")({
   component: CreateWorkerPage,
@@ -37,8 +39,18 @@ function CreateWorkerPage() {
   const [method, setMethod] = useState<Method | null>(null);
   const [name, setName] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [compatibilityDate, setCompatibilityDate] = useState("");
+  const [compatibilityFlags, setCompatibilityFlags] = useState<string[]>([]);
+  const capabilities = useQuery(
+    capabilityQuery(client, selectedInstanceId ?? null),
+  );
   const trimmedName = name.trim();
   const validName = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(trimmedName);
+  const defaultCompatibilityDate = capabilities.data
+    ? latestCompatibilityDate(
+        capabilities.data.compatibility.binary_maximum_date,
+      )
+    : "";
   const deploy = useMutation({
     mutationFn: async () => {
       if (!client || !selectedInstanceId || !method || !validName) {
@@ -54,20 +66,26 @@ function CreateWorkerPage() {
               type: "application/javascript+module",
             });
       if (!moduleFile) throw new Error("Choose a JavaScript module.");
-      const capabilities =
-        await client.openCompute.capabilities.getForAccount(selectedInstanceId);
+      const runtime =
+        capabilities.data ??
+        (await client.openCompute.capabilities.getForAccount(
+          selectedInstanceId,
+        ));
       await client.workers.scripts.update(trimmedName, {
         account_id: selectedInstanceId,
         metadata: {
           main_module: moduleFile.name,
-          compatibility_date: capabilities.compatibility_date.maximum,
+          compatibility_date:
+            compatibilityDate ||
+            latestCompatibilityDate(runtime.compatibility.binary_maximum_date),
+          compatibility_flags: compatibilityFlags,
         },
         files: [moduleFile],
       });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["cloudflare-v4", "workers", selectedInstanceId],
+        queryKey: queryKeys.workers(selectedInstanceId),
       });
       await navigate({
         to: "/workers/$workerId",
@@ -155,6 +173,49 @@ function CreateWorkerPage() {
                 </p>
               ) : null}
             </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Compatibility date"
+                type="date"
+                max={defaultCompatibilityDate}
+                value={compatibilityDate || defaultCompatibilityDate}
+                onChange={(event) => setCompatibilityDate(event.target.value)}
+              />
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium">Compatibility flags</span>
+                <select
+                  multiple
+                  className="border-kumo-line bg-kumo-base min-h-24 rounded-lg border p-2"
+                  value={compatibilityFlags}
+                  onChange={(event) =>
+                    setCompatibilityFlags(
+                      Array.from(
+                        event.currentTarget.selectedOptions,
+                        (option) => option.value,
+                      ),
+                    )
+                  }
+                >
+                  {capabilities.data?.compatibility.features.flatMap(
+                    (feature) =>
+                      [feature.enable_flag, feature.disable_flag]
+                        .filter((flag): flag is string => Boolean(flag))
+                        .map((flag) => (
+                          <option key={flag} value={flag}>
+                            {flag}
+                            {feature.experimental ? " (experimental)" : ""}
+                          </option>
+                        )),
+                  )}
+                </select>
+              </label>
+            </div>
+            <p className="text-kumo-subtle mt-2 text-xs">
+              workerd validates dates through today, up to{" "}
+              {capabilities.data?.compatibility.binary_maximum_date ??
+                "the embedded binary maximum"}
+              .
+            </p>
             {method === "hello" ? (
               <div className="mt-5">
                 <p className="mb-2 font-medium">Worker preview</p>

@@ -2,7 +2,7 @@
 
 use open_compute_artifacts::SnapshotObjectStore;
 use open_compute_core::{ErrorCode, PlatformSnapshotManifestV1};
-use open_compute_storage::RestoreTarget;
+use open_compute_storage::platform_restore::RestoreTarget;
 use std::fs;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;

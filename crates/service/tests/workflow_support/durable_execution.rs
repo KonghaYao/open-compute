@@ -8,8 +8,9 @@ use open_compute_core::{
 use open_compute_service::{
     metrics::MetricsRegistry, scheduler::SchedulerService, workflow_http::WorkflowApiState,
 };
+use open_compute_storage::scheduler::SchedulerStore;
 use open_compute_storage::scheduler::WorkflowState;
-use open_compute_storage::{SchedulerStore, WorkflowRefState, WorkflowRepository};
+use open_compute_storage::workflows::{WorkflowRefState, WorkflowRepository};
 use open_compute_workers::VersionBindingInput;
 use serde_json::{Value, json};
 use std::{

@@ -53,7 +53,7 @@ pub(super) async fn update(
     };
     let mut commands = Vec::with_capacity(values.len());
     for value in values {
-        if open_compute_storage::validate_key(&value.key).is_err()
+        if open_compute_storage::kv::validate_key(&value.key).is_err()
             || value.expiration_ttl.is_some_and(|ttl| ttl < 60)
             || value.expiration_ttl.is_none()
                 && value
@@ -73,10 +73,9 @@ pub(super) async fn update(
             value.value.into_bytes()
         };
         if bytes.len() > MAX_VALUE_BODY
-            || value
-                .metadata
-                .as_ref()
-                .is_some_and(|metadata| open_compute_storage::canonical_metadata(metadata).is_err())
+            || value.metadata.as_ref().is_some_and(|metadata| {
+                open_compute_storage::kv::canonical_metadata(metadata).is_err()
+            })
         {
             return error_response(V4Error::InvalidRequest, context.request_id());
         }
@@ -153,7 +152,7 @@ pub(super) async fn get(
     if body
         .keys
         .iter()
-        .any(|key| open_compute_storage::validate_key(key).is_err())
+        .any(|key| open_compute_storage::kv::validate_key(key).is_err())
     {
         return error_response(V4Error::InvalidRequest, context.request_id());
     }
@@ -234,7 +233,7 @@ pub(super) async fn delete(
     };
     if keys
         .iter()
-        .any(|key| open_compute_storage::validate_key(key).is_err())
+        .any(|key| open_compute_storage::kv::validate_key(key).is_err())
     {
         return error_response(V4Error::InvalidRequest, context.request_id());
     }

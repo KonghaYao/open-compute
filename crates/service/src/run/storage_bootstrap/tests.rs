@@ -1,10 +1,11 @@
 use super::*;
 use open_compute_core::{BindingKind, ErrorCode, PublicDomainConfig, ResourceId, ResourceState};
-use open_compute_storage::{
-    D1DatabaseRepository, D1Engine, D1Paths, KvEngine, KvNamespaceRepository, KvPaths,
-    KvPutOptions, ReserveResourceCreate, ResourceCreateReservation, ResourceRecord,
-    ResourceRepository, inspect_current_schema,
+use open_compute_storage::d1::{D1DatabaseRepository, D1Engine, D1Paths};
+use open_compute_storage::kv::{KvEngine, KvNamespaceRepository, KvPaths, KvPutOptions};
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRecord, ResourceRepository,
 };
+use open_compute_storage::schema_inspection::inspect_current_schema;
 use open_compute_workers::ResourceDriver;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};

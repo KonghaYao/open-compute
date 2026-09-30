@@ -25,7 +25,8 @@ use open_compute_service::service_invocations::ServiceInvocationRegistry;
 use open_compute_service::{
     SqliteKvBindingExecutor, bind_binding_backend, serve_binding_backend_with_assets,
 };
-use open_compute_storage::{PlatformStorage, WorkerRepository};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{
     AssetEntryV1, AssetHeaderOperation, AssetHeaderRule, AssetManifestV1, AssetRedirectRule,
     AssetRoutingConfigV1, BundleLimits, CanonicalBundle, CreateVersionOutcome,
@@ -471,7 +472,7 @@ async fn deploy_hybrid(
     controller: &VersionController<'_>,
     artifacts: &ArtifactStore,
     spec: HybridVersionSpec<'_>,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     let routing = AssetRoutingConfigV1 {
         schema_version: 1,
         binding: Some("ASSETS".to_owned()),
@@ -585,10 +586,14 @@ fn version_request(
         secrets: BTreeMap::new(),
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: open_compute_workers::VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: promote.then_some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: promote
+            .then_some(open_compute_storage::worker_repository::DeploymentSource::VersionsApi),
         observability: None,
         request_id: RequestId::generate(),
         now_ms,
@@ -598,7 +603,7 @@ fn version_request(
 async fn deploy(
     controller: &VersionController<'_>,
     request: CreateVersionRequest,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     match controller.create_version(request).await.unwrap() {
         CreateVersionOutcome::Applied(result) => result.version,
         CreateVersionOutcome::Replay(_) => panic!("unexpected version replay"),
@@ -609,7 +614,7 @@ fn dispatch_target(
     repository: WorkerRepository<'_>,
     account_id: open_compute_core::InstanceId,
     worker_id: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
 ) -> DispatchTarget {
     let route_generation = i64::try_from(
         repository

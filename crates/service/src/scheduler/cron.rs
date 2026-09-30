@@ -4,10 +4,11 @@ use super::{SchedulerService, decode_pool_state, encode_pool_state, scheduler_ta
 use crate::metrics::{CronRunOutcome, MetricsRegistry, SchedulerClaimOutcome};
 use crate::runtime_bridge::{DispatchTarget, ScheduledDispatchRequest};
 use open_compute_core::{PlatformError, RequestId, SchedulerKind, SchedulerPoolState};
-use open_compute_storage::{
-    ClaimedCronRun, CronCompletion, CronCompletionResult, CronRepository, CronUnknownReason,
-    WorkerRepository,
+use open_compute_storage::cron::CronRepository;
+use open_compute_storage::scheduler::{
+    ClaimedCronRun, CronCompletion, CronCompletionResult, CronUnknownReason,
 };
+use open_compute_storage::worker_repository::WorkerRepository;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;

@@ -6,18 +6,22 @@ fn p2_2_queue_enqueue_delay_quota_retention_and_counters_are_transactional() {
     let config = storage_config(&root);
     let storage = PlatformStorage::bootstrap(&config, &SystemClock).unwrap();
     let scheduler_path = storage.data_dir().ensure_scheduler_db().unwrap();
-    let scheduler =
-        crate::SchedulerStore::open(&scheduler_path, 5_000, 1, storage.identity().instance_id)
-            .unwrap();
+    let scheduler = crate::scheduler::SchedulerStore::open(
+        &scheduler_path,
+        5_000,
+        1,
+        storage.identity().instance_id,
+    )
+    .unwrap();
     let queue_id = open_compute_core::QueueId::generate();
-    let queue_config = crate::QueueConfig {
+    let queue_config = crate::queues::QueueConfig {
         delivery_delay_seconds: 7,
         retention_seconds: 60,
         max_backlog_bytes: 8,
-        ..crate::QueueConfig::default()
+        ..crate::queues::QueueConfig::default()
     };
     scheduler
-        .create_queue_projection(&crate::QueueProjection {
+        .create_queue_projection(&crate::scheduler::QueueProjection {
             queue_id,
             instance_id: storage.identity().instance_id,
             lifecycle_generation: 1,
@@ -29,7 +33,7 @@ fn p2_2_queue_enqueue_delay_quota_retention_and_counters_are_transactional() {
         .unwrap();
     let result = scheduler
         .enqueue_queue(
-            &crate::QueueEnqueueRequest {
+            &crate::scheduler::QueueEnqueueRequest {
                 queue_id,
                 request_id: uuid::Uuid::now_v7(),
                 output_gate: false,
@@ -37,13 +41,13 @@ fn p2_2_queue_enqueue_delay_quota_retention_and_counters_are_transactional() {
                 config_generation: 1,
                 batch_delay_seconds: Some(3),
                 messages: vec![
-                    crate::QueueMessageInput {
-                        content_type: crate::QueueContentType::Json,
+                    crate::scheduler::QueueMessageInput {
+                        content_type: crate::scheduler::QueueContentType::Json,
                         body: b"{}".to_vec(),
                         delay_seconds: None,
                     },
-                    crate::QueueMessageInput {
-                        content_type: crate::QueueContentType::Bytes,
+                    crate::scheduler::QueueMessageInput {
+                        content_type: crate::scheduler::QueueContentType::Bytes,
                         body: vec![1, 2, 3],
                         delay_seconds: Some(0),
                     },
@@ -78,15 +82,15 @@ fn p2_2_queue_enqueue_delay_quota_retention_and_counters_are_transactional() {
     assert_eq!(
         scheduler
             .enqueue_queue(
-                &crate::QueueEnqueueRequest {
+                &crate::scheduler::QueueEnqueueRequest {
                     queue_id,
                     request_id: uuid::Uuid::now_v7(),
                     output_gate: false,
                     lifecycle_generation: 1,
                     config_generation: 1,
                     batch_delay_seconds: None,
-                    messages: vec![crate::QueueMessageInput {
-                        content_type: crate::QueueContentType::Text,
+                    messages: vec![crate::scheduler::QueueMessageInput {
+                        content_type: crate::scheduler::QueueContentType::Text,
                         body: b"more".to_vec(),
                         delay_seconds: None,
                     }],
@@ -117,10 +121,11 @@ fn p2_2_queue_enqueue_delay_quota_retention_and_counters_are_transactional() {
     assert!(scheduler.queue_counter_mismatches().unwrap().is_empty());
     drop(reader);
     drop(scheduler);
-    let inspection = crate::inspect_scheduler_db(&scheduler_path, 5_000, 61_000).unwrap();
+    let inspection =
+        crate::scheduler::inspect_scheduler_db(&scheduler_path, 5_000, 61_000).unwrap();
     assert_eq!(
         inspection.schema_version,
-        crate::current_scheduler_schema_version()
+        crate::scheduler::current_scheduler_schema_version()
     );
     assert_eq!(inspection.queue.queues, 1);
     assert_eq!(inspection.queue.backlog_messages, 0);

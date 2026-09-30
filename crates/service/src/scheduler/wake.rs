@@ -1,7 +1,7 @@
 //! Scheduler notification and deadline coordination.
 
 use open_compute_core::SchedulerClock;
-use open_compute_storage::SchedulerWakeSignal;
+use open_compute_storage::scheduler::SchedulerWakeSignal;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

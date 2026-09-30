@@ -2,8 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { importRuntime, moduleUrl } from "../compiled-runtime.mjs";
 
-const { resolveSnapshot } = await importRuntime("loader/shared.ts", {
-  "./snapshot.js": moduleUrl("export function assertSnapshot() {}"),
+const { resolveSnapshot, snapshotWorkerCode } = await importRuntime(
+  "loader/shared.ts",
+  {
+    "./snapshot.js": moduleUrl("export function assertSnapshot() {}"),
+  },
+);
+
+test("dynamic Worker validation delegates experimental flags to workerd", () => {
+  assert.deepEqual(
+    snapshotWorkerCode({
+      compatibilityDate: "2026-09-08",
+      compatibilityFlags: ["experimental"],
+      limits: { cpuMs: 30_000, subRequests: 1_000 },
+    }),
+    {
+      compatibilityDate: "2026-09-08",
+      compatibilityFlags: ["experimental"],
+      allowExperimental: true,
+      limits: { cpuMs: 30_000, subRequests: 1_000 },
+    },
+  );
 });
 
 test("runtime snapshot rejects a route generation changed during source resolution", async () => {

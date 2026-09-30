@@ -21,10 +21,11 @@ use open_compute_artifacts::MockS3;
 use open_compute_core::config::DataConfig;
 use open_compute_core::{Redactor, RequestId, SystemClock, VersionId};
 use open_compute_runtime::verify_runtime_binary;
-use open_compute_storage::{
-    NewVersion, NewVersionProducts, PlatformStorage, VersionContentKind, WorkerRepository,
-    WorkflowRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::worker_repository::{
+    NewVersion, NewVersionProducts, VersionContentKind, WorkerRepository,
 };
+use open_compute_storage::workflows::WorkflowRepository;
 use rustix::process::{Pid, Signal, kill_process};
 use serde_json::Value;
 use std::fs;

@@ -8,7 +8,7 @@ use axum::extract::Request;
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::Response;
 use open_compute_artifacts::{ARTIFACT_KEY_VERSION, ArtifactRef};
-use open_compute_storage::WorkerRepository;
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{CanonicalBundle, ModuleType};
 
 pub(super) async fn download_script(
@@ -47,7 +47,9 @@ pub(super) async fn download_script(
     {
         return raw_response(context, StatusCode::NOT_MODIFIED, None, &etag, Vec::new());
     }
-    if snapshot.version.content_kind == open_compute_storage::VersionContentKind::AssetsOnly {
+    if snapshot.version.content_kind
+        == open_compute_storage::worker_repository::VersionContentKind::AssetsOnly
+    {
         return multipart_response(context, &etag, None, "assets-only");
     }
     let Some(digest) = snapshot.version.artifact_sha256 else {
@@ -181,7 +183,7 @@ mod tests {
     use crate::http;
     use axum::body::to_bytes;
     use open_compute_core::{InstanceId, RequestId, SecretString};
-    use open_compute_storage::{DeploymentSource, WorkerRepository};
+    use open_compute_storage::worker_repository::{DeploymentSource, WorkerRepository};
     use open_compute_workers::{
         AssetEntryV1, AssetManifestV1, AssetRoutingConfigV1, CreateVersionOutcome,
         CreateVersionRequest, ModuleInput, NotFoundHandling, RunWorkerFirst, RuntimeValidator,
@@ -224,7 +226,10 @@ mod tests {
             secrets: BTreeMap::new(),
             bindings: BTreeMap::new(),
             services: BTreeMap::new(),
-            runtime_features: Default::default(),
+            runtime_features: open_compute_workers::VersionRuntimeFeatures {
+                compatibility_date: "2026-09-08".to_owned(),
+                ..Default::default()
+            },
             queue_consumers: Vec::new(),
             crons: Vec::new(),
             deployment_source: Some(DeploymentSource::ScriptUpload),
@@ -292,7 +297,10 @@ mod tests {
             secrets: BTreeMap::new(),
             bindings: BTreeMap::new(),
             services: BTreeMap::new(),
-            runtime_features: Default::default(),
+            runtime_features: open_compute_workers::VersionRuntimeFeatures {
+                compatibility_date: "2026-09-08".to_owned(),
+                ..Default::default()
+            },
             queue_consumers: Vec::new(),
             crons: Vec::new(),
             deployment_source: Some(DeploymentSource::ScriptUpload),

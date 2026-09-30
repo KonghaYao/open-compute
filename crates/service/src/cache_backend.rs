@@ -12,11 +12,13 @@ use open_compute_artifacts::{ARTIFACT_KEY_VERSION, ArtifactCache, ArtifactRef, A
 use open_compute_core::{
     ErrorCode, InstanceId, PlatformError, ResponseCacheConfig, VersionId, WorkerId,
 };
-use open_compute_storage::{
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::cache::{
     CacheBodyRef, CacheIdentity, CacheLookupStatus, CacheManager, CacheMethod, CachePurge,
-    CachePut, CacheStoredResponse, CacheSurface, PlatformStorage, WorkerRepository,
-    version_runtime_features,
+    CachePut, CacheStoredResponse, CacheSurface,
 };
+use open_compute_storage::runtime_features::version_runtime_features;
+use open_compute_storage::worker_repository::WorkerRepository;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -655,7 +657,7 @@ fn lookup_status(status: CacheLookupStatus) -> &'static str {
 
 fn insert_lookup_headers(
     headers: &mut HeaderMap,
-    lookup: &open_compute_storage::CacheLookup,
+    lookup: &open_compute_storage::cache::CacheLookup,
 ) -> Result<(), PlatformError> {
     headers.insert(
         HeaderName::from_static("x-open-compute-cache-status"),

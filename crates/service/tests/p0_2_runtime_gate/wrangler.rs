@@ -121,8 +121,8 @@ async fn verify_project(
             account,
             Some(WORKFLOW_NAME),
             None,
-            open_compute_storage::CatalogSort::Name,
-            open_compute_storage::CatalogDirection::Asc,
+            open_compute_storage::catalog_page::CatalogSort::Name,
+            open_compute_storage::catalog_page::CatalogDirection::Asc,
             None,
             10,
         )

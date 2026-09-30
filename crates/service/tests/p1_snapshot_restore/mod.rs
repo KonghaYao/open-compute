@@ -20,10 +20,13 @@ use open_compute_service::backup_cli::{
     backup_restore, backup_retention_plan,
 };
 use open_compute_service::instance_registry::{InstanceRegistry, ServiceScope};
-use open_compute_storage::{
-    PlatformStorage, QueueConfig, QueueContentType, QueueEnqueueRequest, QueueMessageInput,
-    QueueRepository, RestoreTarget, SchedulerStore, inspect_control_db, inspect_master_key,
-    inspect_scheduler_db, sign_snapshot_manifest,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::inspect::{inspect_control_db, inspect_master_key};
+use open_compute_storage::platform_restore::RestoreTarget;
+use open_compute_storage::platform_snapshot::sign_snapshot_manifest;
+use open_compute_storage::queues::{QueueConfig, QueueRepository};
+use open_compute_storage::scheduler::{
+    QueueContentType, QueueEnqueueRequest, QueueMessageInput, SchedulerStore, inspect_scheduler_db,
 };
 use open_compute_workers::{CreateQueueOutcome, CreateQueueRequest, QueueController};
 use std::fs;

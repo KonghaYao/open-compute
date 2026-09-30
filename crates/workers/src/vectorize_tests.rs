@@ -2,7 +2,7 @@ use super::*;
 use crate::{CreateResourceOutcome, CreateResourceRequest, ResourceController, ResourcePins};
 use open_compute_core::config::DataConfig;
 use open_compute_core::{ErrorCode, RequestId, ResourceId, SystemClock};
-use open_compute_storage::ResourceRepository;
+use open_compute_storage::resources::ResourceRepository;
 use std::time::Duration;
 
 fn storage() -> (tempfile::TempDir, PlatformStorage) {

@@ -1,9 +1,9 @@
 //! Workflow catalog, version, binding, and live-version authority.
 
 use crate::catalog_page::{CatalogColumns, build_catalog_sql, record_catalog_cursor};
-use crate::{
-    CatalogCursor, CatalogDirection, CatalogListPage, CatalogSort, ControlDb, VersionState,
-};
+use crate::catalog_page::{CatalogCursor, CatalogDirection, CatalogListPage, CatalogSort};
+use crate::control_db::ControlDb;
+use crate::worker_repository::VersionState;
 use open_compute_core::{
     BindingId, ErrorCode, InstanceId, PlatformError, ResourceAvailability, ResourceState,
     VersionId, WorkflowId, WorkflowInstanceId, WorkflowOperationId, WorkflowToken,
@@ -302,7 +302,7 @@ impl<'a> WorkflowRepository<'a> {
             return Err(error(ErrorCode::LimitInvalid));
         }
         let search = search.map(str::trim).filter(|value| !value.is_empty());
-        let exact_id = search.and_then(crate::search_as_workflow_id);
+        let exact_id = search.and_then(crate::catalog_page::search_as_workflow_id);
         let search_needle = if exact_id.is_some() {
             None
         } else {

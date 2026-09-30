@@ -62,7 +62,7 @@ pub(crate) async fn run_offline(
     }
     let _lock = crate::run::DaemonLock::acquire(root)?;
     let cache_dir = root.join("cache");
-    open_compute_storage::ensure_dir_secure(&cache_dir)?;
+    open_compute_storage::fs::ensure_dir_secure(&cache_dir)?;
     let package = open_compute_runtime::materialize_embedded_runtime(&cache_dir)?;
     match command {
         CaddyCommand::ListModules | CaddyCommand::Fmt { .. } => {
@@ -103,7 +103,7 @@ async fn run_read_only(
                 )
             })?;
             let file = crate::config_load::lexical_absolute(&cwd, &file)?;
-            open_compute_storage::validate_owned_file(&file, false)?;
+            open_compute_storage::fs::validate_owned_file(&file, false)?;
             let source = std::fs::read(file).map_err(|_| {
                 PlatformError::new(ErrorCode::ConfigPathInvalid, "failed to read Caddyfile")
             })?;
@@ -112,7 +112,7 @@ async fn run_read_only(
         _ => unreachable!(),
     };
     let tmp_root = data_root.join("tmp");
-    open_compute_storage::ensure_dir_secure(&tmp_root)?;
+    open_compute_storage::fs::ensure_dir_secure(&tmp_root)?;
     let (_, digest) = package.caddy()?;
     crate::task_workspace::recover(
         &tmp_root,
@@ -168,7 +168,7 @@ async fn validate(
     out: &mut impl Write,
 ) -> Result<(), PlatformError> {
     let tmp_dir = root.join("tmp");
-    open_compute_storage::ensure_dir_secure(&tmp_dir)?;
+    open_compute_storage::fs::ensure_dir_secure(&tmp_dir)?;
     let (_, digest) = package.caddy()?;
     crate::task_workspace::recover(
         &tmp_dir,
@@ -234,7 +234,7 @@ async fn run(
     stdin: Vec<u8>,
 ) -> Result<open_compute_runtime::BoundedOutput, PlatformError> {
     let (image, digest) = package.caddy()?;
-    open_compute_storage::ensure_dir_secure(&cwd.join("tmp"))?;
+    open_compute_storage::fs::ensure_dir_secure(&cwd.join("tmp"))?;
     run_host_process(
         &image,
         HostProcessSpec {

@@ -283,11 +283,30 @@ export type CacheStatus = {
 export type Capabilities = {
   readonly release: string;
   readonly wrangler_version: "4.143.0";
-  readonly compatibility_date: {
-    readonly minimum: string;
-    readonly maximum: string;
+  readonly compatibility: {
+    readonly validation: "workerd_code_version";
+    readonly binary_maximum_date: string;
+    readonly future_dates_allowed: false;
+    readonly experimental_enabled: boolean;
+    readonly features: readonly {
+      readonly field: string;
+      readonly enable_flag?: string;
+      readonly disable_flag?: string;
+      readonly default_on_date?: string;
+      readonly enabled_for_all_dates: boolean;
+      readonly experimental: boolean;
+      readonly python_snapshot_release: boolean;
+      readonly implied_by?: readonly {
+        readonly flags: readonly string[];
+        readonly after_date: string;
+      }[];
+    }[];
+    readonly catalog_sha256: string;
   };
-  readonly compatibility_flags: readonly string[];
+  readonly system_workers: {
+    readonly compatibility_date: string;
+    readonly compatibility_flags: readonly string[];
+  };
   readonly endpoints: Record<
     string,
     "supported" | "supported_with_deviation" | "unsupported"

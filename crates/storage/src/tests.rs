@@ -1,16 +1,21 @@
 //! Real filesystem, lock, control-database, and AEAD tests.
 
+use crate::PlatformStorage;
+use crate::catalog_page::{CatalogDirection, CatalogSort, decode_catalog_cursor};
+use crate::crypto::SecretCrypto;
+use crate::data_dir::{DataDir, inspect_durable_object_storage};
 use crate::fs as sfs;
+use crate::fs::atomic_write;
 use crate::master_key;
 use crate::migrations::MigrationFault;
-use crate::workers::EffectiveResourceLimits;
-use crate::{
-    CatalogDirection, CatalogSort, DataDir, IdempotencyReservation, NewQueueConsumerDeclaration,
-    NewVersion, PlatformStorage, QueueConsumerConfig, QueueConsumerRepository,
-    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
-    SYSTEM_DASHBOARD_WORKER_NAME, SecretCrypto, StoredVersionSecret, SystemOwnedVersionKind,
-    UpdateWorkerObservabilitySettings, VersionState, WorkerRepository, atomic_write,
-    decode_catalog_cursor, inspect_durable_object_storage,
+use crate::queue_consumers::{
+    NewQueueConsumerDeclaration, QueueConsumerConfig, QueueConsumerRepository,
+};
+use crate::resources::{ReserveResourceCreate, ResourceCreateReservation, ResourceRepository};
+use crate::worker_repository::EffectiveResourceLimits;
+use crate::worker_repository::{
+    IdempotencyReservation, NewVersion, SYSTEM_DASHBOARD_WORKER_NAME, StoredVersionSecret,
+    SystemOwnedVersionKind, UpdateWorkerObservabilitySettings, VersionState, WorkerRepository,
 };
 use open_compute_core::clock::{DeterministicClock, SystemClock};
 use open_compute_core::config::DataConfig;
@@ -176,7 +181,7 @@ fn inspect_identity_after(sql: &str) -> ErrorCode {
         .unwrap();
     conn.execute_batch(sql).unwrap();
     drop(conn);
-    let db = crate::ControlDb::open(&root.join("control.sqlite"), 100).unwrap();
+    let db = crate::control_db::ControlDb::open(&root.join("control.sqlite"), 100).unwrap();
     crate::identity::inspect_stored(&db).unwrap_err().code()
 }
 
@@ -211,7 +216,7 @@ fn insert_ready_result(
             id,
             instance_id: account,
             worker_id: worker,
-            content_kind: crate::VersionContentKind::Worker,
+            content_kind: crate::worker_repository::VersionContentKind::Worker,
             artifact_sha256: Some(digest),
             artifact_size: Some(100),
             artifact_schema_version: Some(1),
@@ -225,7 +230,7 @@ fn insert_ready_result(
             request_id: request,
             now_ms: now,
         },
-        &crate::NewVersionProducts::default(),
+        &crate::worker_repository::NewVersionProducts::default(),
         1_000_000,
     )?;
     repo.begin_validation(id)?;
@@ -247,7 +252,7 @@ fn inspect_schema_after_raw_sql(sql: &str) -> ErrorCode {
     let conn = Connection::open(&path).unwrap();
     conn.execute_batch(sql).unwrap();
     drop(conn);
-    let db = crate::ControlDb::open(&path, 100).unwrap();
+    let db = crate::control_db::ControlDb::open(&path, 100).unwrap();
     crate::migrations::inspect_schema(&db).unwrap_err().code()
 }
 

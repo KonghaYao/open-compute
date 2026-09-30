@@ -2,10 +2,12 @@ use super::*;
 use crate::ResourceDriver;
 use open_compute_core::config::DataConfig;
 use open_compute_core::{RequestId, ResourceId, SystemClock, durable_object_namespace_prefix};
-use open_compute_storage::{
-    DO_NAMESPACE_SCHEMA_VERSION, PlatformStorage, ReserveResourceCreate, ResourceCreateReservation,
-    ResourceRepository, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::durable_objects::DO_NAMESPACE_SCHEMA_VERSION;
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
 };
+use open_compute_storage::worker_repository::WorkerRepository;
 
 fn fixture() -> (tempfile::TempDir, PlatformStorage, ResourceRecord, WorkerId) {
     let temp = tempfile::tempdir().unwrap();

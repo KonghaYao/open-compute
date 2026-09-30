@@ -10,11 +10,16 @@ use open_compute_core::{
     CanonicalBindingConfig, CanonicalPermissions, ErrorCode, InstanceId, RequestId, SystemClock,
     WorkerId,
 };
-use open_compute_storage::{
-    NewVersion, NewVersionBinding, R2BucketRepository, R2MultipartPartRecord,
-    R2MultipartRepository, R2MultipartState, R2MultipartUploadRecord, R2ObjectRecord,
-    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository, WorkerRepository,
+use open_compute_storage::bindings::NewVersionBinding;
+use open_compute_storage::r2::R2BucketRepository;
+use open_compute_storage::r2_multipart::{
+    R2MultipartPartRecord, R2MultipartRepository, R2MultipartState, R2MultipartUploadRecord,
 };
+use open_compute_storage::r2_objects::R2ObjectRecord;
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
+};
+use open_compute_storage::worker_repository::{NewVersion, WorkerRepository};
 use open_compute_workers::R2ResourceDriver;
 use serde::Serialize;
 use sha2::{Digest as _, Sha256};
@@ -75,7 +80,7 @@ async fn fixture() -> Fixture {
                 fingerprint_key_id: storage.crypto().fingerprint_key_id(),
                 request_fingerprint: &fingerprint,
                 resource_id: resource,
-                driver_schema_version: open_compute_storage::R2_SCHEMA_VERSION,
+                driver_schema_version: open_compute_storage::r2::R2_SCHEMA_VERSION,
                 request_id: RequestId::generate(),
                 now_ms: 10,
                 expires_at_ms: 1000,
@@ -110,7 +115,7 @@ async fn fixture() -> Fixture {
     workers
         .insert_staging_version(
             &version_input(account, worker.id, version),
-            &open_compute_storage::NewVersionProducts {
+            &open_compute_storage::worker_repository::NewVersionProducts {
                 bindings: &[NewVersionBinding {
                     id: binding,
                     name: "BUCKET".to_owned(),
@@ -154,7 +159,7 @@ fn version_input(account_id: InstanceId, worker_id: WorkerId, version_id: Versio
         id: version_id,
         instance_id: account_id,
         worker_id,
-        content_kind: open_compute_storage::VersionContentKind::Worker,
+        content_kind: open_compute_storage::worker_repository::VersionContentKind::Worker,
         artifact_sha256: Some([1; 32]),
         artifact_size: Some(1),
         artifact_schema_version: Some(1),
@@ -162,7 +167,8 @@ fn version_input(account_id: InstanceId, worker_id: WorkerId, version_id: Versio
         worker_code_sha256: [2; 32],
         compatibility_date: "2026-09-08".into(),
         compatibility_flags: Vec::new(),
-        resource_limits: open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+        resource_limits:
+            open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
         vars: BTreeMap::new(),
         secrets: BTreeMap::new(),
         request_id: RequestId::generate(),

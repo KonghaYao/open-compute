@@ -367,7 +367,7 @@ impl<'a> VersionController<'a> {
                 request_id: request.request_id,
                 now_ms: request.now_ms,
             },
-            &open_compute_storage::NewVersionProducts {
+            &open_compute_storage::worker_repository::NewVersionProducts {
                 annotations: Some(&request.runtime_features.annotations),
                 assets: prepared_assets.as_ref().map(|value| &value.0),
                 asset_object_refs: prepared_assets
@@ -447,7 +447,7 @@ impl<'a> VersionController<'a> {
         durable_object_classes.dedup();
         let queue_declarations =
             QueueConsumerRepository::new(self.storage.db()).version_declarations(version_id)?;
-        let cron_declarations = open_compute_storage::CronRepository::new(self.storage.db())
+        let cron_declarations = open_compute_storage::cron::CronRepository::new(self.storage.db())
             .version_config(version_id)?
             .declarations;
         let requires_product_promoter =
@@ -456,8 +456,10 @@ impl<'a> VersionController<'a> {
             .into_iter()
             .map(|consumer| consumer.entrypoint)
             .collect::<Vec<_>>();
-        let (cache_policies, _) =
-            open_compute_storage::version_runtime_features(self.storage.db(), version_id)?;
+        let (cache_policies, _) = open_compute_storage::runtime_features::version_runtime_features(
+            self.storage.db(),
+            version_id,
+        )?;
         queue_entrypoints.extend(
             cache_policies
                 .into_iter()

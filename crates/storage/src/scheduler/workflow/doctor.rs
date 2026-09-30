@@ -1,8 +1,9 @@
 //! Bounded read-only cross-database Workflow diagnostics.
 
 use super::*;
-use crate::{
-    ControlDb, WorkflowOperation, WorkflowOperationKind, WorkflowOperationResult, WorkflowRefState,
+use crate::control_db::ControlDb;
+use crate::workflows::{
+    WorkflowOperation, WorkflowOperationKind, WorkflowOperationResult, WorkflowRefState,
     WorkflowRepository,
 };
 use serde::Serialize;
@@ -83,7 +84,7 @@ pub fn inspect_workflow_databases(
     }
     let scheduler = SchedulerStore {
         connection: std::sync::Mutex::new(connection),
-        wake: std::sync::Arc::new(crate::SchedulerWakeSignal::default()),
+        wake: std::sync::Arc::new(crate::scheduler::SchedulerWakeSignal::default()),
         instance_id,
     };
     let repository = WorkflowRepository::new(&control);

@@ -457,7 +457,7 @@ fn write_instances_rejects_unresponsive_locked_daemon() {
     let deps = test_deps(&temp);
     let root = deps.registry.root_for(ServiceScope::User);
     fs::create_dir_all(root.parent().unwrap()).unwrap();
-    open_compute_storage::ensure_dir_secure(root).unwrap();
+    open_compute_storage::fs::ensure_dir_secure(root).unwrap();
     let lock = root.join("ocd.lock");
     write_mode(&lock, "", 0o600);
     let file = fs::File::open(&lock).unwrap();
@@ -1672,10 +1672,10 @@ async fn online_caddy_tools_use_the_daemon_control_socket() {
         InstanceRegistry::with_roots(temp.path().join("ocd/system"), temp.path().join("ocd/user"));
     write_shared_gateway(&registry);
     let root = registry.root_for(ServiceScope::User);
-    open_compute_storage::ensure_dir_secure(&root.join("cache")).unwrap();
+    open_compute_storage::fs::ensure_dir_secure(&root.join("cache")).unwrap();
     open_compute_runtime::materialize_embedded_runtime(&root.join("cache")).unwrap();
     let runtime = root.join("run");
-    open_compute_storage::ensure_dir_secure(&runtime).unwrap();
+    open_compute_storage::fs::ensure_dir_secure(&runtime).unwrap();
     let socket = runtime.join("control.sock");
     let listener = UnixListener::bind(&socket).unwrap();
     fs::set_permissions(&socket, fs::Permissions::from_mode(0o600)).unwrap();

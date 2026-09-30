@@ -1,7 +1,7 @@
 //! Authenticated binary D1 transport framing with native BLOB fields.
 
 use open_compute_core::{ErrorCode, PlatformError};
-use open_compute_storage::{
+use open_compute_storage::d1::{
     D1_MAX_BATCH_STATEMENTS, D1_MAX_BOUND_PARAMS, D1_MAX_SQL_BYTES, D1Statement, D1StatementResult,
     D1Value,
 };
@@ -207,10 +207,10 @@ impl<'a> Reader<'a> {
                 Ok(D1Value::Real(value))
             }
             3 => self
-                .text(open_compute_storage::D1_MAX_VALUE_OR_ROW_BYTES)
+                .text(open_compute_storage::d1::D1_MAX_VALUE_OR_ROW_BYTES)
                 .map(D1Value::Text),
             4 => self
-                .length_bytes(open_compute_storage::D1_MAX_VALUE_OR_ROW_BYTES)
+                .length_bytes(open_compute_storage::d1::D1_MAX_VALUE_OR_ROW_BYTES)
                 .map(|value| D1Value::Blob(value.to_vec())),
             _ => Err(protocol_error()),
         }

@@ -17,6 +17,7 @@ import {
 import { openConfirmDeleteDialog } from "../../../components/resource-dialog";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/workers/")({
   validateSearch: (search: Record<string, unknown>): { q?: string } =>
@@ -45,7 +46,7 @@ function WorkersPage() {
   const from = rangeEnd - 24 * 60 * 60 * 1_000;
 
   const workers = useQuery({
-    queryKey: ["cloudflare-v4", "workers", selectedInstanceId],
+    queryKey: queryKeys.workers(selectedInstanceId),
     queryFn: ({ signal }) =>
       client!.workers.scripts.list(
         { account_id: selectedInstanceId! },
@@ -54,13 +55,7 @@ function WorkersPage() {
     enabled,
   });
   const usage = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "workers",
-      "usage",
-      selectedInstanceId,
-      rangeEnd,
-    ],
+    queryKey: queryKeys.workers(selectedInstanceId, "usage", rangeEnd),
     queryFn: ({ signal }) =>
       client!.openCompute.workers.observability.usage(selectedInstanceId!, {
         signal,
@@ -81,7 +76,7 @@ function WorkersPage() {
           throw error;
         }
         await queryClient.invalidateQueries({
-          queryKey: ["cloudflare-v4", "workers", selectedInstanceId],
+          queryKey: queryKeys.workers(selectedInstanceId),
         });
         feedback.success("Worker deleted.");
       },

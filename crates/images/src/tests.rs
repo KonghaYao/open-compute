@@ -99,6 +99,31 @@ fn info_restricts_formats_bytes_dimensions_and_pixels() {
 }
 
 #[test]
+fn jpeg_fit_enforces_dimensions_pixels_and_encoded_bytes() {
+    let engine = ImageEngine::new(ImagesConfig::default());
+    let output = engine
+        .fit_jpeg(&fixture(image::ImageFormat::Jpeg), 2, 2, 4, 1024 * 1024, 90)
+        .unwrap();
+    assert!(output.width <= 2 && output.height <= 2);
+    assert!(u64::from(output.width) * u64::from(output.height) <= 4);
+    assert_eq!(output.format, RasterFormat::Jpeg);
+    assert_eq!(
+        engine
+            .fit_jpeg(&fixture(image::ImageFormat::Jpeg), 2, 2, 4, 1, 90)
+            .unwrap_err()
+            .code(),
+        ErrorCode::ImageLimitExceeded
+    );
+    assert_eq!(
+        engine
+            .fit_jpeg(&fixture(image::ImageFormat::Jpeg), 0, 2, 4, 100, 90)
+            .unwrap_err()
+            .code(),
+        ErrorCode::ImageOptionUnsupported
+    );
+}
+
+#[test]
 fn exif_orientation_is_applied_and_animated_inputs_fail_closed() {
     let engine = ImageEngine::new(ImagesConfig::default());
     let oriented = jpeg_with_orientation(6);

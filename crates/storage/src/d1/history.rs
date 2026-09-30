@@ -1,6 +1,6 @@
 //! Completed D1 snapshot history and restart-safe transfer/restore intents.
 
-use crate::ControlDb;
+use crate::control_db::ControlDb;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, ResourceId};
 use rusqlite::{OptionalExtension, params};
 use std::str::FromStr;

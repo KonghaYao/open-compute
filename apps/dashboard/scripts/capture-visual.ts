@@ -52,7 +52,7 @@ try {
     account_id: account,
     metadata: {
       main_module: "index.js",
-      compatibility_date: capabilities.compatibility_date.maximum,
+      compatibility_date: capabilities.compatibility.binary_maximum_date,
     },
     files: [
       new File(

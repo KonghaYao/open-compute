@@ -8,8 +8,12 @@ use crate::fsutil::{
 };
 use crate::{RuntimeLock, VerifiedLaunchImage, VerifiedRuntime, runtime_assets_sha256};
 use flate2::read::GzDecoder;
-use open_compute_core::{ErrorCode, PlatformError, Redactor};
+use open_compute_core::{
+    CompatibilityFeatureV1, CompatibilityImplicationV1, ErrorCode, PlatformError, Redactor,
+    RuntimeCompatibilityV1, SystemWorkerCompatibilityV1,
+};
 use rustix::fs::{Mode, fchmod};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::io::{Read, Write};
@@ -41,6 +45,102 @@ pub fn embedded_runtime_lock() -> Result<(RuntimeLock, &'static [u8]), PlatformE
         ));
     }
     Ok((lock, bytes))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WorkerdCatalog {
+    schema_version: u32,
+    validation: String,
+    binary_maximum_date: String,
+    future_dates_allowed: bool,
+    features: Vec<WorkerdCatalogFeature>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WorkerdCatalogFeature {
+    field: String,
+    enable_flag: Option<String>,
+    disable_flag: Option<String>,
+    default_on_date: Option<String>,
+    enabled_for_all_dates: bool,
+    experimental: bool,
+    python_snapshot_release: bool,
+    #[serde(default)]
+    implied_by: Vec<WorkerdCatalogImplication>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WorkerdCatalogImplication {
+    flags: Vec<String>,
+    after_date: String,
+}
+
+/// Return tenant and system-Worker compatibility from the embedded formal runtime payload.
+pub fn embedded_runtime_compatibility()
+-> Result<(RuntimeCompatibilityV1, SystemWorkerCompatibilityV1), PlatformError> {
+    let (lock, _) = embedded_runtime_lock()?;
+    let bytes = payload::FILES
+        .iter()
+        .find_map(|(name, bytes)| (*name == "runtime/compatibility-catalog.json").then_some(*bytes))
+        .ok_or_else(|| invalid("embedded compatibility catalog is missing"))?;
+    if hex::encode(Sha256::digest(bytes)) != lock.compatibility_catalog.sha256 {
+        return Err(invalid(
+            "embedded compatibility catalog does not match its formal pin",
+        ));
+    }
+    let catalog: WorkerdCatalog = serde_json::from_slice(bytes)
+        .map_err(|_| invalid("embedded compatibility catalog is invalid"))?;
+    if catalog.schema_version != lock.compatibility_catalog.schema_version
+        || catalog.validation != "code_version"
+        || catalog.binary_maximum_date != lock.binary_maximum_compatibility_date
+        || catalog.future_dates_allowed
+    {
+        return Err(invalid(
+            "embedded compatibility catalog does not match the runtime lock",
+        ));
+    }
+    let compatibility = RuntimeCompatibilityV1 {
+        validation: "workerd_code_version".to_owned(),
+        binary_maximum_date: catalog.binary_maximum_date,
+        future_dates_allowed: catalog.future_dates_allowed,
+        experimental_enabled: lock
+            .process_flags
+            .iter()
+            .any(|flag| flag == "--experimental"),
+        features: catalog
+            .features
+            .into_iter()
+            .map(|feature| CompatibilityFeatureV1 {
+                field: feature.field,
+                enable_flag: feature.enable_flag,
+                disable_flag: feature.disable_flag,
+                default_on_date: feature.default_on_date,
+                enabled_for_all_dates: feature.enabled_for_all_dates,
+                experimental: feature.experimental,
+                python_snapshot_release: feature.python_snapshot_release,
+                implied_by: feature
+                    .implied_by
+                    .into_iter()
+                    .map(|rule| CompatibilityImplicationV1 {
+                        flags: rule.flags,
+                        after_date: rule.after_date,
+                    })
+                    .collect(),
+            })
+            .collect(),
+        catalog_sha256: lock.compatibility_catalog.sha256,
+    };
+    let system_workers = SystemWorkerCompatibilityV1 {
+        compatibility_date: lock.system_compatibility_date,
+        compatibility_flags: lock.system_compatibility_flags,
+    };
+    if !compatibility.validate() {
+        return Err(invalid("embedded compatibility catalog is invalid"));
+    }
+    Ok((compatibility, system_workers))
 }
 
 /// Return the formally pinned Caddy lock embedded in this executable.
@@ -111,6 +211,7 @@ impl RuntimePackage {
         redactor: &Redactor,
         lease_path: &Path,
     ) -> Result<VerifiedRuntime, PlatformError> {
+        embedded_runtime_compatibility()?;
         let pyodide_bundle_cache = self.pyodide_bundle_cache_dir();
         crate::verify::verify_runtime_binary_inner(
             embedded_runtime_lock()?.1,

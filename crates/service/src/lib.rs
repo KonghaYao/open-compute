@@ -110,7 +110,7 @@ pub mod wrangler_launcher;
 #[must_use]
 pub fn product_promotion_for_test(
     storage: std::sync::Arc<open_compute_storage::PlatformStorage>,
-    scheduler: std::sync::Arc<open_compute_storage::SchedulerStore>,
+    scheduler: std::sync::Arc<open_compute_storage::scheduler::SchedulerStore>,
     validator: std::sync::Arc<dyn open_compute_workers::RuntimeValidator>,
 ) -> std::sync::Arc<dyn open_compute_workers::ProductPromotionCoordinator> {
     std::sync::Arc::new(

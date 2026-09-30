@@ -1,8 +1,8 @@
 use super::*;
-use crate::{
-    CatalogDirection, CatalogSort, KvPaths, PlatformStorage, ReserveResourceCreate,
-    ResourceCreateReservation, ResourceRepository, decode_catalog_cursor,
-};
+use crate::PlatformStorage;
+use crate::catalog_page::{CatalogDirection, CatalogSort, decode_catalog_cursor};
+use crate::kv::KvPaths;
+use crate::resources::{ReserveResourceCreate, ResourceCreateReservation, ResourceRepository};
 use open_compute_core::config::DataConfig;
 use open_compute_core::{BindingKind, RequestId, ResourceState, SystemClock};
 

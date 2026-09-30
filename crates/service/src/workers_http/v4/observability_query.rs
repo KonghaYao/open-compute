@@ -12,10 +12,11 @@ use crate::observability_filter::{
 use axum::extract::{Path, Request, State};
 use axum::response::Response;
 use open_compute_core::{InstanceId, RequestId};
-use open_compute_storage::{
-    ObservabilityAudit, ObservabilityEventCursor, ObservabilityFieldKey, ObservabilityFieldValue,
+use open_compute_storage::observability::{
+    ObservabilityEventCursor, ObservabilityFieldKey, ObservabilityFieldValue,
     StoredObservabilityEvent,
 };
+use open_compute_storage::worker_repository::ObservabilityAudit;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};

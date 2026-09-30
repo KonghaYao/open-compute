@@ -69,15 +69,16 @@ pywrangler / Wrangler multipart upload
 当前 open-compute 正式 runtime baseline 由
 [`workerd.lock.json`](../packages/runtime/workerd.lock.json)唯一指定：
 
-| 项目                         | 当前正式值                                 |
-| ---------------------------- | ------------------------------------------ |
-| workerd fork release         | `v1.20260918.1-open-compute-i102.1c7b89be` |
-| source revision              | `1c7b89bea323a39a8511271913820f9fcf39306d` |
-| version output               | `workerd 2026-09-18`                       |
-| effective compatibility date | `2026-09-08`                               |
-| Pyodide bundle               | `314.0.6_2026-08-17_2`                     |
-| Workers types                | `5.20260830.1`                             |
-| Wrangler snapshot            | `4.138.0`                                  |
+| 项目                             | 当前正式值                                 |
+| -------------------------------- | ------------------------------------------ |
+| workerd fork release             | `v1.20260930.0-open-compute-r3.e3bdb07f5`  |
+| source revision                  | `e3bdb07f52affc6a618f02ed2b731a581b0b2f69` |
+| version output                   | `workerd 2026-09-30`                       |
+| system Worker compatibility date | `2026-09-08`                               |
+| binary maximum date              | `2026-10-07`                               |
+| Pyodide bundle                   | `314.0.6_2026-08-17_6`                     |
+| Workers types                    | `5.20260830.1`                             |
+| Wrangler snapshot                | `4.143.0`                                  |
 
 这些值只说明二进制含有对应 Pyodide bundle，不证明 open-compute upload、binding 或 deploy lifecycle 已支持 Python。P20
 开始实施时先用同一套正式 pin 完成 G0；若官方 upload/SDK 合同需要更新，再按 runtime pin policy 一次性协调升级并重新跑全部

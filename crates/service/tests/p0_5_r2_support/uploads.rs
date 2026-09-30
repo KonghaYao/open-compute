@@ -5,7 +5,7 @@ use futures::StreamExt as _;
 use http_body_util::BodyExt as _;
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use hyper_util::rt::TokioExecutor;
-use open_compute_storage::{R2MultipartRepository, R2MultipartState};
+use open_compute_storage::r2_multipart::{R2MultipartRepository, R2MultipartState};
 use open_compute_workers::{
     CreateResourceOutcome, CreateResourceRequest, D1ResourceDriver, ResourceController,
 };
@@ -41,7 +41,7 @@ async fn concurrent_large_upload_keeps_runtime_responsive() {
         kind: BindingKind::D1Database,
         name: "upload-index".to_owned(),
         idempotency_key: "upload-index".to_owned(),
-        driver_schema_version: open_compute_storage::D1_DATABASE_SCHEMA_VERSION,
+        driver_schema_version: open_compute_storage::d1::D1_DATABASE_SCHEMA_VERSION,
         request_id: RequestId::generate(),
         now_ms: 20,
     })

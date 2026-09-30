@@ -1,6 +1,8 @@
 //! Resumable version-upload session authority.
 
-use crate::{ControlDb, VersionContentKind, VersionObjectKind};
+use crate::assets::VersionObjectKind;
+use crate::control_db::ControlDb;
+use crate::worker_repository::VersionContentKind;
 use open_compute_core::{
     ErrorCode, InstanceId, PlatformError, StartupId, VersionId, VersionUploadId, WorkerId,
 };
@@ -401,7 +403,7 @@ fn require_live_worker(
     instance_id: InstanceId,
     worker_id: WorkerId,
 ) -> Result<(), PlatformError> {
-    crate::workers::require_instance(tx, instance_id).map_err(|_| not_found())?;
+    crate::worker_repository::require_instance(tx, instance_id).map_err(|_| not_found())?;
     let found: Option<i64> = tx
         .query_row(
             "SELECT 1 FROM workers

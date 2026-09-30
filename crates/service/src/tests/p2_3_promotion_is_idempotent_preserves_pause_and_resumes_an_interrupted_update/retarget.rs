@@ -14,7 +14,8 @@ pub(super) async fn exercise_retarget_and_repair(
     let account = request_target.account;
     let queue_id = request_target.queue;
     let scheduler = &runtime.scheduler;
-    let consumer_repo = open_compute_storage::QueueConsumerRepository::new(storage.db());
+    let consumer_repo =
+        open_compute_storage::queue_consumers::QueueConsumerRepository::new(storage.db());
     let mut retarget = promotion_request::build(
         request_target,
         "p23-retarget",
@@ -32,7 +33,7 @@ pub(super) async fn exercise_retarget_and_repair(
     let retargeted_consumer = consumer_repo.live_for_queue(queue_id).unwrap().unwrap();
     assert_eq!(retargeted_consumer.consumer_generation, 4);
     assert_eq!(retargeted_consumer.version_id, retargeted_id);
-    let retargeted_crons = open_compute_storage::CronRepository::new(storage.db())
+    let retargeted_crons = open_compute_storage::cron::CronRepository::new(storage.db())
         .live_for_worker(worker.id)
         .unwrap();
     assert_eq!(retargeted_crons.len(), 1);
@@ -44,7 +45,7 @@ pub(super) async fn exercise_retarget_and_repair(
         .into_iter()
         .next()
         .unwrap();
-    let retargeted_cron_declarations = vec![open_compute_storage::CronDeclaration {
+    let retargeted_cron_declarations = vec![open_compute_storage::cron::CronDeclaration {
         id: open_compute_core::CronActivationId::generate(),
         version_id: retargeted_id,
         expression: retargeted_crons[0].expression.clone(),
@@ -64,7 +65,7 @@ pub(super) async fn exercise_retarget_and_repair(
             .unwrap()
     );
     assert_eq!(
-        open_compute_storage::CronRepository::new(storage.db())
+        open_compute_storage::cron::CronRepository::new(storage.db())
             .retire_before(
                 worker.id,
                 retargeted_crons[0].activation_generation + 1,
@@ -76,7 +77,7 @@ pub(super) async fn exercise_retarget_and_repair(
     assert!(scheduler.repair_products(1_000).unwrap() >= 2);
     assert!(consumer_repo.live_for_queue(queue_id).unwrap().is_none());
     assert!(
-        open_compute_storage::CronRepository::new(storage.db())
+        open_compute_storage::cron::CronRepository::new(storage.db())
             .live_for_worker(worker.id)
             .unwrap()
             .is_empty()
@@ -84,7 +85,7 @@ pub(super) async fn exercise_retarget_and_repair(
     let reactivated = consumer_repo
         .create_attachment(account, worker.id, &retargeted_declaration, 706_002)
         .unwrap();
-    let restaged = open_compute_storage::CronRepository::new(storage.db())
+    let restaged = open_compute_storage::cron::CronRepository::new(storage.db())
         .stage_activations(
             account,
             worker.id,
@@ -98,14 +99,14 @@ pub(super) async fn exercise_retarget_and_repair(
     assert!(scheduler.repair_products(1_000).unwrap() >= 2);
     assert_eq!(
         consumer_repo.get(reactivated.id).unwrap().state,
-        open_compute_storage::QueueConsumerState::Active
+        open_compute_storage::queue_consumers::QueueConsumerState::Active
     );
     assert_eq!(
-        open_compute_storage::CronRepository::new(storage.db())
+        open_compute_storage::cron::CronRepository::new(storage.db())
             .live_for_worker(worker.id)
             .unwrap()[0]
             .state,
-        open_compute_storage::CronActivationState::Active
+        open_compute_storage::cron::CronActivationState::Active
     );
     assert!(
         consumer_repo
@@ -123,7 +124,7 @@ pub(super) async fn exercise_retarget_and_repair(
     assert_eq!(reactivated.consumer_generation, 2);
     assert_eq!(
         reactivated.state,
-        open_compute_storage::QueueConsumerState::Active
+        open_compute_storage::queue_consumers::QueueConsumerState::Active
     );
     assert!(
         consumer_repo
@@ -131,7 +132,7 @@ pub(super) async fn exercise_retarget_and_repair(
             .unwrap()
     );
     assert_eq!(
-        open_compute_storage::CronRepository::new(storage.db())
+        open_compute_storage::cron::CronRepository::new(storage.db())
             .retire_before(worker.id, restaged[0].activation_generation + 1, 706_004,)
             .unwrap(),
         1

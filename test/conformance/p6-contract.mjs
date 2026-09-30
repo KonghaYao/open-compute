@@ -844,8 +844,8 @@ function extensionSchemas() {
       [
         "release",
         "wrangler_version",
-        "compatibility_date",
-        "compatibility_flags",
+        "compatibility",
+        "system_workers",
         "endpoints",
         "deviations",
         "configuration",
@@ -853,15 +853,66 @@ function extensionSchemas() {
       {
         release: { type: "string", minLength: 1 },
         wrangler_version: { type: "string", const: "4.143.0" },
-        compatibility_date: objectSchema(["minimum", "maximum"], {
-          minimum: { type: "string", format: "date" },
-          maximum: { type: "string", format: "date" },
-        }),
-        compatibility_flags: {
-          type: "array",
-          uniqueItems: true,
-          items: string,
-        },
+        compatibility: objectSchema(
+          [
+            "validation",
+            "binary_maximum_date",
+            "future_dates_allowed",
+            "experimental_enabled",
+            "features",
+            "catalog_sha256",
+          ],
+          {
+            validation: { type: "string", const: "workerd_code_version" },
+            binary_maximum_date: { type: "string", format: "date" },
+            future_dates_allowed: { type: "boolean", const: false },
+            experimental_enabled: { type: "boolean" },
+            features: {
+              type: "array",
+              items: objectSchema(
+                [
+                  "field",
+                  "enabled_for_all_dates",
+                  "experimental",
+                  "python_snapshot_release",
+                ],
+                {
+                  field: { type: "string", minLength: 1 },
+                  enable_flag: { type: "string", minLength: 1 },
+                  disable_flag: { type: "string", minLength: 1 },
+                  default_on_date: { type: "string", format: "date" },
+                  enabled_for_all_dates: { type: "boolean" },
+                  experimental: { type: "boolean" },
+                  python_snapshot_release: { type: "boolean" },
+                  implied_by: {
+                    type: "array",
+                    items: objectSchema(["flags", "after_date"], {
+                      flags: {
+                        type: "array",
+                        minItems: 1,
+                        uniqueItems: true,
+                        items: { type: "string", minLength: 1 },
+                      },
+                      after_date: { type: "string", format: "date" },
+                    }),
+                  },
+                },
+              ),
+            },
+            catalog_sha256: { type: "string", pattern: "^[a-f0-9]{64}$" },
+          },
+        ),
+        system_workers: objectSchema(
+          ["compatibility_date", "compatibility_flags"],
+          {
+            compatibility_date: { type: "string", format: "date" },
+            compatibility_flags: {
+              type: "array",
+              uniqueItems: true,
+              items: { type: "string", minLength: 1 },
+            },
+          },
+        ),
         endpoints: {
           type: "object",
           additionalProperties: {

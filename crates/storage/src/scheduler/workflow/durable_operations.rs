@@ -1,7 +1,7 @@
 //! Exact scheduler restart/purge commits under a persisted control intent.
 
 use super::*;
-use crate::{WorkflowOperation, WorkflowOperationKind, WorkflowOperationResult};
+use crate::workflows::{WorkflowOperation, WorkflowOperationKind, WorkflowOperationResult};
 use open_compute_core::workflow::{WorkflowRestartSelector, WorkflowRestartStepType};
 
 #[derive(Clone, Copy, Debug)]

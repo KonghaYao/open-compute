@@ -15,7 +15,8 @@ use open_compute_runtime::{
 use open_compute_service::runtime_bridge::{
     DispatchTarget, WorkerdTransport, bind_runtime_source, serve_runtime_source,
 };
-use open_compute_storage::{PlatformStorage, WorkerRepository};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateVersionOutcome, CreateVersionRequest, ModuleInput,
     ModuleType, RuntimeSource, VersionController,
@@ -407,10 +408,15 @@ request_timeout_ms = 3000
                 secrets: BTreeMap::new(),
                 bindings,
                 services: BTreeMap::new(),
-                runtime_features: Default::default(),
+                runtime_features: open_compute_workers::VersionRuntimeFeatures {
+                    compatibility_date: "2026-09-08".to_owned(),
+                    ..Default::default()
+                },
                 queue_consumers: Vec::new(),
                 crons: Vec::new(),
-                deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+                deployment_source: Some(
+                    open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+                ),
                 observability: None,
                 request_id: RequestId::generate(),
                 now_ms: 1,

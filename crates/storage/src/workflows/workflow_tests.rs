@@ -1,6 +1,7 @@
 use super::*;
-use crate::workers::EffectiveResourceLimits;
-use crate::{NewVersion, PlatformStorage, WorkerRepository};
+use crate::PlatformStorage;
+use crate::worker_repository::EffectiveResourceLimits;
+use crate::worker_repository::{NewVersion, WorkerRepository};
 use open_compute_core::{DataConfig, RequestId, WorkflowsConfig, clock::SystemClock};
 
 #[path = "migration_tests.rs"]
@@ -50,7 +51,7 @@ fn staging(storage: &PlatformStorage, worker: open_compute_core::WorkerId) -> Ve
                 id,
                 instance_id: storage.identity().instance_id,
                 worker_id: worker,
-                content_kind: crate::VersionContentKind::Worker,
+                content_kind: crate::worker_repository::VersionContentKind::Worker,
                 artifact_sha256: Some([1; 32]),
                 artifact_size: Some(100),
                 artifact_schema_version: Some(1),
@@ -64,7 +65,7 @@ fn staging(storage: &PlatformStorage, worker: open_compute_core::WorkerId) -> Ve
                 request_id: RequestId::generate(),
                 now_ms: 0,
             },
-            &crate::NewVersionProducts::default(),
+            &crate::worker_repository::NewVersionProducts::default(),
             1_000_000,
         )
         .unwrap();

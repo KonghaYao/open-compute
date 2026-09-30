@@ -40,12 +40,18 @@ use open_compute_service::{
     R2BindingService, SqliteKvBindingExecutor, bind_binding_backend,
     serve_binding_backend_with_ai_search,
 };
-use open_compute_storage::{
-    AI_SEARCH_NAMESPACE_SCHEMA_VERSION, AI_SEARCH_SCHEMA_VERSION, PlatformStorage,
-    R2_SCHEMA_VERSION, ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
-    VECTORIZE_SCHEMA_VERSION, VectorizeEngine, VectorizeIndexRepository, VectorizePaths,
-    WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::ai_search::{
+    AI_SEARCH_NAMESPACE_SCHEMA_VERSION, AI_SEARCH_SCHEMA_VERSION,
 };
+use open_compute_storage::r2::R2_SCHEMA_VERSION;
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
+};
+use open_compute_storage::vectorize::{
+    VECTORIZE_SCHEMA_VERSION, VectorizeEngine, VectorizeIndexRepository, VectorizePaths,
+};
+use open_compute_storage::worker_repository::WorkerRepository;
 use open_compute_workers::{
     AiSearchInstanceResourceDriver, AiSearchInstanceSpec, AiSearchNamespaceResourceDriver,
     BundleLimits, CanonicalBundle, CreateResourceOutcome, CreateResourceRequest,

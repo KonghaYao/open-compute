@@ -1,6 +1,8 @@
 //! Fail-closed fresh-host restore staging and atomic publication.
 
-use crate::{ControlDb, inspect_control_db, inspect_scheduler_db};
+use crate::control_db::ControlDb;
+use crate::inspect::inspect_control_db;
+use crate::scheduler::inspect_scheduler_db;
 use open_compute_core::{
     ErrorCode, InstanceId, PlatformError, PlatformSnapshotManifestV1, ResourceId, SnapshotFileRole,
 };
@@ -563,14 +565,13 @@ fn normalize_restored_scheduler(
     instance_id: InstanceId,
 ) -> Result<(), PlatformError> {
     drop(
-        crate::SchedulerStore::open(path, busy_timeout_ms, now_ms, instance_id).map_err(
-            |error| {
+        crate::scheduler::SchedulerStore::open(path, busy_timeout_ms, now_ms, instance_id)
+            .map_err(|error| {
                 restore_stage(
                     &error,
                     "restore scheduler runtime mode could not be initialized",
                 )
-            },
-        )?,
+            })?,
     );
     let inspection = inspect_scheduler_db(path, busy_timeout_ms, now_ms).map_err(|error| {
         restore_stage(

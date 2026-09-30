@@ -5,6 +5,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { PageHeader } from "../../../components/dashboard-page";
 import { useAuth } from "../../../features/auth/auth-atoms";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/r2/new")({
   component: CreateR2Page,
@@ -27,7 +28,7 @@ function CreateR2Page() {
     },
     onSuccess: async (bucket) => {
       await queryClient.invalidateQueries({
-        queryKey: ["cloudflare-v4", "r2", selectedInstanceId, "buckets"],
+        queryKey: queryKeys.r2(selectedInstanceId, "buckets"),
       });
       await navigate({
         to: "/r2/$bucketId",

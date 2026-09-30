@@ -3,7 +3,8 @@
 use crate::health::HealthCoordinator;
 use crate::metrics::MetricsRegistry;
 use open_compute_core::{ComponentName, ComponentState, PlatformError, ReadinessReason};
-use open_compute_storage::{DataDir, PlatformStorage};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::data_dir::DataDir;
 use std::time::Duration;
 
 pub(crate) fn load_offline_metrics_receipts(data_dir: &DataDir, metrics: &MetricsRegistry) {
@@ -86,7 +87,7 @@ pub(crate) fn refresh_metrics(
     emergency_reserve_bytes: u64,
 ) -> Result<(), PlatformError> {
     metrics.set_disk_admission(&storage.admission_snapshot()?, emergency_reserve_bytes);
-    let inventory = open_compute_storage::inspect_control_inventory(storage.db())?;
+    let inventory = open_compute_storage::inspect::inspect_control_inventory(storage.db())?;
     metrics.set_resource_counts([
         inventory.instances,
         inventory.workers,

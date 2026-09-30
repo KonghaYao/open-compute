@@ -14,6 +14,7 @@ import { useState } from "react";
 import type { Consumer } from "@open-compute/sdk";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 import { DefinitionList, ErrorState, LoadingRows } from "./dashboard-page";
 import { DataTable } from "./page-layout";
 import { openConfirmDeleteDialog } from "./resource-dialog";
@@ -79,13 +80,7 @@ export function QueueConsumerEditor({ queueId }: { queueId: string }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const enabled = client !== null && selectedInstanceId !== null;
   const consumers = useQuery({
-    queryKey: [
-      "cloudflare-v4",
-      "queues",
-      selectedInstanceId,
-      queueId,
-      "consumers",
-    ],
+    queryKey: queryKeys.queues(selectedInstanceId, queueId, "consumers"),
     queryFn: ({ signal }) =>
       client!.queues.consumers.list(
         queueId,
@@ -95,7 +90,7 @@ export function QueueConsumerEditor({ queueId }: { queueId: string }) {
     enabled,
   });
   const workers = useQuery({
-    queryKey: ["cloudflare-v4", "workers", selectedInstanceId],
+    queryKey: queryKeys.workers(selectedInstanceId),
     queryFn: ({ signal }) =>
       client!.workers.scripts.list(
         { account_id: selectedInstanceId! },
@@ -106,15 +101,13 @@ export function QueueConsumerEditor({ queueId }: { queueId: string }) {
   const rows = consumers.data?.result ?? [];
   const runtimes = useQueries({
     queries: rows.map((consumer) => ({
-      queryKey: [
-        "open-compute",
-        "queues",
+      queryKey: queryKeys.queues(
         selectedInstanceId,
         queueId,
         "consumers",
         consumer.consumer_id,
         "runtime",
-      ],
+      ),
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         client!.openCompute.queues.consumerRuntime(
           selectedInstanceId!,
@@ -127,7 +120,7 @@ export function QueueConsumerEditor({ queueId }: { queueId: string }) {
   });
   const refresh = () =>
     queryClient.invalidateQueries({
-      queryKey: ["cloudflare-v4", "queues", selectedInstanceId, queueId],
+      queryKey: queryKeys.queues(selectedInstanceId, queueId),
     });
   const save = useMutation({
     mutationFn: (input: Draft) =>

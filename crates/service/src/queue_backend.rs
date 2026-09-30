@@ -6,10 +6,12 @@ use axum::extract::Request;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse as _, Response};
 use open_compute_core::{BindingId, ErrorCode, PlatformError, QueuesConfig, VersionId};
-use open_compute_storage::{
+use open_compute_storage::queues::{
     QUEUE_MAX_BATCH_BYTES, QUEUE_MAX_BATCH_MESSAGES, QUEUE_MAX_DELAY_SECONDS,
-    QUEUE_MAX_MESSAGE_BYTES, QueueContentType, QueueEnqueueRequest, QueueMessageInput,
-    QueueRepository, SchedulerStore,
+    QUEUE_MAX_MESSAGE_BYTES, QueueRepository,
+};
+use open_compute_storage::scheduler::{
+    QueueContentType, QueueEnqueueRequest, QueueMessageInput, SchedulerStore,
 };
 use std::str::FromStr as _;
 use std::sync::{Arc, Mutex, Weak};

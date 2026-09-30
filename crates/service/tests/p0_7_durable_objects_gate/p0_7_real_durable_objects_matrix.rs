@@ -197,12 +197,12 @@ pub(super) async fn run() {
 
 struct MatrixCase<'a> {
     storage: &'a Arc<PlatformStorage>,
-    scheduler: &'a Arc<open_compute_storage::SchedulerStore>,
+    scheduler: &'a Arc<open_compute_storage::scheduler::SchedulerStore>,
     transport: &'a WorkerdTransport,
     supervisor: &'a Arc<WorkerdSupervisor>,
     versions: &'a VersionController<'a>,
     account: InstanceId,
-    worker: &'a open_compute_storage::WorkerRecord,
+    worker: &'a open_compute_storage::worker_repository::WorkerRecord,
     counter: ResourceId,
     other: ResourceId,
     output_queue: open_compute_core::QueueId,

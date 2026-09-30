@@ -271,9 +271,10 @@ async fn stopped_instance_cache_clean_is_locked_scoped_and_dry_run_safe() {
     let entry = cache.join("ab".repeat(31));
     fs::write(&entry, b"copy").unwrap();
 
-    let competing = open_compute_storage::InspectLock::try_acquire(&data.join("platform.lock"))
-        .unwrap()
-        .unwrap();
+    let competing =
+        open_compute_storage::lock::InspectLock::try_acquire(&data.join("platform.lock"))
+            .unwrap()
+            .unwrap();
     assert_eq!(
         clean_stopped_cache(&plan, &id, true)
             .await

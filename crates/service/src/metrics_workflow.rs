@@ -2,8 +2,8 @@
 
 use super::{Inner, MetricsRegistry, write_help};
 use open_compute_core::ErrorCode;
-use open_compute_storage::WorkflowOperationInspection;
 use open_compute_storage::scheduler::WorkflowInspection;
+use open_compute_storage::workflows::WorkflowOperationInspection;
 use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

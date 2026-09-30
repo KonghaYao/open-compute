@@ -1,5 +1,5 @@
 use super::*;
-use crate::workers::EffectiveResourceLimits;
+use crate::worker_repository::EffectiveResourceLimits;
 
 #[test]
 fn p0_2_repository_enforces_lifecycle_immutability_and_idempotency() {
@@ -52,7 +52,7 @@ fn p0_2_repository_enforces_lifecycle_immutability_and_idempotency() {
         id: version,
         instance_id: account,
         worker_id: worker.id,
-        content_kind: crate::VersionContentKind::Worker,
+        content_kind: crate::worker_repository::VersionContentKind::Worker,
         artifact_sha256: Some([1; 32]),
         artifact_size: Some(123),
         artifact_schema_version: Some(1),
@@ -74,13 +74,21 @@ fn p0_2_repository_enforces_lifecycle_immutability_and_idempotency() {
         .envelope
         .version = 1;
     assert_eq!(
-        repo.insert_staging_version(&invalid, &crate::NewVersionProducts::default(), 1_000_000)
-            .unwrap_err()
-            .code(),
+        repo.insert_staging_version(
+            &invalid,
+            &crate::worker_repository::NewVersionProducts::default(),
+            1_000_000
+        )
+        .unwrap_err()
+        .code(),
         ErrorCode::VersionInvariantViolation
     );
     let created = repo
-        .insert_staging_version(&input, &crate::NewVersionProducts::default(), 1_000_000)
+        .insert_staging_version(
+            &input,
+            &crate::worker_repository::NewVersionProducts::default(),
+            1_000_000,
+        )
         .unwrap();
     assert_eq!(created.version_number, 1);
     assert_eq!(created.state, VersionState::Staging);
@@ -94,7 +102,7 @@ fn p0_2_repository_enforces_lifecycle_immutability_and_idempotency() {
         .resolve_route(
             &route.hostname_ascii,
             "/path",
-            crate::WorkerOriginExposure::Local,
+            crate::worker_repository::WorkerOriginExposure::Local,
         )
         .unwrap();
     assert_eq!(resolved.version.id, version);
@@ -142,22 +150,26 @@ fn p0_2_repository_enforces_lifecycle_immutability_and_idempotency() {
         .resolve_route(
             public_hostname,
             "/path",
-            crate::WorkerOriginExposure::Public,
+            crate::worker_repository::WorkerOriginExposure::Public,
         )
         .unwrap();
     assert_eq!(public.version.id, version);
     assert_eq!(public.deployment.id, resolved.deployment.id);
     assert_eq!(
-        repo.resolve_route(public_hostname, "/path", crate::WorkerOriginExposure::Local,)
-            .unwrap_err()
-            .code(),
+        repo.resolve_route(
+            public_hostname,
+            "/path",
+            crate::worker_repository::WorkerOriginExposure::Local,
+        )
+        .unwrap_err()
+        .code(),
         ErrorCode::RouteNotFound
     );
     assert_eq!(
         repo.resolve_route(
             &route.hostname_ascii,
             "/path",
-            crate::WorkerOriginExposure::Public,
+            crate::worker_repository::WorkerOriginExposure::Public,
         )
         .unwrap_err()
         .code(),

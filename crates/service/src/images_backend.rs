@@ -12,9 +12,9 @@ use open_compute_core::{
     AdmissionReservation, ErrorCode, ImagesConfig, InstanceId, PlatformError, VersionId, WorkerId,
 };
 use open_compute_images::{ImageEngine, ImageJob, ImageOperation, OutputOptions};
-use open_compute_storage::{
-    BuiltinBindingKind, PlatformStorage, WorkerRepository, version_runtime_features,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::runtime_features::{BuiltinBindingKind, version_runtime_features};
+use open_compute_storage::worker_repository::WorkerRepository;
 use options::{DrawRequest, TransformRequest};
 use serde::Serialize;
 use std::collections::HashMap;

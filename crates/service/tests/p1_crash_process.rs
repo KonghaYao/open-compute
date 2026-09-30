@@ -10,8 +10,10 @@ use open_compute_core::{
 };
 use open_compute_service::config_load::load_platform_config;
 use open_compute_service::instance_registry::{InstanceRegistry, ServiceScope};
-use open_compute_storage::{
-    ControlDb, D1DatabaseRepository, D1Engine, D1Paths, D1QueryLimits, PlatformStorage,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::control_db::ControlDb;
+use open_compute_storage::d1::{D1DatabaseRepository, D1Engine, D1Paths, D1QueryLimits};
+use open_compute_storage::resources::{
     ReserveResourceCreate, ResourceCreateReservation, ResourceRecord, ResourceRepository,
 };
 use open_compute_workers::{D1ResourceDriver, KvResourceDriver, ResourceDriver};

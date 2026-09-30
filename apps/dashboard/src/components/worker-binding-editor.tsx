@@ -9,6 +9,7 @@ import { useState } from "react";
 import type { OpenComputeJsonValue } from "@open-compute/sdk";
 import { useAuth } from "../features/auth/auth-atoms";
 import { useMutationFeedback } from "../features/toast/use-mutation-feedback";
+import { queryKeys } from "../lib/query-options";
 import { CodeBlock } from "./code-block";
 import {
   WorkerAiSearchBindingDialog,
@@ -136,7 +137,7 @@ export function WorkerBindingEditor({
     ),
   ];
   const namespaces = useQuery({
-    queryKey: ["cloudflare-v4", "kv", selectedInstanceId, "namespaces"],
+    queryKey: queryKeys.kv(selectedInstanceId, "namespaces"),
     queryFn: async ({ signal }) => {
       const result: { id: string; title: string }[] = [];
       for await (const namespace of client!.kv.namespaces.list(

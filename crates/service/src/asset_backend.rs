@@ -8,9 +8,9 @@ use bytes::Bytes;
 use hyper::body::{Body as HttpBody, Frame, SizeHint};
 use open_compute_artifacts::{ARTIFACT_KEY_VERSION, ArtifactCache, ArtifactRef, ArtifactStore};
 use open_compute_core::{ErrorCode, PlatformError, VersionId};
-use open_compute_storage::{
-    PlatformStorage, VersionAssetsRepository, VersionRecord, WorkerRepository,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::assets::VersionAssetsRepository;
+use open_compute_storage::worker_repository::{VersionRecord, WorkerRepository};
 use open_compute_workers::{
     AssetManifestV1, AssetRequest, AssetResponsePlan, AssetRoutingConfigV1, VersionPin,
     VersionPins, plan_asset_response,

@@ -1,6 +1,6 @@
 # R2：架构与代码审查收敛
 
-状态：**planned**。2026-09-29 对当前 `main` 的 crate ownership、resource lifecycle、HTTP composition、Dashboard 和 public API surface 复核后，确认以下跨既有阶段的问题需要直接收敛。R2 不改变已声明的 Cloudflare 行为、持久化语义或单 daemon 部署模型，也不为当前实现保留兼容别名。
+状态：**implemented（2026-09-30）**。R2 直接收敛 crate ownership、resource lifecycle、HTTP composition、Dashboard 和 public API surface；不改变已声明的 Cloudflare 行为、持久化语义或单 daemon 部署模型，也不保留兼容别名。
 
 ## 用户结果
 
@@ -9,8 +9,6 @@
 - Dashboard 只展示当前支持的产品，所有生产 API 类型、错误和 query identity 都从 `@open-compute/sdk` 与一个本地 query authority 取得。
 - storage、workers、search 和 images 的职责从 module path、公开面和依赖方向即可辨认，不再依赖重复实现或模糊命名。
 - 零消费者 production API 被删除；测试钩子只在 `cfg(test)` 或 `test-support` 下可达。
-
-
 
 ## 已确认的审查结论与修复
 
@@ -62,8 +60,6 @@
 - `open-compute-core` Cargo description 删除不准确的 “Dependency-free”，改为基础 config、error、ID、secret、health 与 clock 职责；它没有 workspace-internal dependency 不等于没有 dependency。
 - R2 完成后同步本页、`docs/README.md` 和受影响的持续维护文档；不把历史 review 当成新的兼容合同。
 
-
-
 ## 验收
 
 - R2 create、replay、lost-response reconcile、startup recovery、delete 和 restart/crash case 只经过一个 lifecycle controller；handler 中不再直接调用 resource reservation/state transition repository methods。
@@ -74,3 +70,9 @@
 - production build 不包含只供测试的 service helpers，确认的零消费者 API 已删除。
 
 实现完成后按仓库约定运行 Dashboard build、Rust format/Clippy、no-default-features、MSRV、metadata、dependency boundaries、coverage，以及最终一次 `./test/gate.py --workspace`；只有成功退出的结果才能写入移至 `implemented/` 后的精简记录。
+
+## 实施证据（2026-09-30）
+
+- `bun run build`、Dashboard TypeScript/tests/build、Rust format/Clippy、no-default-features、Rust 1.98 MSRV、metadata、dependency boundaries 与 source policy 均通过。
+- `./test/coverage.sh --jobs 2` 的 54 项 workspace Gate 全部通过，line coverage 为 **90.08%**（最低要求 90.00%）；报告保存在 `target/llvm-cov/{html,lcov.info,summary.json}`。
+- source freeze 后唯一一次最终 `./test/gate.py --workspace --jobs 2` 通过 54/54 目标；报告为 `.temp/gate-run/20260930T192920-fd616dea/report.json`。

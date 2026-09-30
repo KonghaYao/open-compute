@@ -1,7 +1,7 @@
 //! Host-wide immutable Vectorize snapshots with a bounded weighted LRU.
 
 use open_compute_core::PlatformError;
-use open_compute_storage::{VectorRecord, VectorizeEngine};
+use open_compute_storage::vectorize::{VectorRecord, VectorizeEngine};
 use std::collections::{BTreeMap, VecDeque};
 use std::mem::size_of;
 use std::sync::{Arc, Mutex, OnceLock};

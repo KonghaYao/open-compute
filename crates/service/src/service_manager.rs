@@ -2,7 +2,7 @@
 
 use crate::instance_registry::ServiceScope;
 use open_compute_core::{ErrorCode, PlatformError};
-use open_compute_storage::{atomic_write, ensure_dir_secure};
+use open_compute_storage::fs::{atomic_write, ensure_dir_secure};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

@@ -4,10 +4,13 @@ use crate::cloudflare_v4::V4ResourceKind;
 use crate::cloudflare_v4::accounts::V4InstanceContext;
 use crate::workers_http::WorkerApiState;
 use open_compute_core::{BindingKind, ErrorCode, PlatformError};
-use open_compute_storage::{
-    AiSearchCatalog, BuiltinBindingKind, DurableObjectRepository, QueueRepository,
-    ResourceRepository, VersionSnapshot, WorkerRepository, WorkflowRepository,
-};
+use open_compute_storage::ai_search::AiSearchCatalog;
+use open_compute_storage::durable_objects::DurableObjectRepository;
+use open_compute_storage::queues::QueueRepository;
+use open_compute_storage::resources::ResourceRepository;
+use open_compute_storage::runtime_features::BuiltinBindingKind;
+use open_compute_storage::worker_repository::{VersionSnapshot, WorkerRepository};
+use open_compute_storage::workflows::WorkflowRepository;
 use open_compute_workers::ServiceDescriptor;
 
 pub(super) fn public_bindings(
@@ -84,7 +87,9 @@ pub(super) fn public_bindings(
         };
         values.push(value);
     }
-    let artifacts = open_compute_storage::CloudflareArtifactsRepository::new(api.storage.db());
+    let artifacts = open_compute_storage::cloudflare_artifacts::CloudflareArtifactsRepository::new(
+        api.storage.db(),
+    );
     for binding in artifacts.version_bindings(snapshot.version.id)? {
         let namespace = artifacts.namespace(snapshot.instance_id, binding.namespace_id)?;
         values.push(serde_json::json!({
@@ -140,12 +145,12 @@ pub(super) fn public_bindings(
             return Err(invariant());
         }
         let service = match &binding.target {
-            open_compute_storage::ServiceTarget::Worker { worker_id } => workers
+            open_compute_storage::services::ServiceTarget::Worker { worker_id } => workers
                 .iter()
                 .find(|worker| worker.id == *worker_id)
                 .map(|worker| worker.name.as_str())
                 .ok_or_else(invariant)?,
-            open_compute_storage::ServiceTarget::Extension { name, .. } => name,
+            open_compute_storage::services::ServiceTarget::Extension { name, .. } => name,
         };
         let mut value = serde_json::json!({
             "name": binding.binding_name,

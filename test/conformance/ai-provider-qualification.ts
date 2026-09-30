@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { execFile, spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -94,16 +94,16 @@ if (args.length === 1 && args[0] === "--list") {
     ({ stdout: buildOutput } = await execFileAsync(
       "cargo",
       [
-      "test",
-      "--locked",
-      "--offline",
-      "--all-features",
-      "-p",
-      "open-compute-service",
-      "--test",
-      "p5_search_gate",
-      "--no-run",
-      "--message-format=json",
+        "test",
+        "--locked",
+        "--offline",
+        "--all-features",
+        "-p",
+        "open-compute-service",
+        "--test",
+        "p5_search_gate",
+        "--no-run",
+        "--message-format=json",
       ],
       {
         cwd: ROOT,
@@ -166,7 +166,8 @@ if (args.length === 1 && args[0] === "--list") {
       protocols: definition.protocols,
       models: definition.models,
       providerRevision: manifest.retrievedAt,
-      httpStatusClass: status === "passed" ? "2xx" : "non-2xx-or-contract-failure",
+      httpStatusClass:
+        status === "passed" ? "2xx" : "non-2xx-or-contract-failure",
       durationMs: Math.round(performance.now() - started),
       responseSchemaSha256: definition.responseSchemaSha256,
     });

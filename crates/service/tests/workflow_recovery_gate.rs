@@ -22,8 +22,10 @@ use open_compute_service::runtime_bridge::{
 use open_compute_service::scheduler::SchedulerService;
 use open_compute_service::workflow_http::WorkflowApiState;
 use open_compute_service::{SqliteKvBindingExecutor, serve_binding_backend};
+use open_compute_storage::scheduler::SchedulerStore;
 use open_compute_storage::scheduler::{WorkflowCompletion, WorkflowState};
-use open_compute_storage::{SchedulerStore, VersionState, WorkflowRepository};
+use open_compute_storage::worker_repository::VersionState;
+use open_compute_storage::workflows::WorkflowRepository;
 use open_compute_workers::{
     ResourcePins, VersionBindingInput, WorkflowController, WorkflowReconcileCursor,
 };

@@ -134,6 +134,27 @@ pub(super) async fn run() {
         scheduler.clone(),
         validator,
     ));
+    assert_compatibility_matrix(&controller, account, worker.id).await;
+
+    let (compatibility, system_workers) =
+        open_compute_runtime::embedded_runtime_compatibility().unwrap();
+    let paired = compatibility
+        .features
+        .iter()
+        .find(|feature| {
+            !feature.experimental && feature.enable_flag.is_some() && feature.disable_flag.is_some()
+        })
+        .unwrap();
+    let a_runtime_features = VersionRuntimeFeatures {
+        compatibility_date: system_workers.compatibility_date.clone(),
+        compatibility_flags: vec![paired.enable_flag.clone().unwrap()],
+        ..VersionRuntimeFeatures::default()
+    };
+    let b_runtime_features = VersionRuntimeFeatures {
+        compatibility_date: system_workers.compatibility_date,
+        compatibility_flags: vec![paired.disable_flag.clone().unwrap()],
+        ..VersionRuntimeFeatures::default()
+    };
 
     let a = deploy(
         &controller,
@@ -141,8 +162,7 @@ pub(super) async fn run() {
         worker.id,
         "deploy-a",
         "A",
-        true,
-        false,
+        Some(a_runtime_features.clone()),
     )
     .await;
     assert_eq!(
@@ -436,11 +456,20 @@ pub(super) async fn run() {
         worker.id,
         "deploy-b",
         "B",
-        true,
-        false,
+        Some(b_runtime_features.clone()),
     )
     .await;
     assert_ne!(a.id, b.id);
+    assert_eq!(a.compatibility_date, a_runtime_features.compatibility_date);
+    assert_eq!(
+        a.compatibility_flags,
+        a_runtime_features.compatibility_flags
+    );
+    assert_eq!(b.compatibility_date, b_runtime_features.compatibility_date);
+    assert_eq!(
+        b.compatibility_flags,
+        b_runtime_features.compatibility_flags
+    );
     assert_eq!(
         repo.get_worker(account, worker.id)
             .unwrap()
@@ -602,6 +631,24 @@ pub(super) async fn run() {
     // Restart rotates credentials and forces a new workerd process/cold cache.
     supervisor.force_restart_for_test();
     wait_pid_change(&supervisor, first_pid, Duration::from_secs(30)).await;
+    let persisted_a = repo.get_version(account, worker.id, a.id).unwrap();
+    let persisted_b = repo.get_version(account, worker.id, b.id).unwrap();
+    assert_eq!(
+        persisted_a.compatibility_date,
+        a_runtime_features.compatibility_date
+    );
+    assert_eq!(
+        persisted_a.compatibility_flags,
+        a_runtime_features.compatibility_flags
+    );
+    assert_eq!(
+        persisted_b.compatibility_date,
+        b_runtime_features.compatibility_date
+    );
+    assert_eq!(
+        persisted_b.compatibility_flags,
+        b_runtime_features.compatibility_flags
+    );
     assert_ne!(
         auth.credential().unwrap().expose(),
         first_credential.expose(),

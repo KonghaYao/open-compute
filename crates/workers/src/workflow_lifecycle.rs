@@ -4,7 +4,9 @@ use super::*;
 use open_compute_core::WorkflowOperationId;
 use open_compute_core::workflow::WorkflowRestartSelector;
 use open_compute_storage::scheduler::{WorkflowInstanceAction, WorkflowInstanceRecord};
-use open_compute_storage::{WorkflowOperation, WorkflowOperationKind, WorkflowOperationResult};
+use open_compute_storage::workflows::{
+    WorkflowOperation, WorkflowOperationKind, WorkflowOperationResult,
+};
 
 impl WorkflowController<'_> {
     /// Inspect an owner-scoped, logically live instance without returning its payload or fences.
@@ -254,7 +256,7 @@ impl WorkflowController<'_> {
             .workflow_gc_receipts(cursor.gc_receipt, limit)?;
         let next = receipts
             .last()
-            .map(open_compute_storage::WorkflowGcReceipt::instance_id);
+            .map(open_compute_storage::workflows::WorkflowGcReceipt::instance_id);
         for receipt in receipts {
             match repository.acknowledge_workflow_gc(&receipt) {
                 Ok(proof) => self.scheduler.sweep_workflow_gc(&proof)?,

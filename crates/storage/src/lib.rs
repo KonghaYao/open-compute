@@ -28,7 +28,7 @@ pub mod observability;
 mod observability_tests;
 pub mod platform_restore;
 pub mod platform_snapshot;
-mod public_gateway;
+pub mod public_gateway;
 pub mod queue_consumers;
 pub mod queues;
 pub mod r2;
@@ -36,191 +36,23 @@ pub mod r2_multipart;
 pub mod r2_objects;
 pub mod r2_staging;
 pub mod resources;
-mod restore_cleanup;
+pub mod restore_cleanup;
 pub mod runtime_features;
 pub mod scheduler;
-mod schema_inspection;
+pub mod schema_inspection;
 mod schema_migrations;
 pub mod services;
-mod snapshot_staging;
+pub mod snapshot_staging;
 pub mod vectorize;
-pub mod workers;
+pub mod worker_repository;
 pub mod workflows;
-pub use ai_search::{
-    AI_SEARCH_NAMESPACE_SCHEMA_VERSION, AI_SEARCH_SCHEMA_VERSION, AiSearchCatalog,
-    AiSearchChunkRecord, AiSearchInstanceAuthority, AiSearchInstanceInspection,
-    AiSearchInstanceRecord, AiSearchInstanceStorageContract, AiSearchItemRecord, AiSearchJobClaim,
-    AiSearchJobRecord, AiSearchLogRecord, AiSearchManualObjectReference, AiSearchManualUpsert,
-    AiSearchNamespaceRecord, AiSearchObjectGcClaim, AiSearchObjectReference, AiSearchParseCache,
-    AiSearchParseCacheKey, AiSearchParseCacheLookup, AiSearchParseCacheStore, AiSearchPaths,
-    AiSearchR2Candidate, AiSearchR2ObjectReference, AiSearchR2ReconcileClaim,
-    AiSearchR2SourceRecord, AiSearchSourceReference, AiSearchStore, ClaimedAiSearchItem,
-    NewAiSearchItemGeneration, NewAiSearchManualGeneration, StagedAiSearchChunk,
-    inspect_ai_search_instance, inspect_ai_search_object_references,
-};
-pub use assets::{
-    AssetUploadEntry, AssetUploadRepository, AssetUploadSession, BeginVersionUploadFinalize,
-    NewAssetUploadEntry, NewVersionAssets, NewVersionObjectRef, NewVersionUpload,
-    NewVersionUploadObject, VersionAssetsRecord, VersionAssetsRepository, VersionObjectKind,
-    VersionUploadFinalize, VersionUploadFinalizeDisposition, VersionUploadObjectRecord,
-    VersionUploadRecord, VersionUploadRepository, VersionUploadStatus,
-};
-pub use bindings::{AuthorizedBinding, BindingRepository, NewVersionBinding, VersionBindingRecord};
-pub use cache::{
-    CACHE_DATABASE_SCHEMA_VERSION, CacheBodyRef, CacheEngine, CacheHeader, CacheIdentity,
-    CacheLookup, CacheLookupStatus, CacheManager, CacheMethod, CachePaths, CachePurge, CachePut,
-    CacheStats, CacheStoredResponse, CacheSurface,
-};
-pub use catalog_page::{
-    CatalogCursor, CatalogCursorValue, CatalogDirection, CatalogListPage, CatalogSort,
-    CreatedIdCursor, DEFAULT_CATALOG_LIST_LIMIT, MAX_CATALOG_LIST_LIMIT, NameIdCursor,
-    decode_catalog_cursor, decode_created_id_cursor, decode_name_id_cursor, encode_catalog_cursor,
-    encode_created_id_cursor, encode_name_id_cursor, invalid_catalog_cursor, invalid_catalog_query,
-    normalize_catalog_limit, search_as_queue_id, search_as_resource_id, search_as_worker_id,
-    search_as_workflow_id,
-};
-pub use cloudflare_artifacts::{
-    ARTIFACT_MAX_REPOSITORIES, ARTIFACT_MAX_TOKENS_PER_REPOSITORY,
-    ARTIFACT_REPOSITORY_SCHEMA_VERSION, ArtifactNamespaceRecord, ArtifactRepositoryRecord,
-    ArtifactRepositoryState, ArtifactTokenRecord, ArtifactTokenScope, AuthorizedArtifactBinding,
-    CloudflareArtifactsRepository, NewArtifactRepository, NewArtifactToken,
-    NewVersionArtifactBinding, VersionArtifactBindingRecord,
-};
-pub use control_db::ControlDb;
-pub use cron::{
-    CRON_PARSER_VERSION, CronActivationRecord, CronActivationState, CronDeclaration,
-    CronRepository, CronVersionConfig, NewCronConfig, NewCronDeclaration,
-};
-pub use crypto::{SecretCrypto, SecretEnvelope};
-pub use d1::{
-    D1_DATABASE_SCHEMA_VERSION, D1_MAX_BATCH_STATEMENTS, D1_MAX_BOUND_PARAMS, D1_MAX_COLUMNS,
-    D1_MAX_EXEC_STATEMENTS, D1_MAX_SQL_BYTES, D1_MAX_TRANSFER_SQL_BYTES, D1_MAX_VALUE_OR_ROW_BYTES,
-    D1BackupRecord, D1BackupState, D1DatabaseRecord, D1DatabaseRepository, D1Engine, D1ExecResult,
-    D1ExportOptions, D1ImportResult, D1Meta, D1Migration, D1MigrationRecord, D1Paths,
-    D1QueryLimits, D1QueryTimings, D1RestoreIntent, D1SnapshotRecord, D1SnapshotRepository,
-    D1Statement, D1StatementResult, D1TransferAction, D1TransferKind, D1TransferRecord,
-    D1TransferState, D1Value, NewD1Transfer,
-};
-pub use data_dir::{
-    DURABLE_OBJECT_DATA_FORMAT_VERSION, DURABLE_OBJECT_UNIQUE_KEY, DataDir,
-    inspect_durable_object_storage, read_operation_receipt,
-};
-pub use disk_admission::DiskAdmission;
-pub use durable_objects::{
-    AuthorizedDurableObjectDelete, AuthorizedDurableObjectDispatch, DO_NAMESPACE_SCHEMA_VERSION,
-    DurableObjectClassRename, DurableObjectListPage, DurableObjectMigrationHead,
-    DurableObjectMigrationPlan, DurableObjectMigrationPreparation, DurableObjectNamespaceRecord,
-    DurableObjectRecord, DurableObjectRepository, decode_object_list_cursor,
-    encode_object_list_cursor,
-};
-pub use fs::{atomic_write, ensure_dir_secure, validate_owned_file};
-pub use identity::{ARTIFACT_SCHEMA_VERSION, StableIdentity};
-pub use inspect::{
-    ControlInventory, DataRootInspect, ResourceInspect, inspect_control_db,
-    inspect_control_inventory, inspect_data_root, inspect_master_key, inspect_operator_event_count,
-    inspect_resources, inspect_snapshot_immutable_references,
-};
-pub use kv::{
-    KV_CAPABILITY_VERSION, KV_DEFAULT_LIST_LIMIT, KV_MAX_KEY_BYTES, KV_MAX_LIST_LIMIT,
-    KV_MAX_METADATA_BYTES, KV_MAX_MULTI_GET_KEYS, KV_MAX_MULTI_GET_RESPONSE_BYTES,
-    KV_MAX_VALUE_BYTES, KV_MIN_CACHE_TTL_SECONDS, KV_MIN_EXPIRATION_TTL_SECONDS, KV_SCHEMA_VERSION,
-    KvBackupRecord, KvBackupState, KvEngine, KvEntry, KvEntryInfo, KvListPage, KvListRow,
-    KvNamespaceRecord, KvNamespaceRepository, KvPaths, KvPutOptions, canonical_metadata,
-    validate_key,
-};
-pub use lock::{DataDirLock, FilesystemDurability, InspectLock};
-pub use master_key::MasterKey;
+use crate::control_db::ControlDb;
+use crate::crypto::SecretCrypto;
+use crate::data_dir::DataDir;
+use crate::disk_admission::DiskAdmission;
+use crate::identity::StableIdentity;
 #[cfg(any(test, feature = "test-support"))]
-pub use master_key::{clear_test_env, set_test_env};
-#[cfg(any(test, feature = "test-support"))]
-pub use migrations::MigrationFault;
-pub use observability::{
-    NewObservabilityEvent, NewObservabilityInvocation, ObservabilityEventCursor,
-    ObservabilityField, ObservabilityFieldKey, ObservabilityFieldValue, ObservabilityStore,
-    ObservabilityUsage, ObservabilityUsageBreakdown, StoredObservabilityEvent,
-};
-pub use platform_restore::RestoreTarget;
-pub use platform_snapshot::{
-    PreparePlatformSnapshotRequest, PreparedPlatformSnapshot, PreparedSnapshotFile,
-    estimate_platform_snapshot_bytes, prepare_platform_snapshot, sign_snapshot_manifest,
-    verify_snapshot_manifest_mac,
-};
-pub use public_gateway::PublicGatewayRepository;
-pub use queue_consumers::{
-    NewQueueConsumerDeclaration, QUEUE_CONSUMER_DEFAULT_BATCH_SIZE,
-    QUEUE_CONSUMER_DEFAULT_BATCH_TIMEOUT_SECONDS, QUEUE_CONSUMER_DEFAULT_MAX_CONCURRENCY,
-    QUEUE_CONSUMER_DEFAULT_MAX_RETRIES, QUEUE_CONSUMER_DEFAULT_RETRY_DELAY_SECONDS,
-    QueueConsumerConfig, QueueConsumerDeclaration, QueueConsumerRecord, QueueConsumerRepository,
-    QueueConsumerState,
-};
-pub use queues::{
-    AuthorizedQueueBinding, NewQueueProducerBinding, QUEUE_DEFAULT_MAX_BACKLOG_BYTES,
-    QUEUE_DEFAULT_RETENTION_SECONDS, QUEUE_MAX_BATCH_BYTES, QUEUE_MAX_BATCH_MESSAGES,
-    QUEUE_MAX_DELAY_SECONDS, QUEUE_MAX_MESSAGE_BYTES, QUEUE_MAX_RETENTION_SECONDS,
-    QUEUE_MIN_RETENTION_SECONDS, QUEUE_PRODUCER_CAPABILITY_VERSION, QueueAvailability, QueueConfig,
-    QueueCreateReservation, QueueProducerBindingRecord, QueueRecord, QueueRepository, QueueState,
-    RunningQueueMutation,
-};
-pub use r2::{R2_SCHEMA_VERSION, R2BucketRecord, R2BucketRepository};
-pub use r2_multipart::{
-    R2MultipartPartRecord, R2MultipartRepository, R2MultipartState, R2MultipartUploadRecord,
-};
-pub use r2_objects::{
-    R2BucketUsage, R2ObjectListEntry, R2ObjectListPage, R2ObjectMutationKind,
-    R2ObjectMutationRecord, R2ObjectRecord, R2ObjectRepository,
-};
-pub use r2_staging::R2Staging;
-pub use resources::{
-    ReserveResourceCreate, ReserveResourceDelete, ResourceCreateReservation,
-    ResourceDeleteReservation, ResourceRecord, ResourceReferrer, ResourceRepository,
-};
-pub use restore_cleanup::{RestoreStagingCleanup, cleanup_restore_staging};
-pub use runtime_features::{
-    BuiltinBindingKind, VersionBuiltinBindingRecord, VersionCachePolicyRecord,
-    version_runtime_features,
-};
-pub use scheduler::{
-    AlarmProjection, ClaimResult, ClaimedCronRun, ClaimedJob, ClaimedQueueBatch,
-    ClaimedQueueMessage, CronCompletion, CronCompletionResult, CronInspectionSummary,
-    CronRuntimeInspection, CronScheduleProjection, CronSlotSummary, CronUnknownReason,
-    P23CrossDatabaseInspection, QueueCompletionAction, QueueCompletionDecision,
-    QueueCompletionSummary, QueueConsumerInspectionSummary, QueueConsumerProjection,
-    QueueConsumerRuntimeInspection, QueueContentType, QueueCounterMismatch, QueueDeleteBatch,
-    QueueDlqForwardSummary, QueueEnqueueRequest, QueueEnqueueResult, QueueInspectionSummary,
-    QueueMessageInput, QueueMetrics, QueueProjection, SchedulerInspection, SchedulerStore,
-    SchedulerSummary, SchedulerWakeFuture, SchedulerWakeSignal, current_scheduler_schema_version,
-    inspect_p23_cross_database, inspect_scheduler_db,
-};
-pub use schema_inspection::{SchemaInspection, inspect_current_schema};
-pub use services::{
-    NewVersionService, ResolvedServiceDestination, ResolvedServiceTarget, ServiceReferrer,
-    ServiceRepository, ServiceTarget, VersionServiceRecord,
-};
-pub use snapshot_staging::{LocalSnapshotStagingCleanup, cleanup_stale_snapshot_staging};
-pub use vectorize::{
-    VECTORIZE_SCHEMA_VERSION, VectorMutation, VectorMutationInput, VectorMutationKind,
-    VectorMutationState, VectorRecord, VectorizeDescription, VectorizeEngine, VectorizeIndexRecord,
-    VectorizeIndexRepository, VectorizePaths, VectorizeReadSnapshot,
-};
-pub use workers::{
-    DeploymentRecord, DeploymentRuntimeAssessmentSummary, DeploymentSource,
-    EffectiveResourceLimits, IdempotencyReservation, LOADER_SCHEMA_VERSION, NewVersion,
-    NewVersionProducts, ObservabilityAudit, RetentionCandidate, RouteRecord, RouteSnapshot,
-    SYSTEM_DASHBOARD_WORKER_NAME, StoredVersionSecret, SystemOwnedVersionKind,
-    SystemOwnedVersionRecord, UpdateWorkerObservabilitySettings, VersionContentKind, VersionRecord,
-    VersionReferrer, VersionSnapshot, VersionState, WorkerDeleteIntent, WorkerObservabilityPatch,
-    WorkerObservabilitySettings, WorkerOriginExposure, WorkerOwnership, WorkerRecord,
-    WorkerRepository, local_worker_hostname,
-};
-pub use workflows::{
-    WorkflowAppliedOperation, WorkflowBindingDescriptor, WorkflowBindingRecord, WorkflowDefinition,
-    WorkflowDefinitionReservation, WorkflowDeleteIntent, WorkflowGcAcknowledgement,
-    WorkflowGcReceipt, WorkflowInstanceIdentity, WorkflowOperation, WorkflowOperationInspection,
-    WorkflowOperationKind, WorkflowOperationResult, WorkflowRefState, WorkflowRejectedOperation,
-    WorkflowRepository, WorkflowReservation, WorkflowReservationState, WorkflowTarget,
-    WorkflowVersion,
-};
-
+use crate::migrations::MigrationFault;
 use open_compute_core::clock::Clock;
 use open_compute_core::config::DataConfig;
 use open_compute_core::{

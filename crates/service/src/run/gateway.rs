@@ -117,13 +117,13 @@ async fn prepare(
 ) -> Result<GatewayOwner, PlatformError> {
     let gateway_dir = root.join("gateway");
     for name in ["", "run", "config-state"] {
-        open_compute_storage::ensure_dir_secure(&gateway_dir.join(name))?;
+        open_compute_storage::fs::ensure_dir_secure(&gateway_dir.join(name))?;
     }
     ensure_storage_identity(&gateway_dir)?;
     crate::gateway_certificates::check_certified_domains(&gateway_dir, &domains)?;
-    open_compute_storage::ensure_dir_secure(&root.join("run"))?;
+    open_compute_storage::fs::ensure_dir_secure(&root.join("run"))?;
     let socket_dir = root.join("run/gateway");
-    open_compute_storage::ensure_dir_secure(&socket_dir)?;
+    open_compute_storage::fs::ensure_dir_secure(&socket_dir)?;
     let admin_path = socket_dir.join("admin.sock");
     let upstream_path = socket_dir.join("upstream.sock");
     let provider_path = socket_dir.join("dns.sock");
@@ -169,7 +169,7 @@ async fn prepare(
             #[cfg(any(test, feature = "test-support"))]
             {
                 let cache_dir = root.join("cache");
-                open_compute_storage::ensure_dir_secure(&cache_dir)?;
+                open_compute_storage::fs::ensure_dir_secure(&cache_dir)?;
                 tokio::task::spawn_blocking(move || {
                     open_compute_runtime::materialize_embedded_runtime(&cache_dir)
                 })
@@ -223,7 +223,7 @@ fn ensure_storage_identity(gateway_dir: &Path) -> Result<(), PlatformError> {
     let storage_present = path_exists(&storage)?;
     let outside_present = path_exists(&outside)?;
     let inside_present = if storage_present {
-        open_compute_storage::ensure_dir_secure(&storage)?;
+        open_compute_storage::fs::ensure_dir_secure(&storage)?;
         path_exists(&inside)?
     } else {
         false
@@ -244,11 +244,11 @@ fn ensure_storage_identity(gateway_dir: &Path) -> Result<(), PlatformError> {
                 && !path_exists(&gateway_dir.join("managed.caddyfile"))?
                 && !path_exists(&gateway_dir.join("config-state/current.meta.json"))? =>
         {
-            open_compute_storage::ensure_dir_secure(&storage)?;
+            open_compute_storage::fs::ensure_dir_secure(&storage)?;
             crate::gateway_certificates::initialize_registry(gateway_dir)?;
             let id = uuid::Uuid::now_v7().as_simple().to_string();
-            open_compute_storage::atomic_write(&inside, id.as_bytes())?;
-            open_compute_storage::atomic_write(&outside, id.as_bytes())?;
+            open_compute_storage::fs::atomic_write(&inside, id.as_bytes())?;
+            open_compute_storage::fs::atomic_write(&outside, id.as_bytes())?;
         }
         _ => {
             return Err(gateway_error(
@@ -306,8 +306,8 @@ mod tests {
     fn acme_storage_identity_distinguishes_first_start_from_state_loss() {
         let temp = tempfile::tempdir().unwrap();
         let gateway = temp.path().join("gateway");
-        open_compute_storage::ensure_dir_secure(&gateway).unwrap();
-        open_compute_storage::ensure_dir_secure(&gateway.join("config-state")).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway.join("config-state")).unwrap();
         ensure_storage_identity(&gateway).unwrap();
         let outside = fs::read(gateway.join("config-state/storage.id")).unwrap();
         assert_eq!(
@@ -331,8 +331,8 @@ mod tests {
     fn acme_storage_identity_rejects_mismatch_and_old_unmarked_state() {
         let temp = tempfile::tempdir().unwrap();
         let gateway = temp.path().join("gateway");
-        open_compute_storage::ensure_dir_secure(&gateway).unwrap();
-        open_compute_storage::ensure_dir_secure(&gateway.join("config-state")).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway.join("config-state")).unwrap();
         ensure_storage_identity(&gateway).unwrap();
         fs::write(
             gateway.join("storage/.ocd-storage-id"),
@@ -379,17 +379,17 @@ mod tests {
     fn acme_storage_rejects_one_missing_certificate_asset() {
         let temp = tempfile::tempdir().unwrap();
         let gateway = temp.path().join("gateway");
-        open_compute_storage::ensure_dir_secure(&gateway).unwrap();
-        open_compute_storage::ensure_dir_secure(&gateway.join("config-state")).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway.join("config-state")).unwrap();
         ensure_storage_identity(&gateway).unwrap();
         let certificates = gateway.join("storage/certificates");
         let issuer = certificates.join("issuer");
         let site = issuer.join("wildcard_example.com");
         for path in [&certificates, &issuer, &site] {
-            open_compute_storage::ensure_dir_secure(path).unwrap();
+            open_compute_storage::fs::ensure_dir_secure(path).unwrap();
         }
         for suffix in ["crt", "key", "json"] {
-            open_compute_storage::atomic_write(
+            open_compute_storage::fs::atomic_write(
                 &site.join(format!("wildcard_example.com.{suffix}")),
                 b"asset",
             )
@@ -403,7 +403,7 @@ mod tests {
                 ensure_storage_identity(&gateway).unwrap_err().code(),
                 ErrorCode::ConfigInvalid
             );
-            open_compute_storage::atomic_write(&path, b"asset").unwrap();
+            open_compute_storage::fs::atomic_write(&path, b"asset").unwrap();
         }
         fs::set_permissions(&site, fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(
@@ -424,8 +424,8 @@ mod tests {
     fn rejected_reload_restores_the_previous_challenge_authority() {
         let temp = tempfile::tempdir().unwrap();
         let gateway_dir = temp.path().join("gateway");
-        open_compute_storage::ensure_dir_secure(&gateway_dir).unwrap();
-        open_compute_storage::ensure_dir_secure(&gateway_dir.join("config-state")).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway_dir).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway_dir.join("config-state")).unwrap();
         let previous = "old.example.com";
         let next = "new.example.net";
         let authority =
@@ -488,7 +488,7 @@ mod tests {
             .tempdir_in("/tmp")
             .unwrap();
         let root = temp.path().join("user");
-        open_compute_storage::ensure_dir_secure(&root).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&root).unwrap();
         let _lock = DaemonLock::acquire(&root).unwrap();
         let https = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let https_listen = https.local_addr().unwrap();

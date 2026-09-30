@@ -4,7 +4,7 @@ use super::errors::{invalid, unsupported};
 use super::model::{WorkerUploadExport, WorkerUploadMetadata};
 use crate::workers_http::WorkerApiState;
 use open_compute_core::{InstanceId, PlatformError, WorkerId};
-use open_compute_storage::{
+use open_compute_storage::durable_objects::{
     DurableObjectClassRename, DurableObjectMigrationHead, DurableObjectMigrationPlan,
     DurableObjectRepository,
 };

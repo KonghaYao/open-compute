@@ -28,7 +28,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (caddy, caddy_hash) = verified_caddy(&root, target, &caddy_lock["targets"][target])?;
     let (archive, archive_hash) = verified_archive(&root, target, selected)?;
     let (pyodide_archive, pyodide_archive_hash) = verified_pyodide_archive(&root, &lock)?;
-    let assets = runtime_assets(&root, lock_bytes, caddy_lock_bytes)?;
+    let catalog = verified_compatibility_catalog(&root, &lock)?;
+    let assets = runtime_assets(&root, lock_bytes, caddy_lock_bytes, catalog)?;
     let payload_hash = payload_digest(
         target,
         &archive_hash,
@@ -201,10 +202,15 @@ fn runtime_assets(
     root: &Path,
     lock_bytes: Vec<u8>,
     caddy_lock_bytes: Vec<u8>,
+    compatibility_catalog: Vec<u8>,
 ) -> Result<BTreeMap<String, Vec<u8>>, Box<dyn Error>> {
     let mut assets = BTreeMap::new();
     assets.insert("runtime/workerd.lock.json".to_owned(), lock_bytes);
     assets.insert("runtime/caddy.lock.json".to_owned(), caddy_lock_bytes);
+    assets.insert(
+        "runtime/compatibility-catalog.json".to_owned(),
+        compatibility_catalog,
+    );
     assets.insert(
         "runtime/config.capnp".to_owned(),
         tracked(&root.join("packages/runtime/config.capnp"))?,
@@ -213,6 +219,34 @@ fn runtime_assets(
     verify_manifest(root, &assets)?;
 
     Ok(assets)
+}
+
+fn verified_compatibility_catalog(
+    root: &Path,
+    lock: &serde_json::Value,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let pin = &lock["compatibilityCatalog"];
+    let expected = pin["sha256"].as_str().ok_or("missing catalog digest")?;
+    let path = root
+        .join(".temp/workerd-build/compatibility-catalog")
+        .join(expected)
+        .join("compatibility-catalog.json");
+    println!("cargo:rerun-if-changed={}", path.display());
+    let bytes = read_bounded(&path, 1024 * 1024)
+        .map_err(|_| "run bun run build to prepare the workerd compatibility catalog")?;
+    if hex::encode(Sha256::digest(&bytes)) != expected {
+        return Err("compatibility catalog SHA-256 does not match the formal pin".into());
+    }
+    let catalog: serde_json::Value = serde_json::from_slice(&bytes)?;
+    if catalog["schemaVersion"] != pin["schemaVersion"]
+        || catalog["validation"] != "code_version"
+        || catalog["binaryMaximumDate"] != lock["binaryMaximumCompatibilityDate"]
+        || catalog["futureDatesAllowed"] != false
+        || !catalog["features"].is_array()
+    {
+        return Err("compatibility catalog does not match the formal pin".into());
+    }
+    Ok(bytes)
 }
 
 fn payload_digest(
@@ -383,7 +417,7 @@ fn verify_manifest(root: &Path, assets: &BTreeMap<String, Vec<u8>>) -> Result<()
     let sources = manifest["sources"]
         .as_object()
         .ok_or("invalid runtime manifest")?;
-    if manifest["schemaVersion"] != 1 || sources.len() + 4 != assets.len() {
+    if manifest["schemaVersion"] != 1 || sources.len() + 5 != assets.len() {
         return Err("runtime manifest does not cover the exact embedded file set".into());
     }
     for (name, expected) in sources {

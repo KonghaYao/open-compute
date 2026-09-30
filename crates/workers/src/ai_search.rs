@@ -4,11 +4,12 @@ use crate::{ReconcileOutcome, ResourceDriver, ResourceHealth};
 use open_compute_core::{
     BindingKind, ErrorCode, PlatformError, ResourceAvailability, ResourceId, ResourceState,
 };
+use open_compute_storage::PlatformStorage;
 use open_compute_storage::ai_search::{
     AI_SEARCH_NAMESPACE_SCHEMA_VERSION, AI_SEARCH_SCHEMA_VERSION, AiSearchCatalog,
     AiSearchInstanceStorageContract, AiSearchPaths, AiSearchStore, inspect_ai_search_instance,
 };
-use open_compute_storage::{PlatformStorage, ResourceRecord};
+use open_compute_storage::resources::ResourceRecord;
 
 /// Parent resource driver for `ai_search_namespace`.
 ///

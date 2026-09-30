@@ -21,7 +21,9 @@ pub(super) async fn list_versions(
             .list_versions(account, worker.id)
             .map_err(|error| V4Error::from(&error))?;
         if query.deployable {
-            records.retain(|version| version.state == open_compute_storage::VersionState::Ready);
+            records.retain(|version| {
+                version.state == open_compute_storage::worker_repository::VersionState::Ready
+            });
         }
         let total = records.len();
         let start = query.page.saturating_sub(1).saturating_mul(query.per_page);

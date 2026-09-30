@@ -100,7 +100,7 @@ async fn p1_capability_release_support_bundle_and_metrics_contract_is_bounded() 
     let result = crate::support_bundle::create_support_bundle(&loaded, &output, &server)
         .await
         .unwrap();
-    assert_eq!(result.entries, 11);
+    assert_eq!(result.entries, 12);
     assert_eq!(
         fs::metadata(&output).unwrap().permissions().mode() & 0o777,
         0o600
@@ -121,6 +121,7 @@ async fn p1_capability_release_support_bundle_and_metrics_contract_is_bounded() 
         b"receipts/last-snapshot.json".as_slice(),
         b"release.json".as_slice(),
         b"search.json".as_slice(),
+        b"workerd-compatibility.json".as_slice(),
     ] {
         assert!(archive.windows(name.len()).any(|window| window == name));
     }

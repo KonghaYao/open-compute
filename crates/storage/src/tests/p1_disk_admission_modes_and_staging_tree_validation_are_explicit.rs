@@ -6,7 +6,7 @@ fn p1_disk_admission_modes_and_staging_tree_validation_are_explicit() {
     let config = storage_config(&root);
     let storage = PlatformStorage::bootstrap(&config, &SystemClock).unwrap();
     let hardening = HardeningConfig::default();
-    let admission = crate::DiskAdmission::new(&config, &hardening);
+    let admission = crate::disk_admission::DiskAdmission::new(&config, &hardening);
     assert_eq!(
         admission.snapshot(storage.data_dir()).unwrap().mode,
         open_compute_core::PlatformMode::Serving
@@ -21,7 +21,7 @@ fn p1_disk_admission_modes_and_staging_tree_validation_are_explicit() {
         admission.snapshot(storage.data_dir()).unwrap().mode,
         open_compute_core::PlatformMode::Draining
     );
-    let offline = crate::DiskAdmission::offline(&config, &hardening);
+    let offline = crate::disk_admission::DiskAdmission::offline(&config, &hardening);
     assert_eq!(
         offline.snapshot(storage.data_dir()).unwrap().mode,
         open_compute_core::PlatformMode::Offline

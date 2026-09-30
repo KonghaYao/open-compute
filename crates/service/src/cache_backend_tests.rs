@@ -2,13 +2,14 @@ use super::*;
 use crate::p3_3_test_support::RuntimeFeatureFixture;
 use axum::http::Request;
 use futures::StreamExt as _;
-use open_compute_storage::CacheHeader;
+use open_compute_storage::cache::CacheHeader;
 use open_compute_workers::{VersionCacheInput, VersionCachePolicyInput, VersionRuntimeFeatures};
 use std::collections::HashSet;
 use std::time::SystemTime;
 
 async fn fixture() -> (RuntimeFeatureFixture, CacheBindingService) {
     let fixture = RuntimeFeatureFixture::create(VersionRuntimeFeatures {
+        compatibility_date: "2026-09-08".to_owned(),
         cache: VersionCacheInput {
             default: VersionCachePolicyInput {
                 enabled: true,

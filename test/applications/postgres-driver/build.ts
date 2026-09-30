@@ -10,7 +10,10 @@ const worker = await compileWorker({
   entry: "src/index.ts",
   tsconfig: "tsconfig.worker.json",
 });
-if (worker.modules.length !== 1 || worker.modules[0]?.name !== worker.mainModule)
+if (
+  worker.modules.length !== 1 ||
+  worker.modules[0]?.name !== worker.mainModule
+)
   throw new Error("PostgreSQL fixture must compile to one Worker module");
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });

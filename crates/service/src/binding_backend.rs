@@ -16,10 +16,10 @@ use open_compute_core::{
     PlatformError, QueuesConfig, ResourceId, VersionId,
 };
 use open_compute_runtime::GenerationAuthRegistry;
-use open_compute_storage::{
-    AlarmProjection, AuthorizedBinding, BindingRepository, DurableObjectRepository,
-    PlatformStorage, SchedulerStore,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::bindings::{AuthorizedBinding, BindingRepository};
+use open_compute_storage::durable_objects::DurableObjectRepository;
+use open_compute_storage::scheduler::{AlarmProjection, SchedulerStore};
 use open_compute_workers::ResourcePins;
 use serde::Deserialize;
 use std::future::Future;

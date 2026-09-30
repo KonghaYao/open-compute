@@ -288,9 +288,10 @@ test("AI Search rejects unknown options, limits, unsupported first tranche, and 
     /AI_SEARCH_INPUT_INVALID/,
   );
   assert.throws(
-    () => direct.chatCompletions({
-      messages: [{ role: "user", content: [{ type: "text", text: "x" }] }],
-    }),
+    () =>
+      direct.chatCompletions({
+        messages: [{ role: "user", content: [{ type: "text", text: "x" }] }],
+      }),
     /AI_SEARCH_INPUT_INVALID/,
   );
   assert.equal(

@@ -7,7 +7,7 @@ use super::{
 use open_compute_document_parser::{
     DocumentFormat, DocumentMetadata, ParsedContentKind, canonical_content_type,
 };
-use open_compute_storage::{
+use open_compute_storage::ai_search::{
     AiSearchParseCacheKey, AiSearchParseCacheLookup, AiSearchParseCacheStore,
 };
 use serde::{Deserialize, Serialize};

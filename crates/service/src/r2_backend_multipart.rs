@@ -5,9 +5,9 @@ use open_compute_artifacts::{
     R2HttpMetadata, R2MultipartCreateOptions, R2ObjectMetadata, R2SsecKey,
 };
 use open_compute_core::SecretBytes;
-use open_compute_storage::{
+use open_compute_storage::crypto::SecretEnvelope;
+use open_compute_storage::r2_multipart::{
     R2MultipartPartRecord, R2MultipartRepository, R2MultipartState, R2MultipartUploadRecord,
-    SecretEnvelope,
 };
 use std::collections::BTreeMap;
 #[path = "r2_backend_multipart/reconcile.rs"]

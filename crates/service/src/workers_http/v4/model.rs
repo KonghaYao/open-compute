@@ -4,6 +4,8 @@ use open_compute_core::SecretString;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
 
+const CLOUDFLARE_OLDEST_COMPATIBILITY_DATE: &str = "2021-11-02";
+
 /// Cloudflare Worker upload metadata emitted by Wrangler 4.143.0.
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -13,6 +15,7 @@ pub(crate) struct WorkerUploadMetadata {
     /// Service-worker/CommonJS entry point.
     pub body_part: Option<String>,
     /// Immutable runtime compatibility date.
+    #[serde(default = "default_compatibility_date")]
     pub compatibility_date: String,
     /// Immutable runtime compatibility flags.
     #[serde(default)]
@@ -44,6 +47,10 @@ pub(crate) struct WorkerUploadMetadata {
     /// Standard resource limits declared through the Cloudflare upload wire.
     #[serde(default, deserialize_with = "deserialize_optional_resource_limits")]
     pub limits: Option<WorkerUploadResourceLimits>,
+}
+
+fn default_compatibility_date() -> String {
+    CLOUDFLARE_OLDEST_COMPATIBILITY_DATE.to_owned()
 }
 
 /// One package dependency emitted by Wrangler's dependency instrumentation.

@@ -10,7 +10,8 @@ use open_compute_artifacts::{
     R2PutOptions, R2Range, R2SsecKey, R2StorageClass, R2UploadedPart,
 };
 use open_compute_core::{BindingId, BindingKind, ErrorCode, PlatformError, ResourceId};
-use open_compute_storage::{AuthorizedBinding, PlatformStorage};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::bindings::AuthorizedBinding;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use std::collections::BTreeMap;

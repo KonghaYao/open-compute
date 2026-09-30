@@ -200,8 +200,8 @@ test("Extension admission injects one host port and no outbound capability", asy
     },
   };
   const env = {
-    COMPATIBILITY_DATE: "2026-09-08",
-    REQUIRED_COMPATIBILITY_FLAGS: ["experimental"],
+    SYSTEM_COMPATIBILITY_DATE: "2026-09-08",
+    SYSTEM_COMPATIBILITY_FLAGS: ["experimental"],
     HOST_EXTENSION_FACTORY: {
       get(identity) {
         assert.equal(identity, "session");

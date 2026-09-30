@@ -11,7 +11,9 @@ use axum::extract::{Path, Request, State};
 use axum::response::Response;
 use axum::routing::{get, post};
 use open_compute_core::{BindingKind, ErrorCode, InstanceId, PlatformError, ResourceId};
-use open_compute_storage::{DurableObjectRepository, ResourceRepository, WorkerRepository};
+use open_compute_storage::durable_objects::DurableObjectRepository;
+use open_compute_storage::resources::ResourceRepository;
+use open_compute_storage::worker_repository::WorkerRepository;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -102,13 +104,11 @@ async fn capabilities(State(state): State<HttpState>, request: Request) -> Respo
         Ok(value) => value,
         Err(response) => return response.into_response(),
     };
-    let lock = match open_compute_runtime::embedded_runtime_lock() {
-        Ok((value, _)) => value,
-        Err(error) => return platform_error(&error, context),
-    };
-    if lock.effective_compatibility_date != open_compute_workers::WORKER_COMPATIBILITY_DATE {
-        return error_response(V4Error::Internal, context.request_id());
-    }
+    let (compatibility, system_workers) =
+        match open_compute_runtime::embedded_runtime_compatibility() {
+            Ok(value) => value,
+            Err(error) => return platform_error(&error, context),
+        };
     let inventory: serde_json::Value = match serde_json::from_slice(include_bytes!(
         "../../../../share/cloudflare-capabilities.json"
     )) {
@@ -168,17 +168,13 @@ async fn capabilities(State(state): State<HttpState>, request: Request) -> Respo
         }
     }
     insert_deviations(&mut deviations, contract["managementApi"].get("deviations"));
-    deviations.insert("OC-MANAGEMENT-COMPATIBILITY-DATE-001".to_owned());
     success_response(
         context,
         Capabilities {
             release: env!("CARGO_PKG_VERSION"),
             wrangler_version: WRANGLER_VERSION,
-            compatibility_date: CompatibilityDate {
-                minimum: &lock.effective_compatibility_date,
-                maximum: &lock.effective_compatibility_date,
-            },
-            compatibility_flags: open_compute_workers::ALLOWED_WORKER_COMPATIBILITY_FLAGS,
+            compatibility,
+            system_workers,
             endpoints,
             deviations: deviations.into_iter().collect(),
             limits: state.capability_limits().clone(),
@@ -670,8 +666,8 @@ fn platform_error(error: &PlatformError, context: V4RequestContext) -> Response 
 struct Capabilities<'a> {
     release: &'a str,
     wrangler_version: &'a str,
-    compatibility_date: CompatibilityDate<'a>,
-    compatibility_flags: &'static [&'static str],
+    compatibility: open_compute_core::RuntimeCompatibilityV1,
+    system_workers: open_compute_core::SystemWorkerCompatibilityV1,
     endpoints: BTreeMap<&'a str, &'static str>,
     deviations: Vec<String>,
     limits: BTreeMap<String, u64>,
@@ -684,12 +680,6 @@ struct ProductConfiguration {
 }
 
 #[derive(Serialize)]
-struct CompatibilityDate<'a> {
-    minimum: &'a str,
-    maximum: &'a str,
-}
-
-#[derive(Serialize)]
 struct SystemStatus {
     state: &'static str,
     version: &'static str,
@@ -698,7 +688,8 @@ struct SystemStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     observability: Option<ObservabilityStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    deployment_runtime: Option<open_compute_storage::DeploymentRuntimeAssessmentSummary>,
+    deployment_runtime:
+        Option<open_compute_storage::worker_repository::DeploymentRuntimeAssessmentSummary>,
 }
 
 #[derive(Serialize)]

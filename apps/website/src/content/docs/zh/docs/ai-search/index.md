@@ -77,17 +77,17 @@ await index.items.openComputeUpsert({
 
 ## 兼容性
 
-| 主题                  | Cloudflare                                          | open-compute                               |
-| --------------------- | --------------------------------------------------- | ------------------------------------------ |
-| AI Search Worker API  | Namespace / instance / items / jobs / search / chat | 已声明表面相同                             |
-| 查询模态              | 模型支持时可使用 text、image 或 multimodal          | **仅文本**                                 |
-| Markdown Conversion   | `env.AI.toMarkdown()` / `supported()`               | 固定 overload 相同                         |
-| Embedding / chat 模型 | Cloudflare 托管 Workers AI                          | operator 固定的 OpenAI-compatible provider |
-| Reranking 模型        | Cloudflare 托管 Workers AI                          | operator 固定的 `cohere_rerank_v2` 或 `rerank_v1` provider |
+| 主题                  | Cloudflare                                          | open-compute                                                               |
+| --------------------- | --------------------------------------------------- | -------------------------------------------------------------------------- |
+| AI Search Worker API  | Namespace / instance / items / jobs / search / chat | 已声明表面相同                                                             |
+| 查询模态              | 模型支持时可使用 text、image 或 multimodal          | **仅文本**                                                                 |
+| Markdown Conversion   | `env.AI.toMarkdown()` / `supported()`               | 固定 overload 相同                                                         |
+| Embedding / chat 模型 | Cloudflare 托管 Workers AI                          | operator 固定的 OpenAI-compatible provider                                 |
+| Reranking 模型        | Cloudflare 托管 Workers AI                          | operator 固定的 `cohere_rerank_v2` 或 `rerank_v1` provider                 |
 | Search 响应           | `query_kind` 与检索/rerank score                    | 文本成功响应返回 `query_kind: "text"`；rerank chunk 包含 `reranking_score` |
-| 完整 Workers AI 推理  | `run()` / `models()` / AutoRAG                      | **不提供**                                 |
-| 对象字节              | 托管存储                                            | 选定的 Local 或 S3 authority               |
-| 就近存放 / 复制       | 全球                                                | 单机                                       |
-| 手动外部 source       | 非官方 member                                       | `open-compute:manual` namespaced 扩展      |
+| 完整 Workers AI 推理  | `run()` / `models()` / AutoRAG                      | **不提供**                                                                 |
+| 对象字节              | 托管存储                                            | 选定的 Local 或 S3 authority                                               |
+| 就近存放 / 复制       | 全球                                                | 单机                                                                       |
+| 手动外部 source       | 非官方 member                                       | `open-compute:manual` namespaced 扩展                                      |
 
 下一步：[使用 bindings 开发](/zh/docs/develop/) · [兼容性与限制](/zh/docs/reference/)

@@ -10,13 +10,18 @@ import { hostTarget, loadPin, sha256 } from "../scripts/workerd-archive.ts";
 const root = fileURLToPath(new URL("../", import.meta.url));
 
 test("bundled archives are atomic, bounded and reject corrupt or unhydrated inputs", () => {
+  const catalogFixture =
+    '{"schemaVersion":1,"validation":"code_version","binaryMaximumDate":"2026-09-25","futureDatesAllowed":false,"features":[]}\n';
+  const executableFixture = `#!/bin/sh
+printf '%s\\n' '{"schemaVersion":1,"validation":"code_version","binaryMaximumDate":"2026-09-25","futureDatesAllowed":false,"features":[]}'
+`;
   const source = `
     import assert from "node:assert/strict";
     import { mkdtemp, mkdir, writeFile, readFile, chmod, symlink, unlink, truncate, rm } from "node:fs/promises";
     import { join } from "node:path";
     import { tmpdir } from "node:os";
     import { gunzipSync } from "node:zlib";
-    import { bundledWorkerdArchive, compressWorkerd } from ${JSON.stringify(new URL("../scripts/bundled-workerd.ts", import.meta.url).href)};
+    import { bundledCompatibilityCatalog, bundledWorkerdArchive, compressWorkerd } from ${JSON.stringify(new URL("../scripts/bundled-workerd.ts", import.meta.url).href)};
     import { loadPin, sha256 } from ${JSON.stringify(new URL("../scripts/workerd-archive.ts", import.meta.url).href)};
     const root = await mkdtemp(join(tmpdir(), "oc-bundled-fixture-"));
     try {
@@ -51,6 +56,21 @@ test("bundled archives are atomic, bounded and reject corrupt or unhydrated inpu
       await writeFile(first, "corrupt-cache");
       await assert.rejects(bundledWorkerdArchive(root, pin), /cached workerd archive/);
       assert.equal(await readFile(first, "utf8"), "corrupt-cache");
+      const catalog = Buffer.from(${JSON.stringify(catalogFixture)});
+      const executable = Buffer.from(${JSON.stringify(executableFixture)});
+      await writeFile(path, executable, { mode: 0o755 });
+      const catalogPin = {
+        ...pin,
+        binarySha256: sha256(executable),
+        catalogSha256: sha256(catalog),
+        catalogSchemaVersion: 1,
+        binaryMaximumCompatibilityDate: "2026-09-25",
+      };
+      assert.deepEqual(await bundledCompatibilityCatalog(root, catalogPin), catalog);
+      await assert.rejects(
+        bundledCompatibilityCatalog(root, { ...catalogPin, catalogSha256: "0".repeat(64) }),
+        /catalog SHA-256 mismatch/,
+      );
     } finally { await rm(root, { recursive: true, force: true }); }
   `;
   const result = spawnSync("bun", ["--eval", source], {

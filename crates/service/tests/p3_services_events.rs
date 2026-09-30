@@ -15,10 +15,11 @@ use open_compute_service::runtime_bridge::{
     DispatchTarget, QueueDispatchMessage, QueueDispatchRequest, ScheduledDispatchRequest,
     WorkflowOutcome, WorkflowRunRequest,
 };
-use open_compute_storage::{
-    DO_NAMESPACE_SCHEMA_VERSION, QueueContentType, SchedulerStore, ServiceTarget, WorkerRepository,
-    WorkflowTarget,
-};
+use open_compute_storage::durable_objects::DO_NAMESPACE_SCHEMA_VERSION;
+use open_compute_storage::scheduler::{QueueContentType, SchedulerStore};
+use open_compute_storage::services::ServiceTarget;
+use open_compute_storage::worker_repository::WorkerRepository;
+use open_compute_storage::workflows::WorkflowTarget;
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateResourceOutcome, CreateResourceRequest,
     CreateVersionOutcome, CreateVersionRequest, DurableObjectResourceDriver, ModuleInput,
@@ -312,6 +313,7 @@ async fn p3_service_calls_from_queue_cron_do_and_workflow_event_sources() {
 
 fn context_runtime_features() -> VersionRuntimeFeatures {
     VersionRuntimeFeatures {
+        compatibility_date: "2026-09-08".to_owned(),
         cache: VersionCacheInput {
             default: VersionCachePolicyInput {
                 enabled: true,
@@ -391,10 +393,15 @@ fn version_request(
         secrets: BTreeMap::new(),
         bindings,
         services,
-        runtime_features: Default::default(),
+        runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
-        deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+        deployment_source: Some(
+            open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+        ),
         observability: None,
         request_id: RequestId::generate(),
         now_ms,
@@ -404,7 +411,7 @@ fn version_request(
 async fn deploy(
     controller: &VersionController<'_>,
     request: CreateVersionRequest,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     match controller.create_version(request).await.unwrap() {
         CreateVersionOutcome::Applied(result) => result.version,
         CreateVersionOutcome::Replay(_) => panic!("unexpected version replay"),
@@ -415,7 +422,7 @@ fn dispatch_target(
     repository: WorkerRepository<'_>,
     account_id: open_compute_core::InstanceId,
     worker_id: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     entrypoint: Option<&str>,
 ) -> DispatchTarget {
     let route_generation = i64::try_from(

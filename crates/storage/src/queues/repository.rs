@@ -136,7 +136,7 @@ impl<'a> QueueRepository<'a> {
             ));
         }
         let search = search.map(str::trim).filter(|value| !value.is_empty());
-        let exact_id = search.and_then(crate::search_as_queue_id);
+        let exact_id = search.and_then(crate::catalog_page::search_as_queue_id);
         let search_needle = if exact_id.is_some() {
             None
         } else {

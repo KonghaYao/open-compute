@@ -216,6 +216,7 @@ async fn serve(composed: composition::ComposedPlatform) -> Result<(), PlatformEr
                     r2_maintenance.run(
                         &maintenance_storage,
                         &maintenance_r2_objects,
+                        &maintenance_resource_pins,
                         &maintenance_r2_config,
                         &maintenance_health,
                     ).await;

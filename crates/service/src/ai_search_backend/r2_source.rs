@@ -4,7 +4,8 @@ use super::*;
 use futures::{TryStreamExt as _, stream};
 use open_compute_artifacts::UserObjectKey;
 use open_compute_document_parser::{FilenameMatcher, ai_search_formats, canonical_content_type};
-use open_compute_storage::{AiSearchR2Candidate, AiSearchSourceReference, R2ObjectRecord};
+use open_compute_storage::ai_search::{AiSearchR2Candidate, AiSearchSourceReference};
+use open_compute_storage::r2_objects::R2ObjectRecord;
 
 const MAX_PREFIX_OBJECTS: u32 = 100_000;
 const MAX_MATCHING_OBJECTS: usize = 10_000;

@@ -247,7 +247,7 @@ async fn provider_and_dns_sockets_isolate_two_domains() {
     .await
     .unwrap();
     let socket = directory.path().join("provider.sock");
-    open_compute_storage::ensure_dir_secure(&directory.path().join("config-state")).unwrap();
+    open_compute_storage::fs::ensure_dir_secure(&directory.path().join("config-state")).unwrap();
     crate::gateway_certificates::initialize_registry(directory.path()).unwrap();
     let pid = Arc::new(AtomicI32::new(i32::try_from(std::process::id()).unwrap()));
     let provider = ChallengeProviderServer::bind(

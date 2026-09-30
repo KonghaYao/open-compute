@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { link, lstat, mkdir, open, readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -7,6 +8,7 @@ import type { loadPin } from "./workerd-archive.ts";
 type Pin = Awaited<ReturnType<typeof loadPin>>;
 const maxBinary = 256 * 1024 * 1024;
 const maxArchive = 64 * 1024 * 1024;
+const maxCatalog = 1024 * 1024;
 const digest = (bytes: Uint8Array) =>
   createHash("sha256").update(bytes).digest("hex");
 
@@ -33,11 +35,7 @@ async function directory(path: string): Promise<void> {
     throw new Error("workerd cache path must be a physical directory");
 }
 
-/** Verify the checked-in binary and materialize only its exact pinned compressed bytes. */
-export async function bundledWorkerdArchive(
-  repository: string,
-  pin: Pin,
-): Promise<string> {
+async function verifiedBundledWorkerd(repository: string, pin: Pin) {
   const source = join(repository, "share", "workerd", pin.target);
   for (const path of [
     join(repository, "share"),
@@ -47,8 +45,8 @@ export async function bundledWorkerdArchive(
     if (!(await lstat(path)).isDirectory())
       throw new Error("bundled workerd path must be a physical directory");
   }
-  const binaryPath = join(source, "workerd");
-  const metadata = await lstat(binaryPath);
+  const path = join(source, "workerd");
+  const metadata = await lstat(path);
   if (
     !metadata.isFile() ||
     metadata.size > maxBinary ||
@@ -58,12 +56,21 @@ export async function bundledWorkerdArchive(
       "bundled workerd must be a bounded executable regular file",
     );
   }
-  const binary = await readFile(binaryPath);
-  if (digest(binary) !== pin.binarySha256) {
+  const bytes = await readFile(path);
+  if (digest(bytes) !== pin.binarySha256) {
     throw new Error(
       "bundled workerd SHA-256 mismatch; hydrate Git LFS files and verify the formal pin",
     );
   }
+  return { path, bytes };
+}
+
+/** Verify the checked-in binary and materialize only its exact pinned compressed bytes. */
+export async function bundledWorkerdArchive(
+  repository: string,
+  pin: Pin,
+): Promise<string> {
+  const { bytes: binary } = await verifiedBundledWorkerd(repository, pin);
   let cache = repository;
   for (const part of [
     ".temp",
@@ -121,4 +128,43 @@ export async function bundledWorkerdArchive(
     await unlink(temporary);
   }
   return destination;
+}
+
+/** Run catalog discovery on the exact checked-in target binary and verify its formal identity. */
+export async function bundledCompatibilityCatalog(
+  repository: string,
+  pin: Pin,
+): Promise<Buffer> {
+  const { path } = await verifiedBundledWorkerd(repository, pin);
+  const result = spawnSync(path, ["compatibility-catalog"], {
+    cwd: repository,
+    encoding: "buffer",
+    maxBuffer: maxCatalog,
+    timeout: 30_000,
+  });
+  if (
+    result.error ||
+    result.status !== 0 ||
+    result.stderr.length !== 0 ||
+    result.stdout.length === 0 ||
+    result.stdout.length > maxCatalog
+  ) {
+    throw new Error("bundled workerd compatibility introspection failed");
+  }
+  const bytes = result.stdout;
+  if (digest(bytes) !== pin.catalogSha256)
+    throw new Error("workerd compatibility catalog SHA-256 mismatch");
+  const parsed = JSON.parse(
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+  ) as Record<string, unknown>;
+  if (
+    parsed.schemaVersion !== pin.catalogSchemaVersion ||
+    parsed.validation !== "code_version" ||
+    parsed.binaryMaximumDate !== pin.binaryMaximumCompatibilityDate ||
+    parsed.futureDatesAllowed !== false ||
+    !Array.isArray(parsed.features)
+  ) {
+    throw new Error("workerd compatibility catalog does not match the lock");
+  }
+  return bytes;
 }

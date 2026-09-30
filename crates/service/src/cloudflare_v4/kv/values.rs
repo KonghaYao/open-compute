@@ -12,7 +12,7 @@ use axum::extract::{FromRequest, Multipart, Path, Request, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use open_compute_core::{BindingKind, RequestId, ResourceId};
-use open_compute_storage::KV_MAX_METADATA_BYTES;
+use open_compute_storage::kv::KV_MAX_METADATA_BYTES;
 use serde_json::Value;
 
 pub(super) async fn get(
@@ -172,7 +172,7 @@ fn entry(
 ) -> Result<
     (
         crate::cloudflare_v4::V4RequestContext,
-        Option<open_compute_storage::KvEntry>,
+        Option<open_compute_storage::kv::KvEntry>,
     ),
     HttpError,
 > {
@@ -295,7 +295,8 @@ async fn read_multipart(request: Request) -> Result<(Vec<u8>, Option<Value>, boo
         }
     }
     if let Some(metadata) = metadata.as_ref() {
-        open_compute_storage::canonical_metadata(metadata).map_err(|_| V4Error::InvalidRequest)?;
+        open_compute_storage::kv::canonical_metadata(metadata)
+            .map_err(|_| V4Error::InvalidRequest)?;
     }
     Ok((
         value.ok_or(V4Error::InvalidRequest)?,

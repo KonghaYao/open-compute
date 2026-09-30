@@ -65,13 +65,17 @@ fn write_lock(dir: &Path, binary_sha: &str) -> PathBuf {
     let archive = host_archive();
     let lock = format!(
         r#"{{
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "release": "v1.20260830.1",
   "revision": "e9dda5963aba7ee4323960db795690ec78fec118",
   "expectedVersionOutput": "{VERSION}",
-  "effectiveCompatibilityDate": "2026-09-08",
-  "requiredCompatibilityFlags": [],
+  "systemCompatibilityDate": "2026-09-08",
   "systemCompatibilityFlags": ["experimental", "service_binding_extra_handlers"],
+  "binaryMaximumCompatibilityDate": "2026-09-25",
+  "compatibilityCatalog": {{
+    "schemaVersion": 1,
+    "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  }},
   "processFlags": ["--experimental"],
   "pyodideBundle": {{
     "version": "314.0.6_2026-08-17_2",
@@ -83,7 +87,7 @@ fn write_lock(dir: &Path, binary_sha: &str) -> PathBuf {
   "source": {{
     "repository": "https://github.com/elliothux/workerd",
     "upstreamBase": "dd8133e9b9656fb39f1434247a80aa7a249ee204",
-    "buildInputs": {{ "bazel": "9.2.0", "target": "//src/workerd/server:workerd", "mode": "opt", "ioBackend": "cxx", "strip": "always", "macosExecRustStrip": "none" }}
+    "buildInputs": {{ "bazel": "9.2.0", "target": "//src/workerd/server:workerd", "mode": "opt", "strip": "always", "macosExecRustStrip": "none" }}
   }},
   "workersTypes": {{
     "version": "5.20260830.1",

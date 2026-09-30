@@ -15,8 +15,8 @@ pub(crate) use validation::{
     validate_injection_module_collisions, validate_secret_set, validate_service_set,
 };
 
+pub(crate) use open_compute_storage::worker_repository::idempotency_ref_id;
 use products::{prepare_cron_config, validate_product_counts};
-pub(crate) use runtime_features::idempotency_ref_id;
 use runtime_features::{
     map_asset_store_error, prepare_runtime_features, validate_asset_content, validate_compatibility,
 };
@@ -41,15 +41,28 @@ use open_compute_core::{
     CronSchedule, ErrorCode, InstanceId, PlatformError, QueueConsumerId, QueueId, RequestId,
     ResourceId, ResourceState, SecretBytes, SecretString, StartupId, VersionId, WorkerId,
 };
-use open_compute_storage::{
-    BindingRepository, BuiltinBindingKind, CRON_PARSER_VERSION, DeploymentRecord, DeploymentSource,
-    DurableObjectMigrationPlan, DurableObjectRepository, EffectiveResourceLimits,
-    IdempotencyReservation, LOADER_SCHEMA_VERSION, NewCronConfig, NewCronDeclaration,
-    NewQueueConsumerDeclaration, NewQueueProducerBinding, NewVersion, NewVersionAssets,
-    NewVersionBinding, NewVersionObjectRef, NewVersionService, PlatformStorage, QueueAvailability,
-    QueueConsumerConfig, QueueConsumerRepository, QueueRepository, QueueState, ResourceRepository,
-    StoredVersionSecret, VersionBuiltinBindingRecord, VersionCachePolicyRecord, VersionContentKind,
-    VersionObjectKind, VersionRecord, VersionState, WorkerObservabilityPatch, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::assets::{NewVersionAssets, NewVersionObjectRef, VersionObjectKind};
+use open_compute_storage::bindings::{BindingRepository, NewVersionBinding};
+use open_compute_storage::cron::{CRON_PARSER_VERSION, NewCronConfig, NewCronDeclaration};
+use open_compute_storage::durable_objects::{DurableObjectMigrationPlan, DurableObjectRepository};
+use open_compute_storage::queue_consumers::{
+    NewQueueConsumerDeclaration, QueueConsumerConfig, QueueConsumerRepository,
+};
+use open_compute_storage::queues::{
+    NewQueueProducerBinding, QueueAvailability, QueueRepository, QueueState,
+};
+use open_compute_storage::resources::ResourceRepository;
+use open_compute_storage::runtime_features::{
+    BuiltinBindingKind, VersionBuiltinBindingRecord, VersionCachePolicyRecord,
+};
+use open_compute_storage::services::NewVersionService;
+use open_compute_storage::worker_repository::{
+    DeploymentRecord, DeploymentSource, EffectiveResourceLimits, IdempotencyReservation,
+    LOADER_SCHEMA_VERSION, NewVersion, StoredVersionSecret, VersionContentKind, VersionRecord,
+    VersionState, WorkerObservabilityPatch, WorkerRepository,
+};
+use open_compute_storage::workflows::{
     WorkflowDefinitionReservation, WorkflowRepository, WorkflowTarget,
 };
 use serde::{Deserialize, Serialize};
@@ -89,7 +102,7 @@ pub struct VersionBindingInput {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct VersionServiceInput {
     /// Existing logical Worker or configured local-extension target.
-    pub target: open_compute_storage::ServiceTarget,
+    pub target: open_compute_storage::services::ServiceTarget,
     /// Optional named `WorkerEntrypoint` export.
     #[serde(default)]
     pub entrypoint: Option<String>,
@@ -239,7 +252,7 @@ impl Default for VersionRuntimeFeatures {
 }
 
 fn default_compatibility_date() -> String {
-    crate::WORKER_COMPATIBILITY_DATE.to_owned()
+    String::new()
 }
 
 /// Immutable Queue push-consumer declaration supplied with a version.

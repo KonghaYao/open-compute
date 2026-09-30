@@ -1,6 +1,8 @@
 //! Immutable version-binding persistence and runtime authorization.
 
-use crate::{ControlDb, ResourceRecord, VersionState};
+use crate::control_db::ControlDb;
+use crate::resources::ResourceRecord;
+use crate::worker_repository::VersionState;
 use open_compute_core::{
     BindingId, BindingKind, CanonicalBindingConfig, CanonicalPermissions, ErrorCode, InstanceId,
     PlatformError, ResourceAvailability, ResourceId, ResourceState, VersionId,

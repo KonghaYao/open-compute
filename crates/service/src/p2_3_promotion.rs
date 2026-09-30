@@ -3,11 +3,15 @@
 use open_compute_core::{
     CronSchedule, ErrorCode, PlatformError, QueueConsumerId, QueueId, StartupId,
 };
-use open_compute_storage::{
-    CronActivationRecord, CronActivationState, CronRepository, CronScheduleProjection,
-    PlatformStorage, QueueConsumerDeclaration, QueueConsumerProjection, QueueConsumerRecord,
-    QueueConsumerRepository, QueueConsumerState, SchedulerStore, WorkerRecord, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::cron::{CronActivationRecord, CronActivationState, CronRepository};
+use open_compute_storage::queue_consumers::{
+    QueueConsumerDeclaration, QueueConsumerRecord, QueueConsumerRepository, QueueConsumerState,
 };
+use open_compute_storage::scheduler::{
+    CronScheduleProjection, QueueConsumerProjection, SchedulerStore,
+};
+use open_compute_storage::worker_repository::{WorkerRecord, WorkerRepository};
 use open_compute_workers::{
     ProductPromotionCoordinator, ProductPromotionRequest, RuntimeValidator, ValidationCandidate,
     version_has_worker_loader, worker_loader_generation_prefix,

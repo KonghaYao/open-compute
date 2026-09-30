@@ -6,9 +6,10 @@ use crate::cloudflare_v4::accounts::V4InstanceContext;
 use crate::workers_http::WorkerApiState;
 use open_compute_artifacts::{ARTIFACT_KEY_VERSION, ArtifactRef};
 use open_compute_core::{ErrorCode, PlatformError, RequestId, SecretString};
-use open_compute_storage::{
-    CronRepository, DeploymentSource, EffectiveResourceLimits, QueueConsumerRepository,
-    VersionSnapshot, WorkerRecord, WorkerRepository,
+use open_compute_storage::cron::CronRepository;
+use open_compute_storage::queue_consumers::QueueConsumerRepository;
+use open_compute_storage::worker_repository::{
+    DeploymentSource, EffectiveResourceLimits, VersionSnapshot, WorkerRecord, WorkerRepository,
 };
 use open_compute_workers::{
     AssetManifestV1, AssetRoutingConfigV1, CreateVersionOutcome, CreateVersionRequest,
@@ -36,7 +37,9 @@ pub(super) async fn clone_content(
             })
         })
         .transpose()?;
-    if snapshot.version.content_kind == open_compute_storage::VersionContentKind::AssetsOnly {
+    if snapshot.version.content_kind
+        == open_compute_storage::worker_repository::VersionContentKind::AssetsOnly
+    {
         return Ok(VersionContent::AssetsOnly {
             assets: assets.ok_or_else(invariant)?,
         });

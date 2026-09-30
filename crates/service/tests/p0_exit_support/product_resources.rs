@@ -2,8 +2,11 @@
 
 use open_compute_artifacts::R2ObjectStore;
 use open_compute_core::{BindingKind, InstanceId, RequestId, ResourceId, ResourceState};
-use open_compute_storage::{
-    D1_DATABASE_SCHEMA_VERSION, KV_SCHEMA_VERSION, PlatformStorage, R2_SCHEMA_VERSION,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::d1::D1_DATABASE_SCHEMA_VERSION;
+use open_compute_storage::kv::KV_SCHEMA_VERSION;
+use open_compute_storage::r2::R2_SCHEMA_VERSION;
+use open_compute_storage::resources::{
     ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
 };
 use open_compute_workers::{

@@ -173,8 +173,8 @@ fn p1_capabilities_are_complete_and_identical_across_fresh_processes() {
     }
     assert_eq!(capabilities(&config), first);
     assert_eq!(
-        capabilities(&config)["runtime"]["effective_compatibility_date"],
-        "2026-09-08"
+        capabilities(&config)["runtime"]["compatibility"]["validation"],
+        "workerd_code_version"
     );
     assert!(
         capabilities(&config)["runtime"]
@@ -183,7 +183,7 @@ fn p1_capabilities_are_complete_and_identical_across_fresh_processes() {
     );
     assert!(
         capabilities(&config)["runtime"]
-            .get("compatibility_date_min")
+            .get("effective_compatibility_date")
             .is_none()
     );
 

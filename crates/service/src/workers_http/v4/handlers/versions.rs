@@ -2,7 +2,7 @@ use super::*;
 use axum::Json;
 use axum::body::to_bytes;
 use axum::response::IntoResponse as _;
-use open_compute_storage::VersionState;
+use open_compute_storage::worker_repository::VersionState;
 
 #[derive(Serialize)]
 struct DeleteVersionResponse {
@@ -231,7 +231,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode, header};
     use open_compute_core::{RequestId, SecretString};
-    use open_compute_storage::{
+    use open_compute_storage::worker_repository::{
         NewVersion, NewVersionProducts, VersionContentKind, WorkerRepository,
     };
     use std::collections::BTreeMap;
@@ -259,7 +259,7 @@ mod tests {
                     compatibility_date: "2026-09-08".to_owned(),
                     compatibility_flags: Vec::new(),
                     resource_limits:
-                        open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+                        open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
                     vars: BTreeMap::new(),
                     secrets: BTreeMap::new(),
                     request_id: RequestId::generate(),

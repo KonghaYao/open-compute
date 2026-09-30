@@ -1,11 +1,11 @@
 # 单二进制分发与部署
 
-2026-09-18 正式 lock 已固定用户 fork `40937077470ed7edec082329d3a10e4195b402cb`，
-release 为 `v1.20260918.1-open-compute-w3.40937077`，见[workerd 方案](../workerd/README.md)。
+2026-09-30 正式 lock 已固定用户 fork `e3bdb07f52affc6a618f02ed2b731a581b0b2f69`，
+release 为 `v1.20260930.0-open-compute-r3.e3bdb07f5`，见[workerd 方案](../workerd/README.md)。
 三个正式产品平台加 macOS Intel 手动输入的 archive/binary 摘要、upstream base 与构建输入统一记录于 lock。
 四个平台的原始二进制作为固定依赖保存在 `share/workerd/` 并由 Git LFS 管理；macOS Intel 仍不进入官方 `ocd` release。
 构建工具从这些字节确定性生成正式 gzip；`archiveUrl` 为 `null`，构建不依赖单独发布的 archive。
-平台无关的 Pyodide `314.0.6_2026-08-17_2` Cap'n Proto bundle 以固定 gzip 保存在
+平台无关的 Pyodide `314.0.6_2026-08-17_6` Cap'n Proto bundle 以固定 gzip 保存在
 `share/pyodide/` 并由同一 lock 记录压缩与解压 SHA-256；它同样通过 Git LFS 进入构建输入。
 
 macOS 的文档解析功能完整保留，但解析子进程尚无可强制执行的内存硬上限。
@@ -113,7 +113,7 @@ ocd（用户下载的唯一文件）
   ├─ OCD_DIR/cache/packages/<payload-sha256>/
   │    ├─ workerd
   │    ├─ caddy
-  │    ├─ pyodide-bundle-cache/pyodide_314.0.6_2026-08-17_2.capnp.bin
+  │    ├─ pyodide-bundle-cache/pyodide_314.0.6_2026-08-17_6.capnp.bin
   │    └─ runtime/{workerd.lock.json,config.capnp,dist/...}
   ├─ INSTANCE_DIR/runtime/config.*           # 每实例编译配置、lease 与 staging
   ├─ INSTANCE_DIR/tessdata/<contract-sha256>/ # OCR 语言资产，逐项复验
@@ -140,9 +140,9 @@ support bundle 不采集输入文档、Markdown、pipe 或 child stderr 正文�
 运行时磁盘会产生独立文件；“单二进制”指分发物，不指单进程或零磁盘写入。
 data-dir 与 macOS staging 所在文件系统必须允许执行，并为解压文件、执行副本及业务状态留足空间。
 
-当前 Linux fork 使用 Ubuntu 24.04 runner 与 Bazel `release_linux` 的 LLVM 19 toolchain 构建，二进制符号基线要求 glibc 2.38+；ocd 同时受实际编译主机的 libc 基线约束。
+当前 Linux fork 使用 Ubuntu 24.04 runner 与 Bazel `release_linux` 的 LLVM 22 toolchain 构建，二进制符号基线要求 glibc 2.38+；ocd 同时受实际编译主机的 libc 基线约束。
 容器示例与 CI 使用 Ubuntu 24.04，不使用 scratch/Alpine。macOS 与 CPU 要求继承
-[当前 upstream base 的要求](https://github.com/cloudflare/workerd/tree/679c09e5eea0af8a04062e1875e99c75af532e3b#running-workerd)。
+[正式 pin upstream base 的要求](https://github.com/cloudflare/workerd/tree/cb26acc62e64f64487a78e3f73d0a08e9926c690#running-workerd)。
 服务配置见 examples/systemd、examples/launchd 和 examples/container。
 只替换并校验完整 ocd，不单独替换缓存中的 workerd 或 JS。
 

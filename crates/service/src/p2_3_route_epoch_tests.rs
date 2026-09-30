@@ -32,7 +32,7 @@ async fn local_origin_route_preserves_queue_and_cron_epochs_during_repromotion_a
     else {
         panic!("queue must be new")
     };
-    let workers = open_compute_storage::WorkerRepository::new(storage.db());
+    let workers = open_compute_storage::worker_repository::WorkerRepository::new(storage.db());
     let worker = workers
         .create_worker(
             account,
@@ -88,7 +88,10 @@ async fn local_origin_route_preserves_queue_and_cron_epochs_during_repromotion_a
             secrets: Default::default(),
             bindings: Default::default(),
             services: Default::default(),
-            runtime_features: Default::default(),
+            runtime_features: open_compute_workers::VersionRuntimeFeatures {
+                compatibility_date: "2026-09-08".to_owned(),
+                ..Default::default()
+            },
             queue_consumers: vec![QueueConsumerInput {
                 queue: queue.queue.id,
                 entrypoint: None,
@@ -96,7 +99,9 @@ async fn local_origin_route_preserves_queue_and_cron_epochs_during_repromotion_a
                 dead_letter_queue: None,
             }],
             crons: vec!["*/5 * * * *".into()],
-            deployment_source: Some(open_compute_storage::DeploymentSource::VersionsApi),
+            deployment_source: Some(
+                open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
+            ),
             observability: None,
             request_id: open_compute_core::RequestId::generate(),
             now_ms: 60_000,
@@ -106,11 +111,12 @@ async fn local_origin_route_preserves_queue_and_cron_epochs_during_repromotion_a
     else {
         panic!("version must be new")
     };
-    let consumer = open_compute_storage::QueueConsumerRepository::new(storage.db())
-        .live_for_queue(queue.queue.id)
-        .unwrap()
-        .unwrap();
-    let activation = open_compute_storage::CronRepository::new(storage.db())
+    let consumer =
+        open_compute_storage::queue_consumers::QueueConsumerRepository::new(storage.db())
+            .live_for_queue(queue.queue.id)
+            .unwrap()
+            .unwrap();
+    let activation = open_compute_storage::cron::CronRepository::new(storage.db())
         .live_for_worker(worker.id)
         .unwrap()
         .remove(0);
@@ -143,7 +149,7 @@ async fn local_origin_route_preserves_queue_and_cron_epochs_during_repromotion_a
             instance_id: account,
             worker_id: worker.id,
             version_id: result.version.id,
-            source: open_compute_storage::DeploymentSource::VersionsApi,
+            source: open_compute_storage::worker_repository::DeploymentSource::VersionsApi,
             annotations: std::collections::BTreeMap::new(),
             observability: None,
             request_id: open_compute_core::RequestId::generate(),
@@ -183,14 +189,14 @@ async fn local_origin_route_preserves_queue_and_cron_epochs_during_repromotion_a
         Some(cron_epoch)
     );
     assert_eq!(
-        open_compute_storage::QueueConsumerRepository::new(storage.db())
+        open_compute_storage::queue_consumers::QueueConsumerRepository::new(storage.db())
             .get(consumer.id)
             .unwrap()
             .consumer_generation,
         consumer.consumer_generation
     );
     assert_eq!(
-        open_compute_storage::CronRepository::new(storage.db())
+        open_compute_storage::cron::CronRepository::new(storage.db())
             .live_for_worker(worker.id)
             .unwrap()[0]
             .activation_generation,

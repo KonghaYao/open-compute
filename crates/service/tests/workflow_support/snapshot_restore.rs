@@ -3,9 +3,11 @@
 use super::*;
 use open_compute_core::{DataConfig, HardeningConfig, PlatformConfig};
 use open_compute_service::capabilities::platform_capabilities;
-use open_compute_storage::{
-    PlatformStorage, PreparePlatformSnapshotRequest, RestoreTarget, inspect_control_db,
-    inspect_master_key, prepare_platform_snapshot, sign_snapshot_manifest,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::inspect::{inspect_control_db, inspect_master_key};
+use open_compute_storage::platform_restore::RestoreTarget;
+use open_compute_storage::platform_snapshot::{
+    PreparePlatformSnapshotRequest, prepare_platform_snapshot, sign_snapshot_manifest,
     verify_snapshot_manifest_mac,
 };
 use std::os::unix::fs::PermissionsExt as _;

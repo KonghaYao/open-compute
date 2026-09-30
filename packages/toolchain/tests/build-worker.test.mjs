@@ -276,7 +276,8 @@ test("converts CommonJS dependency requires for external Node builtins", async (
     t,
     {
       "index.ts": 'import value from "dependency"; export default value;',
-      "dependency.d.ts": 'declare module "dependency" { const value: unknown; export default value; }',
+      "dependency.d.ts":
+        'declare module "dependency" { const value: unknown; export default value; }',
       "node_modules/dependency/package.json": JSON.stringify({
         name: "dependency",
         main: "index.js",

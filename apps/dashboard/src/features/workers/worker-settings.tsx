@@ -4,10 +4,10 @@ import { Switch } from "@cloudflare/kumo/components/switch";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import type { QueueConsumer } from "@open-compute/sdk";
-import { ErrorState, LoadingRows } from "../../../components/dashboard-page";
-import { WorkerBindingEditor } from "../../../components/worker-binding-editor";
-import { WorkerQueueTriggers } from "../../../components/worker-queue-triggers";
-import { WorkerVariableEditor } from "../../../components/worker-variable-editor";
+import { ErrorState, LoadingRows } from "../../components/dashboard-page";
+import { WorkerBindingEditor } from "../../components/worker-binding-editor";
+import { WorkerQueueTriggers } from "../../components/worker-queue-triggers";
+import { WorkerVariableEditor } from "../../components/worker-variable-editor";
 
 type Binding = {
   name?: string;

@@ -7,8 +7,8 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 pub(crate) fn initialize_registry(gateway_dir: &Path) -> Result<(), PlatformError> {
-    open_compute_storage::ensure_dir_secure(&registry(gateway_dir))?;
-    open_compute_storage::ensure_dir_secure(&attempted_registry(gateway_dir))
+    open_compute_storage::fs::ensure_dir_secure(&registry(gateway_dir))?;
+    open_compute_storage::fs::ensure_dir_secure(&attempted_registry(gateway_dir))
 }
 
 pub(crate) fn check_registry(gateway_dir: &Path) -> Result<(), PlatformError> {
@@ -44,7 +44,7 @@ pub(crate) fn record_certified_domain(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => return Err(incomplete()),
     }
-    open_compute_storage::atomic_write(&marker, domain.as_bytes()).map_err(|_| incomplete())?;
+    open_compute_storage::fs::atomic_write(&marker, domain.as_bytes()).map_err(|_| incomplete())?;
     check_certified_domains(gateway_dir, &[domain.to_owned()])
 }
 
@@ -58,13 +58,13 @@ pub(crate) fn record_issuance_attempt(
     if check_marker(&path, domain)? {
         return Ok(());
     }
-    open_compute_storage::atomic_write(&path, domain.as_bytes()).map_err(|_| incomplete())
+    open_compute_storage::fs::atomic_write(&path, domain.as_bytes()).map_err(|_| incomplete())
 }
 
 fn check_marker(path: &Path, domain: &str) -> Result<bool, PlatformError> {
     match fs::symlink_metadata(path) {
         Ok(_) => {
-            open_compute_storage::validate_owned_file(path, true).map_err(|_| incomplete())?;
+            open_compute_storage::fs::validate_owned_file(path, true).map_err(|_| incomplete())?;
             if fs::read(path).map_err(|_| incomplete())? != domain.as_bytes() {
                 return Err(incomplete());
             }
@@ -120,7 +120,7 @@ fn validate_site(site: &Path) -> Result<(), PlatformError> {
         .ok_or_else(incomplete)?;
     for suffix in ["crt", "key", "json"] {
         let file = site.join(format!("{name}.{suffix}"));
-        open_compute_storage::validate_owned_file(&file, true).map_err(|_| incomplete())?;
+        open_compute_storage::fs::validate_owned_file(&file, true).map_err(|_| incomplete())?;
         if fs::metadata(&file).map_err(|_| incomplete())?.len() == 0 {
             return Err(incomplete());
         }
@@ -189,7 +189,7 @@ mod tests {
             gateway.join("storage/certificates/issuer"),
             site.clone(),
         ] {
-            open_compute_storage::ensure_dir_secure(&dir).unwrap();
+            open_compute_storage::fs::ensure_dir_secure(&dir).unwrap();
         }
         initialize_registry(&gateway).unwrap();
         check_certified_domains(&gateway, std::slice::from_ref(&domain)).unwrap();
@@ -201,7 +201,7 @@ mod tests {
             ErrorCode::ConfigInvalid
         );
         for suffix in ["crt", "key", "json"] {
-            open_compute_storage::atomic_write(
+            open_compute_storage::fs::atomic_write(
                 &site.join(format!("wildcard_.example.com.{suffix}")),
                 b"asset",
             )
@@ -233,8 +233,8 @@ mod tests {
     fn certified_marker_permissions_and_symlink_fail_closed() {
         let temp = tempfile::tempdir().unwrap();
         let gateway = temp.path().join("gateway");
-        open_compute_storage::ensure_dir_secure(&gateway).unwrap();
-        open_compute_storage::ensure_dir_secure(&gateway.join("config-state")).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway).unwrap();
+        open_compute_storage::fs::ensure_dir_secure(&gateway.join("config-state")).unwrap();
         initialize_registry(&gateway).unwrap();
         assert_eq!(
             check_certified_domains(&gateway, &["../escape".to_owned()])

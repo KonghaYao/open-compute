@@ -1,4 +1,4 @@
-import { APIError } from "cloudflare/error";
+import { APIError } from "@open-compute/sdk";
 import { useToast } from "./toast-atoms";
 
 export function useMutationFeedback() {

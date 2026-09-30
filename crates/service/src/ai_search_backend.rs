@@ -32,13 +32,17 @@ use open_compute_search::ai_search::{
     build_fts_query, cosine_similarity, fuse_candidates,
 };
 use open_compute_search::{FilterExpr, compile_filter, validate_metadata};
-use open_compute_storage::{
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::ai_search::{
     AiSearchCatalog, AiSearchChunkRecord, AiSearchInstanceInspection, AiSearchInstanceRecord,
     AiSearchInstanceStorageContract, AiSearchItemRecord, AiSearchJobRecord, AiSearchParseCache,
-    AiSearchPaths, AiSearchSourceReference, AiSearchStore, BindingRepository,
-    NewAiSearchItemGeneration, NewAiSearchManualGeneration, PlatformStorage, R2BucketRepository,
-    R2ObjectRepository, ResourceRecord, ResourceRepository,
+    AiSearchPaths, AiSearchSourceReference, AiSearchStore, NewAiSearchItemGeneration,
+    NewAiSearchManualGeneration,
 };
+use open_compute_storage::bindings::BindingRepository;
+use open_compute_storage::r2::R2BucketRepository;
+use open_compute_storage::r2_objects::R2ObjectRepository;
+use open_compute_storage::resources::{ResourceRecord, ResourceRepository};
 use open_compute_workers::{
     AiSearchInstanceResourceDriver, AiSearchInstanceSpec, AiSearchManualSourceSpec,
     AiSearchR2SourceSpec, CreateResourceRequest, ResourceController, ResourceDriver, ResourcePin,

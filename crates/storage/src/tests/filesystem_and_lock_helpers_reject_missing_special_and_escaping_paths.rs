@@ -49,28 +49,28 @@ fn filesystem_and_lock_helpers_reject_missing_special_and_escaping_paths() {
     );
 
     assert_eq!(
-        crate::DataDirLock::classify_path(&root.join("missing")),
-        crate::FilesystemDurability::Unclassified
+        crate::lock::DataDirLock::classify_path(&root.join("missing")),
+        crate::lock::FilesystemDurability::Unclassified
     );
     assert!(
-        crate::FilesystemDurability::ApparentlyLocal
+        crate::lock::FilesystemDurability::ApparentlyLocal
             .doctor_warning()
             .is_none()
     );
     assert!(
-        crate::FilesystemDurability::NetworkOrRemote
+        crate::lock::FilesystemDurability::NetworkOrRemote
             .doctor_warning()
             .unwrap()
             .contains("network")
     );
     assert!(
-        crate::FilesystemDurability::Unclassified
+        crate::lock::FilesystemDurability::Unclassified
             .doctor_warning()
             .unwrap()
             .contains("could not be classified")
     );
     assert_eq!(
-        crate::InspectLock::try_acquire(&root.join("missing.lock"))
+        crate::lock::InspectLock::try_acquire(&root.join("missing.lock"))
             .unwrap_err()
             .code(),
         ErrorCode::PathInvalid

@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::run::daemon_control::{ControlRequest, InstanceView, exchange};
-use open_compute_storage::InspectLock;
+use open_compute_storage::lock::InspectLock;
 use std::io::{BufRead, IsTerminal};
 
 /// Create a fresh instance through the running daemon after showing exact paths.

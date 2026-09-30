@@ -5,6 +5,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { PageHeader } from "../../../components/dashboard-page";
 import { useAuth } from "../../../features/auth/auth-atoms";
+import { queryKeys } from "../../../lib/query-options";
 
 export const Route = createFileRoute("/_authenticated/d1/new")({
   component: CreateD1Page,
@@ -28,7 +29,7 @@ function CreateD1Page() {
     },
     onSuccess: async (database) => {
       await queryClient.invalidateQueries({
-        queryKey: ["cloudflare-v4", "d1", selectedInstanceId, "databases"],
+        queryKey: queryKeys.d1(selectedInstanceId, "databases"),
       });
       if (database.uuid) {
         await navigate({

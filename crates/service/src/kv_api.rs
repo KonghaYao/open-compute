@@ -7,8 +7,9 @@ use open_compute_core::{
     BindingKind, ErrorCode, InstanceId, KvConfig, PlatformError, RequestId, ResourceId,
     ResourceState,
 };
-use open_compute_storage::{
-    KvBackupState, KvEngine, KvNamespaceRepository, KvPaths, PlatformStorage,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::kv::{KvBackupState, KvEngine, KvNamespaceRepository, KvPaths};
+use open_compute_storage::resources::{
     ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
 };
 use open_compute_workers::{CreateResourceOutcome, CreateResourceResult, ResourcePins};

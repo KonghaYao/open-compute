@@ -18,16 +18,12 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::Engine as _;
 use headers::header_text;
-use idempotency::{create_fingerprint, put_idempotency_key};
-use open_compute_core::{BindingKind, ErrorCode, RequestId, ResourceId, ResourceState};
-use open_compute_storage::{
-    R2_SCHEMA_VERSION, R2BucketRecord, R2BucketRepository, ReserveResourceCreate,
-    ResourceCreateReservation, ResourceRecord, ResourceRepository,
-};
+use idempotency::put_idempotency_key;
+use open_compute_core::{RequestId, ResourceState};
+use open_compute_storage::r2::{R2BucketRecord, R2BucketRepository};
+use open_compute_workers::CreateR2BucketRequest;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-const IDEMPOTENCY_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 
 pub(super) fn router() -> Router<HttpState> {
     Router::new()
@@ -190,10 +186,6 @@ async fn create(
     };
     let request_id = context.request_id();
     let now = now_ms();
-    let fingerprint = match create_fingerprint(api, account_id, &name) {
-        Ok(value) => value,
-        Err(error) => return error_response(error, request_id),
-    };
     let idempotency_key = if put_by_name {
         match put_idempotency_key(api, account_id, &name) {
             Ok(value) => value,
@@ -202,151 +194,21 @@ async fn create(
     } else {
         request_id.to_string()
     };
-    let Some(expires_at_ms) = now.checked_add(IDEMPOTENCY_TTL_MS) else {
-        return error_response(V4Error::Internal, request_id);
-    };
-    let reservation_input = ReserveResourceCreate {
-        instance_id: account_id,
-        kind: BindingKind::R2Bucket,
-        name: &name,
-        idempotency_key: &idempotency_key,
-        fingerprint_key_id: api.storage().crypto().fingerprint_key_id(),
-        request_fingerprint: &fingerprint,
-        resource_id: ResourceId::generate(),
-        driver_schema_version: R2_SCHEMA_VERSION,
-        request_id,
-        now_ms: now,
-        expires_at_ms,
-    };
-    let max_resources = api.storage().hardening().max_resources_per_kind;
-    let reservation = ResourceRepository::new(api.storage().db())
-        .reserve_create(&reservation_input, max_resources);
-    let resource = match reservation {
-        Ok(ResourceCreateReservation::Reserved(value))
-        | Ok(ResourceCreateReservation::Continue(value)) => value,
-        Ok(ResourceCreateReservation::Complete(response)) => {
-            if put_by_name {
-                return match reconcile_named_bucket(api, account_id, &name, now).await {
-                    Ok(Some(record)) => bucket_success(context, &record),
-                    Ok(None) => error_response(V4Error::Conflict, request_id),
-                    Err(error) => error_response(error, request_id),
-                };
-            }
-            return persisted_bucket_response(context, request_id, &response);
-        }
-        Ok(ResourceCreateReservation::Failed(_)) => {
-            return error_response(V4Error::Conflict, request_id);
-        }
-        Err(error) if put_by_name && error.code() == ErrorCode::ResourceNameConflict => {
-            return match reconcile_named_bucket(api, account_id, &name, now).await {
-                Ok(Some(record)) => bucket_success(context, &record),
-                Ok(None) => error_response(V4Error::Conflict, request_id),
-                Err(error) => error_response(error, request_id),
-            };
-        }
-        Err(error) => return error_response(V4Error::from(&error), request_id),
-    };
-    let driver = api.resource_driver();
-    let reconciled = match driver.reconcile(&resource).await {
-        Ok(value) => value,
-        Err(error) => return error_response(V4Error::from(&error), request_id),
-    };
-    if resource.state == ResourceState::Creating
-        && let Err(error) = ResourceRepository::new(api.storage().db()).mark_ready(resource.id, now)
+    match api
+        .controller()
+        .create(&CreateR2BucketRequest {
+            instance_id: account_id,
+            name,
+            idempotency_key,
+            request_id,
+            now_ms: now,
+            reconcile_by_name: put_by_name,
+        })
+        .await
     {
-        let current = ResourceRepository::new(api.storage().db()).get(account_id, resource.id);
-        if !matches!(current, Ok(current) if current.state == ResourceState::Ready) {
-            return error_response(V4Error::from(&error), request_id);
-        }
+        Ok(record) => bucket_success(context, &record),
+        Err(error) => error_response(V4Error::from(&error), request_id),
     }
-    let record =
-        match R2BucketRepository::new(api.storage().db()).get(account_id, reconciled.resource.id) {
-            Ok(value) => value,
-            Err(error) => return error_response(V4Error::from(&error), request_id),
-        };
-    let result = match Bucket::from_record(&record) {
-        Ok(value) => value,
-        Err(error) => return error_response(error, request_id),
-    };
-    let Ok(persisted) = serde_json::to_vec(&result) else {
-        return error_response(V4Error::Internal, request_id);
-    };
-    if let Err(error) = ResourceRepository::new(api.storage().db()).complete_create(
-        account_id,
-        &idempotency_key,
-        &fingerprint,
-        record.resource.id,
-        &persisted,
-    ) {
-        if error.code() != ErrorCode::IdempotencyConflict {
-            return error_response(V4Error::from(&error), request_id);
-        }
-        return match ResourceRepository::new(api.storage().db())
-            .reserve_create(&reservation_input, max_resources)
-        {
-            Ok(ResourceCreateReservation::Complete(response)) => {
-                persisted_bucket_response(context, request_id, &response)
-            }
-            Ok(_) | Err(_) => error_response(V4Error::Conflict, request_id),
-        };
-    }
-    success_response(context, result)
-}
-
-fn persisted_bucket_response(
-    context: super::V4RequestContext,
-    request_id: RequestId,
-    response: &[u8],
-) -> Response {
-    match serde_json::from_slice::<Bucket>(response) {
-        Ok(bucket) => success_response(context, bucket),
-        Err(_) => error_response(V4Error::Internal, request_id),
-    }
-}
-
-async fn reconcile_named_bucket(
-    api: &crate::r2_api::R2ApiState,
-    account_id: open_compute_core::InstanceId,
-    name: &str,
-    now_ms: i64,
-) -> Result<Option<R2BucketRecord>, V4Error> {
-    let resource = current_named_resource(
-        ResourceRepository::new(api.storage().db())
-            .list(account_id, Some(BindingKind::R2Bucket))
-            .map_err(|error| V4Error::from(&error))?,
-        name,
-    );
-    let Some(resource) = resource else {
-        return Ok(None);
-    };
-    match resource.state {
-        ResourceState::Ready => R2BucketRepository::new(api.storage().db())
-            .get(account_id, resource.id)
-            .map(Some)
-            .map_err(|error| V4Error::from(&error)),
-        ResourceState::Creating => {
-            let reconciled = api
-                .resource_driver()
-                .reconcile(&resource)
-                .await
-                .map_err(|error| V4Error::from(&error))?;
-            ResourceRepository::new(api.storage().db())
-                .mark_ready(resource.id, now_ms)
-                .map_err(|error| V4Error::from(&error))?;
-            R2BucketRepository::new(api.storage().db())
-                .get(account_id, reconciled.resource.id)
-                .map(Some)
-                .map_err(|error| V4Error::from(&error))
-        }
-        ResourceState::Deleting => Err(V4Error::Conflict),
-        ResourceState::Tombstoned => Ok(None),
-    }
-}
-
-fn current_named_resource(resources: Vec<ResourceRecord>, name: &str) -> Option<ResourceRecord> {
-    resources
-        .into_iter()
-        .find(|resource| resource.name == name && resource.state != ResourceState::Tombstoned)
 }
 
 fn bucket_success(context: super::V4RequestContext, record: &R2BucketRecord) -> Response {
@@ -459,7 +321,7 @@ async fn delete_bucket(
     Path((account_id, bucket_name)): Path<(String, String)>,
     request: Request,
 ) -> Response {
-    let (context, account_id, bucket) =
+    let (context, _account_id, bucket) =
         match bucket(&state, &request, &account_id, &bucket_name, true) {
             Ok(value) => value,
             Err(response) => return response.into_response(),
@@ -471,67 +333,9 @@ async fn delete_bucket(
         return error_response(V4Error::Unavailable, context.request_id());
     };
     let request_id = context.request_id();
-    let resources = ResourceRepository::new(api.storage().db());
-    match resources.referrers(bucket.resource.id) {
-        Ok(referrers) if referrers.is_empty() => {}
-        Ok(_) => return error_response(V4Error::Conflict, request_id),
-        Err(error) => return error_response(V4Error::from(&error), request_id),
-    }
-    let driver = api.resource_driver();
-    if let Err(error) = driver.require_empty(&bucket).await {
-        return error_response(V4Error::from(&error), request_id);
-    }
-    if let Err(error) = api
-        .pins()
-        .fence_and_wait(bucket.resource.id, api.delete_drain_timeout())
-        .await
-    {
-        return error_response(V4Error::from(&error), request_id);
-    }
-    let result = async {
-        let now = now_ms();
-        resources
-            .begin_delete(account_id, bucket.resource.id, now)
-            .map_err(|error| V4Error::from(&error))?;
-        R2BucketRepository::new(api.storage().db())
-            .mark_delete_started(bucket.resource.id, now)
-            .map_err(|error| V4Error::from(&error))?;
-        crate::r2_backend::multipart::reconcile_bucket_multipart(
-            api.storage(),
-            api.objects(),
-            &bucket,
-            false,
-            true,
-            std::time::Duration::from_millis(api.config().operation_timeout_ms),
-        )
-        .await
-        .map_err(|error| V4Error::from(&error))?;
-        crate::r2_backend::objects::reconcile_bucket_objects(
-            api.storage(),
-            api.objects(),
-            &bucket,
-            std::time::Duration::from_millis(api.config().operation_timeout_ms),
-        )
-        .await
-        .map_err(|error| V4Error::from(&error))?;
-        driver
-            .finalize_delete(&bucket)
-            .await
-            .map_err(|error| V4Error::from(&error))?;
-        resources
-            .mark_tombstoned(account_id, bucket.resource.id, request_id, now_ms())
-            .map_err(|error| V4Error::from(&error))
-    }
-    .await;
-    match result {
-        Ok(()) => {
-            api.pins().retire_fence(bucket.resource.id);
-            success_response(context, ())
-        }
-        Err(error) => {
-            api.pins().unfence(bucket.resource.id);
-            error_response(error, request_id)
-        }
+    match api.delete_bucket(&bucket, request_id, now_ms()).await {
+        Ok(()) => success_response(context, ()),
+        Err(error) => error_response(V4Error::from(&error), request_id),
     }
 }
 

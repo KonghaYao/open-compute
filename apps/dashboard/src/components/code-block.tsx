@@ -1,6 +1,10 @@
 import { Button } from "@cloudflare/kumo/components/button";
 import { IconCheck, IconCopy } from "@tabler/icons-react";
-import { common, createStarryNight, type Options } from "@wooorm/starry-night";
+import { createStarryNight, type Options } from "@wooorm/starry-night";
+import sourceJavaScript from "@wooorm/starry-night/source.js";
+import sourceJson from "@wooorm/starry-night/source.json";
+import sourceShell from "@wooorm/starry-night/source.shell";
+import sourceTypeScript from "@wooorm/starry-night/source.ts";
 import { toHtml } from "hast-util-to-html";
 import { useEffect, useRef, useState } from "react";
 import onigurumaWasmUrl from "vscode-oniguruma/release/onig.wasm?url";
@@ -21,10 +25,13 @@ let starryNightPromise: Promise<StarryNight> | undefined;
 function loadStarryNight(): Promise<StarryNight> {
   // Same-origin wasm asset bundled from the pinned vscode-oniguruma release;
   // the default loader would fetch it from a third-party CDN at runtime.
-  starryNightPromise ??= createStarryNight(common, {
-    getOnigurumaUrlFetch: () =>
-      Promise.resolve(new URL(onigurumaWasmUrl, window.location.origin)),
-  } satisfies Options);
+  starryNightPromise ??= createStarryNight(
+    [sourceJavaScript, sourceJson, sourceShell, sourceTypeScript],
+    {
+      getOnigurumaUrlFetch: () =>
+        Promise.resolve(new URL(onigurumaWasmUrl, window.location.origin)),
+    } satisfies Options,
+  );
   return starryNightPromise;
 }
 

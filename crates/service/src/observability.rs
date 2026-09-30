@@ -6,8 +6,11 @@ use base64::Engine as _;
 use hmac::{Hmac, Mac as _};
 use open_compute_core::config::ObservabilityConfig;
 use open_compute_core::{InstanceId, PlatformError, SecretString, VersionId, WorkerId};
-use open_compute_storage::{
-    NewObservabilityInvocation, ObservabilityEventCursor, ObservabilityStore, PlatformStorage,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::observability::{
+    NewObservabilityInvocation, ObservabilityEventCursor, ObservabilityStore,
+};
+use open_compute_storage::worker_repository::{
     WorkerObservabilitySettings, WorkerRecord, WorkerRepository,
 };
 use rand::RngCore as _;

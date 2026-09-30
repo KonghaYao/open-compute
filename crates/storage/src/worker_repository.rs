@@ -1,10 +1,11 @@
 //! Typed P0.2 control-plane repository.
 
-use crate::{
-    CatalogCursor, CatalogCursorValue, CatalogDirection, CatalogListPage, CatalogSort, ControlDb,
-    SecretEnvelope, encode_catalog_cursor, invalid_catalog_cursor, normalize_catalog_limit,
-    search_as_worker_id,
+use crate::catalog_page::{
+    CatalogCursor, CatalogCursorValue, CatalogDirection, CatalogListPage, CatalogSort,
+    encode_catalog_cursor, invalid_catalog_cursor, normalize_catalog_limit, search_as_worker_id,
 };
+use crate::control_db::ControlDb;
+use crate::crypto::SecretEnvelope;
 use open_compute_core::{
     DeploymentId, ErrorCode, InstanceId, PlatformError, RequestId, VersionId, WorkerId,
 };
@@ -62,7 +63,9 @@ pub(crate) fn validate_referrer(kind: &str, ref_id: &str) -> Result<(), Platform
     Ok(())
 }
 
-pub(crate) fn idempotency_ref_id(instance_id: InstanceId, scope: &str, key: &str) -> String {
+/// Derive the immutable version idempotency referrer identity.
+#[must_use]
+pub fn idempotency_ref_id(instance_id: InstanceId, scope: &str, key: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(b"open-compute/version-referrer/v1\0");
     hasher.update(instance_id.to_string().as_bytes());

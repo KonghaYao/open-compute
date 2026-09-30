@@ -30,7 +30,7 @@ impl std::fmt::Debug for WorkflowRunRequest {
     }
 }
 
-use open_compute_storage::WorkflowTarget;
+use open_compute_storage::workflows::WorkflowTarget;
 
 /// Token-free result of one Workflow activation.
 #[derive(Deserialize)]

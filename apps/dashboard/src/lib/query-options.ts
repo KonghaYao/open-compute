@@ -1,12 +1,36 @@
 import { queryOptions, skipToken } from "@tanstack/react-query";
-import type { ManagementClient } from "./cloudflare";
+import type { ManagementClient } from "./management-client";
+
+const managementKey =
+  <TProduct extends string>(product: TProduct) =>
+  (...identity: readonly unknown[]) =>
+    ["cloudflare-v4", product, ...identity] as const;
+
+/** One query identity authority shared by list, detail, prefetch, and invalidation. */
+export const queryKeys = {
+  accounts: managementKey("accounts"),
+  aiSearch: managementKey("ai-search"),
+  d1: managementKey("d1"),
+  durableObjects: managementKey("durable-objects"),
+  kv: managementKey("kv"),
+  observability: managementKey("observability"),
+  platform: managementKey("platform"),
+  queues: managementKey("queues"),
+  r2: managementKey("r2"),
+  service: managementKey("service"),
+  vectorize: managementKey("vectorize"),
+  workers: managementKey("workers"),
+  workflows: managementKey("workflows"),
+  product: (productName: string, ...identity: readonly unknown[]) =>
+    ["cloudflare-v4", productName, ...identity] as const,
+};
 
 export const capabilityQuery = (
   client: ManagementClient | null,
   instanceId: string | null,
 ) =>
   queryOptions({
-    queryKey: ["open-compute", "capabilities", instanceId] as const,
+    queryKey: queryKeys.platform(instanceId, "capabilities"),
     queryFn:
       client && instanceId
         ? ({ signal }) =>
@@ -22,7 +46,7 @@ export const r2BucketQuery = (
   bucketId: string,
 ) =>
   queryOptions({
-    queryKey: ["cloudflare-v4", "r2", instanceId, bucketId] as const,
+    queryKey: queryKeys.r2(instanceId, bucketId),
     queryFn:
       client && instanceId
         ? ({ signal }) =>
@@ -40,13 +64,7 @@ export const workerDeploymentsQuery = (
   workerId: string,
 ) =>
   queryOptions({
-    queryKey: [
-      "cloudflare-v4",
-      "workers",
-      instanceId,
-      workerId,
-      "deployments",
-    ] as const,
+    queryKey: queryKeys.workers(instanceId, workerId, "deployments"),
     queryFn:
       client && instanceId
         ? ({ signal }) =>
@@ -64,7 +82,7 @@ export const d1DatabaseQuery = (
   databaseId: string,
 ) =>
   queryOptions({
-    queryKey: ["cloudflare-v4", "d1", instanceId, databaseId] as const,
+    queryKey: queryKeys.d1(instanceId, databaseId),
     queryFn:
       client && instanceId
         ? ({ signal }) =>
@@ -82,7 +100,7 @@ export const kvNamespaceQuery = (
   namespaceId: string,
 ) =>
   queryOptions({
-    queryKey: ["cloudflare-v4", "kv", instanceId, namespaceId] as const,
+    queryKey: queryKeys.kv(instanceId, namespaceId),
     queryFn:
       client && instanceId
         ? ({ signal }) =>
@@ -100,7 +118,7 @@ export const queueQuery = (
   queueId: string,
 ) =>
   queryOptions({
-    queryKey: ["cloudflare-v4", "queues", instanceId, queueId] as const,
+    queryKey: queryKeys.queues(instanceId, queueId),
     queryFn:
       client && instanceId
         ? ({ signal }) =>
@@ -114,7 +132,7 @@ export const workflowQuery = (
   workflowId: string,
 ) =>
   queryOptions({
-    queryKey: ["cloudflare-v4", "workflows", instanceId, workflowId] as const,
+    queryKey: queryKeys.workflows(instanceId, workflowId),
     queryFn:
       client && instanceId
         ? ({ signal }) =>

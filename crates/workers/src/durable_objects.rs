@@ -4,9 +4,9 @@ use crate::{ReconcileOutcome, ResourceDriver, ResourceHealth};
 use open_compute_core::{
     BindingKind, ErrorCode, PlatformError, ResourceAvailability, ResourceState, WorkerId,
 };
-use open_compute_storage::{
-    DO_NAMESPACE_SCHEMA_VERSION, DurableObjectRepository, PlatformStorage, ResourceRecord,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::durable_objects::{DO_NAMESPACE_SCHEMA_VERSION, DurableObjectRepository};
+use open_compute_storage::resources::ResourceRecord;
 
 /// Static control-plane driver for immutable Durable Object namespaces.
 #[derive(Debug)]

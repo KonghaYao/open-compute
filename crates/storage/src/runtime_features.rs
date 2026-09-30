@@ -1,6 +1,6 @@
 //! Immutable version cache policy and platform-provided binding metadata.
 
-use crate::ControlDb;
+use crate::control_db::ControlDb;
 use open_compute_core::{ErrorCode, PlatformError, VersionId};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};

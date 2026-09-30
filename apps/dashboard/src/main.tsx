@@ -7,10 +7,10 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { APIError } from "cloudflare/error";
 import { Provider as JotaiProvider } from "jotai";
 import { forwardRef, StrictMode, useMemo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import { APIError } from "@open-compute/sdk";
 import { AppRouter } from "./app-router";
 import { AlertDialogHost, DialogHost } from "./components/dialog-manager";
 import { useAuth } from "./features/auth/auth-atoms";

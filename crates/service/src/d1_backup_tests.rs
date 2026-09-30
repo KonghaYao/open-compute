@@ -40,7 +40,7 @@ fn backup_error_mapping_and_file_hashing_are_stable() {
 
 #[test]
 fn replayed_backup_failure_maps_stored_error_code() {
-    let backup = open_compute_storage::D1BackupRecord {
+    let backup = open_compute_storage::d1::D1BackupRecord {
         id: "01aaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
         source_resource_id: ResourceId::generate(),
         state: D1BackupState::Failed,
@@ -55,7 +55,7 @@ fn replayed_backup_failure_maps_stored_error_code() {
     };
     let err = replayed_backup_failure(&backup);
     assert_eq!(err.code(), ErrorCode::D1DatabaseCorrupt);
-    let backup = open_compute_storage::D1BackupRecord {
+    let backup = open_compute_storage::d1::D1BackupRecord {
         error_code: None,
         ..backup
     };

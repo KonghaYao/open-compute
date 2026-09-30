@@ -1,6 +1,8 @@
 use super::*;
 use open_compute_core::{DeploymentId, RequestId};
-use open_compute_storage::{WorkerObservabilitySettings, WorkerOwnership, WorkerRecord};
+use open_compute_storage::worker_repository::{
+    WorkerObservabilitySettings, WorkerOwnership, WorkerRecord,
+};
 use std::net::{IpAddr, Ipv4Addr};
 
 fn identity() -> EffectiveIdentity {

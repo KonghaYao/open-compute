@@ -5,7 +5,6 @@
 pub mod ai_search;
 pub mod assets;
 pub mod bundle;
-pub mod compatibility;
 pub mod d1;
 pub mod descriptor;
 pub mod durable_objects;
@@ -14,7 +13,7 @@ pub mod kv;
 pub mod pins;
 pub mod pipeline;
 pub mod queue_lifecycle;
-pub mod r2;
+mod r2;
 pub mod resource_lifecycle;
 pub mod resource_pins;
 pub mod runtime_source;
@@ -40,9 +39,6 @@ pub use bundle::{
     BundleLimits, CanonicalBundle, ModuleInput, ModuleManifest, ModuleType, StagedBundle,
     WorkerBundleManifest,
 };
-pub use compatibility::{
-    ALLOWED_WORKER_COMPATIBILITY_FLAGS, WORKER_COMPATIBILITY_DATE, supports_worker_compatibility,
-};
 pub use d1::D1ResourceDriver;
 pub use descriptor::{
     AssetDescriptorV1, BindingDescriptorV1, BuiltinBindingDescriptorKindV1,
@@ -65,7 +61,9 @@ pub use pipeline::{
 pub use queue_lifecycle::{
     CreateQueueOutcome, CreateQueueRequest, CreateQueueResult, DeleteQueueResult, QueueController,
 };
+#[cfg(any(test, feature = "test-support"))]
 pub use r2::R2ResourceDriver;
+pub use r2::{CreateR2BucketRequest, R2Controller};
 pub use resource_lifecycle::{
     CreateResourceOutcome, CreateResourceRequest, CreateResourceResult, ReconcileOutcome,
     ResourceController, ResourceDriver, ResourceHealth,

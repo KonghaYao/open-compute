@@ -22,12 +22,17 @@ async fn vendor_capabilities_and_system_status_use_the_canonical_envelope() {
     assert_eq!(capabilities["success"], true);
     assert_eq!(capabilities["result"]["wrangler_version"], "4.143.0");
     assert_eq!(
-        capabilities["result"]["compatibility_date"]["minimum"],
-        "2026-09-08"
+        capabilities["result"]["compatibility"]["validation"],
+        "workerd_code_version"
+    );
+    assert!(
+        capabilities["result"]["compatibility"]["features"]
+            .as_array()
+            .is_some_and(|features| !features.is_empty())
     );
     assert_eq!(
-        capabilities["result"]["compatibility_flags"],
-        serde_json::json!(["nodejs_compat"])
+        capabilities["result"]["system_workers"]["compatibility_date"],
+        "2026-09-08"
     );
     assert_eq!(
         capabilities["result"]["limits"]["workers.max_scripts_per_account"],
@@ -57,10 +62,9 @@ async fn vendor_capabilities_and_system_status_use_the_canonical_envelope() {
         "{deviations:?}"
     );
     assert!(
-        deviations
+        !deviations
             .iter()
-            .any(|value| value == "OC-MANAGEMENT-COMPATIBILITY-DATE-001"),
-        "{deviations:?}"
+            .any(|value| value == "OC-MANAGEMENT-COMPATIBILITY-DATE-001")
     );
 
     let status = app(state)

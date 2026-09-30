@@ -1,6 +1,6 @@
 //! Typed resource lifecycle and immutable version-binding repository.
 
-use crate::ControlDb;
+use crate::control_db::ControlDb;
 use open_compute_core::{
     BindingKind, ErrorCode, InstanceId, PlatformError, RequestId, ResourceAvailability, ResourceId,
     ResourceState,

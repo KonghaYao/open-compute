@@ -33,10 +33,10 @@ use open_compute_service::{
     HealthCoordinator, MetricsRegistry, SqliteKvBindingExecutor, bind_binding_backend,
     serve_binding_backend,
 };
-use open_compute_storage::{
-    PlatformStorage, QueueContentType, SchedulerStore, VersionState, WorkerRepository,
-    WorkflowRepository,
-};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::scheduler::{QueueContentType, SchedulerStore};
+use open_compute_storage::worker_repository::{VersionState, WorkerRepository};
+use open_compute_storage::workflows::WorkflowRepository;
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateVersionOutcome, CreateVersionRequest, ModuleInput,
     ModuleType, ResourcePins, RuntimeSource, RuntimeValidator, VersionController, VersionPins,
@@ -70,7 +70,7 @@ async fn deploy_egress(
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
     fixture: Option<&EgressFixture>,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     let allowed_targets = fixture.map_or_else(Vec::new, |fixture| {
         vec![
             fixture.public_ipv4_url.clone(),
@@ -139,6 +139,7 @@ async fn deploy_egress(
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
         runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
             compatibility_flags: vec!["nodejs_compat".to_owned()],
             ..VersionRuntimeFeatures::default()
         },
@@ -160,7 +161,7 @@ async fn deploy_postgres(
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
     address: std::net::SocketAddr,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     let bundle = CanonicalBundle::build(
         "index.js",
         vec![ModuleInput {
@@ -194,6 +195,7 @@ async fn deploy_postgres(
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
         runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
             compatibility_flags: vec!["nodejs_compat".to_owned()],
             ..VersionRuntimeFeatures::default()
         },
@@ -432,7 +434,7 @@ async fn deploy_node(
     controller: &VersionController<'_>,
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
-) -> open_compute_storage::VersionRecord {
+) -> open_compute_storage::worker_repository::VersionRecord {
     let bundle = CanonicalBundle::build(
         "index.js",
         vec![ModuleInput {
@@ -457,7 +459,10 @@ export default { fetch() { return new Response(Buffer.from("node-compat").toStri
         secrets: BTreeMap::new(),
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: VersionRuntimeFeatures {
+            compatibility_date: "2026-09-08".to_owned(),
+            ..Default::default()
+        },
         queue_consumers: Vec::new(),
         crons: Vec::new(),
         deployment_source: None,
@@ -477,18 +482,114 @@ async fn deploy(
     worker: open_compute_core::WorkerId,
     key: &str,
     label: &str,
-    promote: bool,
-    invalid: bool,
-) -> open_compute_storage::VersionRecord {
-    match controller
-        .create_version(create_request(
-            account, worker, key, label, promote, invalid,
-        ))
-        .await
-        .unwrap()
-    {
+    runtime_features: Option<VersionRuntimeFeatures>,
+) -> open_compute_storage::worker_repository::VersionRecord {
+    let mut request = create_request(account, worker, key, label, true, false);
+    if let Some(runtime_features) = runtime_features {
+        request.runtime_features = runtime_features;
+    }
+    match controller.create_version(request).await.unwrap() {
         CreateVersionOutcome::Applied(result) => result.version,
         CreateVersionOutcome::Replay(_) => panic!("unexpected replay"),
+    }
+}
+
+async fn assert_compatibility_matrix(
+    controller: &VersionController<'_>,
+    account: open_compute_core::InstanceId,
+    worker: open_compute_core::WorkerId,
+) {
+    let (compatibility, system_workers) =
+        open_compute_runtime::embedded_runtime_compatibility().unwrap();
+    let paired = compatibility
+        .features
+        .iter()
+        .find(|feature| {
+            !feature.experimental && feature.enable_flag.is_some() && feature.disable_flag.is_some()
+        })
+        .expect("catalog must contain an ordinary enable/disable pair");
+    let experimental = compatibility
+        .features
+        .iter()
+        .find(|feature| feature.experimental && feature.enable_flag.is_some())
+        .and_then(|feature| feature.enable_flag.clone())
+        .expect("catalog must contain an experimental input flag");
+    let enable = paired.enable_flag.clone().unwrap();
+    let disable = paired.disable_flag.clone().unwrap();
+    let maximum = compatibility.binary_maximum_date;
+    let today = jiff::Timestamp::now().strftime("%F").to_string();
+    let latest = maximum.as_str().min(today.as_str()).to_owned();
+    let accepted = [
+        ("old", "2021-11-02".to_owned(), Vec::new()),
+        ("system", system_workers.compatibility_date, Vec::new()),
+        ("latest", latest.clone(), Vec::new()),
+        ("enable", latest.clone(), vec![enable.clone()]),
+        ("disable", latest.clone(), vec![disable.clone()]),
+        ("experimental", latest.clone(), vec![experimental]),
+    ];
+    for (label, date, flags) in accepted {
+        let mut request = create_request(
+            account,
+            worker,
+            &format!("compatibility-{label}"),
+            label,
+            false,
+            false,
+        );
+        request.runtime_features.compatibility_date = date.clone();
+        request.runtime_features.compatibility_flags = flags.clone();
+        let result = match controller.create_version(request).await.unwrap() {
+            CreateVersionOutcome::Applied(result) => result,
+            CreateVersionOutcome::Replay(_) => panic!("unexpected compatibility replay"),
+        };
+        assert_eq!(result.version.compatibility_date, date);
+        assert_eq!(result.version.compatibility_flags, flags);
+    }
+
+    let rejected = [
+        ("malformed", "not-a-date".to_owned(), Vec::new()),
+        (
+            "future",
+            if maximum > today {
+                maximum.clone()
+            } else {
+                "2999-12-30".to_owned()
+            },
+            Vec::new(),
+        ),
+        (
+            "future-and-over-maximum",
+            "2999-12-31".to_owned(),
+            Vec::new(),
+        ),
+        (
+            "unknown",
+            latest.clone(),
+            vec!["open_compute_unknown_flag".to_owned()],
+        ),
+        (
+            "duplicate",
+            latest.clone(),
+            vec![enable.clone(), enable.clone()],
+        ),
+        ("conflict", latest, vec![enable, disable]),
+    ];
+    for (label, date, flags) in rejected {
+        let mut request = create_request(
+            account,
+            worker,
+            &format!("compatibility-{label}"),
+            label,
+            false,
+            false,
+        );
+        request.runtime_features.compatibility_date = date;
+        request.runtime_features.compatibility_flags = flags;
+        assert_eq!(
+            controller.create_version(request).await.unwrap_err().code(),
+            ErrorCode::BundleRuntimeInvalid,
+            "{label} must be rejected by workerd admission"
+        );
     }
 }
 
@@ -595,14 +696,21 @@ export default {{
         secrets,
         bindings: BTreeMap::new(),
         services: BTreeMap::new(),
-        runtime_features: Default::default(),
+        runtime_features: VersionRuntimeFeatures {
+            compatibility_date: open_compute_runtime::embedded_runtime_compatibility()
+                .unwrap()
+                .1
+                .compatibility_date,
+            ..VersionRuntimeFeatures::default()
+        },
         queue_consumers: Vec::new(),
         crons: vec![
             "*/5 * * * *".to_owned(),
             "1 * * * *".to_owned(),
             "2 * * * *".to_owned(),
         ],
-        deployment_source: promote.then_some(open_compute_storage::DeploymentSource::ScriptUpload),
+        deployment_source: promote
+            .then_some(open_compute_storage::worker_repository::DeploymentSource::ScriptUpload),
         observability: None,
         request_id: RequestId::generate(),
         now_ms: 2,
@@ -643,7 +751,7 @@ fn dispatch_target(
     storage: &PlatformStorage,
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     entrypoint: Option<&str>,
 ) -> DispatchTarget {
     DispatchTarget {
@@ -668,7 +776,7 @@ async fn dispatch(
     transport: &WorkerdTransport,
     account: open_compute_core::InstanceId,
     worker: open_compute_core::WorkerId,
-    version: &open_compute_storage::VersionRecord,
+    version: &open_compute_storage::worker_repository::VersionRecord,
     entrypoint: Option<&str>,
     body: &str,
 ) -> DispatchResponse {

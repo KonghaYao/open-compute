@@ -403,7 +403,7 @@ fn unavailable() -> PlatformError {
 impl DaemonSocket {
     pub(crate) fn bind(root: &Path) -> Result<Self, PlatformError> {
         let run = root.join("run");
-        open_compute_storage::ensure_dir_secure(&run)?;
+        open_compute_storage::fs::ensure_dir_secure(&run)?;
         let path = run.join("control.sock");
         if !crate::instance_control::unix_socket_path_is_valid(&path) {
             return Err(invalid("daemon control socket path is invalid"));

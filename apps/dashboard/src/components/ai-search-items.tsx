@@ -14,6 +14,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useDeferredValue, useState } from "react";
 import { useAuth } from "../features/auth/auth-atoms";
+import { queryKeys } from "../lib/query-options";
 import { AISearchItemDetail } from "./ai-search-item-detail";
 import { AISearchUploadDialog } from "./ai-search-upload-dialog";
 import { ErrorState, LoadingRows } from "./dashboard-page";
@@ -129,8 +130,7 @@ export function AISearchItems({
     setPage(1);
   };
   const items = useQuery({
-    queryKey: [
-      "ai-search",
+    queryKey: queryKeys.aiSearch(
       selectedInstanceId,
       namespaceName,
       instanceId,
@@ -139,7 +139,7 @@ export function AISearchItems({
       deferredSearch,
       status,
       applied,
-    ],
+    ),
     queryFn: ({ signal }) =>
       client!.aiSearch.namespaces.instances.items.list(
         instanceId,

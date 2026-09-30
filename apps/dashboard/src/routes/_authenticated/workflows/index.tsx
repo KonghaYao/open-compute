@@ -25,6 +25,7 @@ import { RowActionsMenu } from "../../../components/row-actions-menu";
 import { useAuth } from "../../../features/auth/auth-atoms";
 import { useMutationFeedback } from "../../../features/toast/use-mutation-feedback";
 import { formatDate } from "../../../lib/format";
+import { queryKeys } from "../../../lib/query-options";
 
 type WorkflowDraft = {
   name: string;
@@ -49,20 +50,20 @@ function WorkflowsPage() {
   const enabled = client !== null && selectedInstanceId !== null;
 
   const workflows = useQuery({
-    queryKey: ["cloudflare-v4", "workflows", selectedInstanceId],
+    queryKey: queryKeys.workflows(selectedInstanceId),
     queryFn: ({ signal }) =>
       client!.workflows.list({ account_id: selectedInstanceId! }, { signal }),
     enabled,
   });
   const settings = useQuery({
-    queryKey: ["open-compute", "workflows", "settings", selectedInstanceId],
+    queryKey: queryKeys.workflows(selectedInstanceId, "settings"),
     queryFn: ({ signal }) =>
       client!.openCompute.workflows.settings(selectedInstanceId!, { signal }),
     enabled,
   });
   const refresh = () =>
     queryClient.invalidateQueries({
-      queryKey: ["cloudflare-v4", "workflows", selectedInstanceId],
+      queryKey: queryKeys.workflows(selectedInstanceId),
     });
   function openWorkflowEditor(initial: WorkflowDraft) {
     openDialog({

@@ -1,6 +1,6 @@
 # R3：workerd 原生 compatibility authority 与能力发现
 
-状态：**planned**。R3 把 tenant Worker 的 compatibility date／flags authority 还给正式 pinned workerd，并让 `ocd` 从同一二进制公开可查询的
+状态：**implemented（2026-09-30）**。R3 把 tenant Worker 的 compatibility date／flags authority 还给正式 pinned workerd，并让 `ocd` 从同一二进制公开可查询的
 兼容能力。它替代当前“全平台只接受一个日期和一个手写 flag allowlist”的模型，不实现 open-compute 自有兼容规则。
 
 ## 用户结果
@@ -25,7 +25,7 @@ enable／disable override 和 experimental 条件。`ocd` 不复制这些规则�
   implication 和 Python snapshot release；
 - server config 与 Worker Loader 都调用同一 `compileCompatibilityFlags()`，以 `CODE_VERSION` 验证 tenant code。
 
-R3 不给日期增加最小值、枚举或 open-compute allowlist。日期不是离散选项；公开的是 workerd 的最大日期以及“同时不得晚于当前 UTC 日期”
+R3 不给日期增加最小值、枚举或 open-compute allowlist。官方 Workers upload API 省略 `compatibility_date` 时使用 oldest date `2021-11-02`；transport 只在这个有官方来源的 boundary case 物化该值，随后与显式日期走同一 workerd admission，不把它扩成内部默认或旧实现兼容分支。日期不是离散选项；公开的是 workerd 的最大日期以及“同时不得晚于当前 UTC 日期”
 规则。`compatibility_flags` 也不经过平台过滤、别名或重写，包括当前 workerd 在 `--experimental` 下接受的 experimental flags；能力输出必须
 准确标出 experimental 属性，使 operator 看见真实合同，但不改变它。
 
@@ -166,3 +166,11 @@ fail closed。
 - 在生产启动时扫描 source tree、执行网络发现、查询 Cloudflare 或生成 catalog；
 - 把 capability catalog 当成绕过正式 workerd candidate validation 的依据；
 - 为完成 R3 修改已发布数据库 migration、重写已有 Version metadata 或重置本地数据。
+
+## 9. 实施证据（2026-09-30）
+
+- 正式 pin `e3bdb07f52affc6a618f02ed2b731a581b0b2f69` 基于 upstream `cb26acc62e64f64487a78e3f73d0a08e9926c690`；随后开发 checkout 与 fork `main` 已同步到 upstream `d99bc6b777e35d72d71c2f1fe2fd1db53284528a` 的 `6c3222ee561b42747bc80753f808d89dd212cd4a`，完整保留 W1/W2/W3/I102。按 pin 升级规则，submodule 前进不自动改写正式 runtime pin。
+- [四平台正式构建 run 36668461686](https://github.com/elliothux/workerd/actions/runs/36668461686) 全部通过；四个 binary 的 catalog 逐字节一致，SHA-256 为 `a6a00dc87f3e246dbc29ee32a5ab06db2867ad165798b3f71b131cfc5c1281b4`，binary maximum date 为 `2026-10-07`。
+- fork 的 compatibility-date、standalone limits、Rust CLI、Tokio/KJ link 与三目标 dependency-graph 检查通过；根仓库 `bun run build` 对四个平台 binary/archive、catalog、source identity 与 runtime lock 完成校验。
+- ordinary Version 与 Dynamic Worker 的日期、enable/disable/experimental flags 及拒绝矩阵由正式 pinned workerd 实际执行；coverage 为 **90.08%**，source freeze 后最终 workspace Gate 54/54 通过。
+- 后续 submodule／fork 同步只前进开发源码，不改正式 pin、四平台 binary、根仓库生产源码或验收结论；同步后的 reference/source identity 静态检查通过，未重复运行 workspace Gate。

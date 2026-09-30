@@ -1,7 +1,7 @@
 //! Fixed-series Workers Cache and Images metrics with no tenant or content labels.
 
 use super::{Inner, MetricsRegistry, write_help};
-use open_compute_storage::CacheStats;
+use open_compute_storage::cache::CacheStats;
 use std::fmt::Write as _;
 use std::sync::Arc;
 use std::time::Duration;

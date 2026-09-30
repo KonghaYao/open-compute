@@ -6,13 +6,16 @@ const lock = JSON.parse(
     "utf8",
   ),
 ) as {
-  effectiveCompatibilityDate: string;
-  requiredCompatibilityFlags: string[];
+  binaryMaximumCompatibilityDate: string;
   workersSdk: { wranglerVersion: string };
 };
 
-export const COMPATIBILITY_DATE = lock.effectiveCompatibilityDate;
-export const COMPATIBILITY_FLAGS = lock.requiredCompatibilityFlags;
+const today = new Date().toISOString().slice(0, 10);
+export const COMPATIBILITY_DATE =
+  lock.binaryMaximumCompatibilityDate < today
+    ? lock.binaryMaximumCompatibilityDate
+    : today;
+export const COMPATIBILITY_FLAGS: string[] = [];
 /** Wrangler version coordinated with the formal workerd/workers-types baseline. */
 export const WRANGLER_VERSION = lock.workersSdk.wranglerVersion;
 export const MAX_OUTPUT = 1024 * 1024;

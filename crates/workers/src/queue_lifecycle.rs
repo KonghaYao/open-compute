@@ -1,10 +1,13 @@
 //! Queue lifecycle orchestration across control and scheduler SQLite authorities.
 
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, QueueId, RequestId};
-use open_compute_storage::{
-    PlatformStorage, QueueAvailability, QueueConfig, QueueCreateReservation, QueueMetrics,
-    QueueProjection, QueueRecord, QueueRepository, QueueState, SchedulerStore, WorkerRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::queues::{
+    QueueAvailability, QueueConfig, QueueCreateReservation, QueueRecord, QueueRepository,
+    QueueState,
 };
+use open_compute_storage::scheduler::{QueueMetrics, QueueProjection, SchedulerStore};
+use open_compute_storage::worker_repository::WorkerRepository;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use std::sync::Arc;

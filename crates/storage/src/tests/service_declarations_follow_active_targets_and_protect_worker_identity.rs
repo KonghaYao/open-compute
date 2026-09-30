@@ -1,5 +1,5 @@
 use super::*;
-use crate::workers::EffectiveResourceLimits;
+use crate::worker_repository::EffectiveResourceLimits;
 
 #[test]
 fn service_declarations_follow_active_targets_and_protect_worker_identity() {
@@ -21,27 +21,27 @@ fn service_declarations_follow_active_targets_and_protect_worker_identity() {
 
     let caller_version = VersionId::generate();
     let descriptor = [7; 32];
-    let service = crate::NewVersionService {
+    let service = crate::services::NewVersionService {
         binding_name: "CATALOG".to_owned(),
-        target: crate::ServiceTarget::Worker {
+        target: crate::services::ServiceTarget::Worker {
             worker_id: target.id,
         },
         entrypoint: Some("CatalogApi".to_owned()),
         props_json: Some(br#"{"mode":"readonly"}"#.to_vec()),
         descriptor_sha256: descriptor,
     };
-    let self_service = crate::NewVersionService {
+    let self_service = crate::services::NewVersionService {
         binding_name: "SELF".to_owned(),
-        target: crate::ServiceTarget::Worker {
+        target: crate::services::ServiceTarget::Worker {
             worker_id: caller.id,
         },
         entrypoint: None,
         props_json: None,
         descriptor_sha256: [6; 32],
     };
-    let extension_service = crate::NewVersionService {
+    let extension_service = crate::services::NewVersionService {
         binding_name: "FILES".to_owned(),
-        target: crate::ServiceTarget::Extension {
+        target: crate::services::ServiceTarget::Extension {
             name: "local-files".to_owned(),
             policy_revision: "a".repeat(64),
         },
@@ -56,7 +56,7 @@ fn service_declarations_follow_active_targets_and_protect_worker_identity() {
                 id: caller_version,
                 instance_id: account,
                 worker_id: caller.id,
-                content_kind: crate::VersionContentKind::Worker,
+                content_kind: crate::worker_repository::VersionContentKind::Worker,
                 artifact_sha256: Some([2; 32]),
                 artifact_size: Some(100),
                 artifact_schema_version: Some(1),
@@ -70,9 +70,9 @@ fn service_declarations_follow_active_targets_and_protect_worker_identity() {
                 request_id: request,
                 now_ms: 6,
             },
-            &crate::NewVersionProducts {
+            &crate::worker_repository::NewVersionProducts {
                 services: &declarations,
-                ..crate::NewVersionProducts::default()
+                ..crate::worker_repository::NewVersionProducts::default()
             },
             1_000_000,
         )
@@ -83,13 +83,13 @@ fn service_declarations_follow_active_targets_and_protect_worker_identity() {
         .promote(account, caller.id, caller_version, None, request, 8)
         .unwrap();
 
-    let services = crate::ServiceRepository::new(storage.db());
+    let services = crate::services::ServiceRepository::new(storage.db());
     let first = services
         .resolve(caller_version, "CATALOG", &descriptor)
         .unwrap();
     assert!(matches!(
         first.target,
-        crate::ResolvedServiceDestination::Worker { version_id, .. } if version_id == target_v1
+        crate::services::ResolvedServiceDestination::Worker { version_id, .. } if version_id == target_v1
     ));
     assert_eq!(first.service.entrypoint.as_deref(), Some("CatalogApi"));
     assert_eq!(
@@ -101,11 +101,11 @@ fn service_declarations_follow_active_targets_and_protect_worker_identity() {
             .resolve(caller_version, "FILES", &[5; 32])
             .unwrap()
             .target,
-        crate::ResolvedServiceDestination::Extension { ref name, .. } if name == "local-files"
+        crate::services::ResolvedServiceDestination::Extension { ref name, .. } if name == "local-files"
     ));
     assert_eq!(
         services.inbound_referrers(account, target.id, 10).unwrap(),
-        vec![crate::ServiceReferrer {
+        vec![crate::services::ServiceReferrer {
             caller_worker_id: caller.id,
             caller_version_id: caller_version,
             binding_name: "CATALOG".to_owned(),
@@ -128,7 +128,7 @@ fn service_declarations_follow_active_targets_and_protect_worker_identity() {
             .resolve(caller_version, "CATALOG", &descriptor)
             .unwrap()
             .target,
-        crate::ResolvedServiceDestination::Worker { version_id, .. } if version_id == target_v2
+        crate::services::ResolvedServiceDestination::Worker { version_id, .. } if version_id == target_v2
     ));
     assert_eq!(
         services
@@ -142,7 +142,7 @@ fn service_declarations_follow_active_targets_and_protect_worker_identity() {
         .unwrap();
     assert_eq!(
         workers.force_delete_intents().unwrap(),
-        vec![crate::WorkerDeleteIntent {
+        vec![crate::worker_repository::WorkerDeleteIntent {
             worker_id: target.id,
             request_id: request,
         }]

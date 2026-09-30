@@ -4,6 +4,12 @@ use crate::PlatformReleaseIdentityV1;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod compatibility;
+pub use compatibility::{
+    CompatibilityFeatureV1, CompatibilityImplicationV1, RuntimeCompatibilityV1,
+    SystemWorkerCompatibilityV1,
+};
+
 /// Product support verdict.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -568,8 +574,10 @@ impl CapabilityInventoryV1 {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeCapabilityV1 {
-    /// Effective compatibility date from the formal runtime lock.
-    pub effective_compatibility_date: String,
+    /// Tenant compatibility catalog from the embedded workerd binary.
+    pub compatibility: RuntimeCompatibilityV1,
+    /// Compatibility metadata for platform-owned system Workers.
+    pub system_workers: SystemWorkerCompatibilityV1,
     /// SHA-256 of the formal runtime lock bytes.
     pub workerd_lock_sha256: String,
     /// npm `@cloudflare/workers-types` version.
@@ -587,7 +595,8 @@ pub struct RuntimeCapabilityV1 {
 impl RuntimeCapabilityV1 {
     /// Validate immutable runtime and type-source identity.
     pub fn validate(&self) -> bool {
-        !self.effective_compatibility_date.is_empty()
+        self.compatibility.validate()
+            && self.system_workers.validate()
             && is_sha256(&self.workerd_lock_sha256)
             && !self.workers_types_version.is_empty()
             && !self.workers_types_git_head.is_empty()

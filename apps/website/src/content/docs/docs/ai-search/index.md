@@ -77,17 +77,17 @@ Official reference: [Cloudflare AI Search](https://developers.cloudflare.com/ai-
 
 ## Compatibility
 
-| Topic                     | Cloudflare                                          | open-compute                                |
-| ------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| AI Search Worker API      | Namespace / instance / items / jobs / search / chat | Same declared surface                       |
-| Query modality            | Text, image, or multimodal when the model supports it | **Text only**                                |
-| Markdown Conversion       | `env.AI.toMarkdown()` / `supported()`               | Same pinned overloads                       |
-| Embeddings / chat models  | Cloudflare-hosted Workers AI                        | Operator-pinned OpenAI-compatible providers |
-| Reranking model           | Cloudflare-hosted Workers AI                        | Operator-pinned `cohere_rerank_v2` or `rerank_v1` provider |
-| Search response           | `query_kind` plus retrieval and reranking scores    | Text success returns `query_kind: "text"`; reranked chunks include `reranking_score` |
-| Full Workers AI inference | `run()` / `models()` / AutoRAG                      | **Not provided**                            |
-| Object bytes              | Hosted storage                                      | Selected Local or S3 authority              |
-| Placement / replication   | Global                                              | Single-node                                 |
-| Manual external source    | Not an official member                              | `open-compute:manual` namespaced extension  |
+| Topic                     | Cloudflare                                            | open-compute                                                                         |
+| ------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| AI Search Worker API      | Namespace / instance / items / jobs / search / chat   | Same declared surface                                                                |
+| Query modality            | Text, image, or multimodal when the model supports it | **Text only**                                                                        |
+| Markdown Conversion       | `env.AI.toMarkdown()` / `supported()`                 | Same pinned overloads                                                                |
+| Embeddings / chat models  | Cloudflare-hosted Workers AI                          | Operator-pinned OpenAI-compatible providers                                          |
+| Reranking model           | Cloudflare-hosted Workers AI                          | Operator-pinned `cohere_rerank_v2` or `rerank_v1` provider                           |
+| Search response           | `query_kind` plus retrieval and reranking scores      | Text success returns `query_kind: "text"`; reranked chunks include `reranking_score` |
+| Full Workers AI inference | `run()` / `models()` / AutoRAG                        | **Not provided**                                                                     |
+| Object bytes              | Hosted storage                                        | Selected Local or S3 authority                                                       |
+| Placement / replication   | Global                                                | Single-node                                                                          |
+| Manual external source    | Not an official member                                | `open-compute:manual` namespaced extension                                           |
 
 Next: [Develop with bindings](/docs/develop/) · [Compatibility and limits](/docs/reference/)

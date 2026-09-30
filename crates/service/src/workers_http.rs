@@ -8,7 +8,8 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use open_compute_artifacts::ArtifactStore;
 use open_compute_core::{ErrorCode, InstanceId, PlatformError, RequestId, VersionId, WorkerId};
-use open_compute_storage::{PlatformStorage, WorkerOriginExposure, WorkerRepository};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::worker_repository::{WorkerOriginExposure, WorkerRepository};
 use open_compute_workers::{BundleLimits, ProductPromotionCoordinator, VersionPins};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -21,7 +22,7 @@ pub(crate) mod v4;
 pub struct WorkerApiState {
     storage: Arc<PlatformStorage>,
     artifacts: ArtifactStore,
-    response_cache: Option<Arc<open_compute_storage::CacheManager>>,
+    response_cache: Option<Arc<open_compute_storage::cache::CacheManager>>,
     transport: WorkerdTransport,
     pins: VersionPins,
     bundle_limits: BundleLimits,
@@ -48,7 +49,10 @@ impl WorkerApiState {
     /// Read secret-free deployment admission counts for the namespaced status API.
     pub(crate) fn deployment_runtime_assessments(
         &self,
-    ) -> Result<open_compute_storage::DeploymentRuntimeAssessmentSummary, PlatformError> {
+    ) -> Result<
+        open_compute_storage::worker_repository::DeploymentRuntimeAssessmentSummary,
+        PlatformError,
+    > {
         WorkerRepository::new(self.storage.db()).deployment_runtime_assessments()
     }
 
@@ -98,7 +102,7 @@ impl WorkerApiState {
         worker_id: WorkerId,
         version_id: Option<VersionId>,
         entrypoint: Option<&str>,
-    ) -> Option<open_compute_storage::ServiceTarget> {
+    ) -> Option<open_compute_storage::services::ServiceTarget> {
         self.local_extensions
             .service_target(name, account_id, worker_id, version_id, entrypoint)
     }
@@ -107,7 +111,7 @@ impl WorkerApiState {
     #[must_use]
     pub fn with_response_cache(
         mut self,
-        response_cache: Arc<open_compute_storage::CacheManager>,
+        response_cache: Arc<open_compute_storage::cache::CacheManager>,
     ) -> Self {
         self.response_cache = Some(response_cache);
         self

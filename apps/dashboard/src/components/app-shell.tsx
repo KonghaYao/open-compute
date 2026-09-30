@@ -24,6 +24,11 @@ import { useEffect, useState, type ComponentType } from "react";
 import { useAuth } from "../features/auth/auth-atoms";
 import { detailBreadcrumbAtom } from "../features/navigation/detail-breadcrumb-atom";
 import { useTheme } from "../features/theme/theme-atoms";
+import { queryKeys } from "../lib/query-options";
+import {
+  supportedProducts,
+  type SupportedProductGroup,
+} from "../lib/supported-products";
 import { BrandLogo } from "./brand-logo";
 import {
   productIcon,
@@ -39,51 +44,28 @@ type NavGroup = { label: string; items: NavItem[] };
 
 const groups: NavGroup[] = [
   { label: "", items: [{ to: "/", label: "Account home", icon: IconHome }] },
-  {
-    label: "Compute",
-    items: [
-      { to: "/workers", label: "Workers", icon: productIcon("Workers") },
-      { to: "/observability", label: "Observability", icon: IconActivity },
-      {
-        to: "/durable-objects",
-        label: "Durable Objects",
-        icon: productIcon("Durable Objects"),
-      },
-      { to: "/queues", label: "Queues", icon: productIcon("Queues") },
-      { to: "/workflows", label: "Workflows", icon: productIcon("Workflows") },
-      {
-        to: "/browser-run",
-        label: "Browser Run",
-        icon: productIcon("Browser Run"),
-      },
-      {
-        to: "/containers",
-        label: "Containers",
-        icon: productIcon("Containers"),
-      },
-      { to: "/sandbox", label: "Sandbox", icon: productIcon("Sandbox") },
-    ],
-  },
-  {
-    label: "Storage and databases",
-    items: [
-      { to: "/kv", label: "KV", icon: productIcon("KV") },
-      { to: "/d1", label: "D1", icon: productIcon("D1") },
-      { to: "/r2", label: "R2", icon: productIcon("R2") },
-      { to: "/vectorize", label: "Vectorize", icon: productIcon("Vectorize") },
-    ],
-  },
-  {
-    label: "AI",
-    items: [
-      { to: "/ai-search", label: "AI Search", icon: productIcon("AI Search") },
-    ],
-  },
+  ...(["Compute", "Storage and databases", "AI"] as const).map(
+    (label: SupportedProductGroup): NavGroup => ({
+      label,
+      items: supportedProducts
+        .filter((product) => product.group === label)
+        .map((product) => ({
+          to: product.href,
+          label: product.name,
+          icon: productIcon(product.icon),
+        })),
+    }),
+  ),
   {
     label: "Manage account",
     items: [{ to: "/platform", label: "Platform", icon: IconCode }],
   },
 ];
+groups[1]?.items.splice(1, 0, {
+  to: "/observability",
+  label: "Observability",
+  icon: IconActivity,
+});
 const items = groups.flatMap((group) => group.items);
 
 function active(pathname: string, target: string) {
@@ -126,7 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [instanceMenuOpen, setInstanceMenuOpen] = useState(false);
   const [instanceSearch, setInstanceSearch] = useState("");
   const accounts = useQuery({
-    queryKey: ["cloudflare-v4", "accounts"],
+    queryKey: queryKeys.accounts(),
     queryFn: async ({ signal }) =>
       (await client!.accounts.list({}, { signal })).result,
     enabled: client !== null,

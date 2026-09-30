@@ -66,7 +66,7 @@ fn localhost_worker_origin_migration_converts_routes_and_rejects_missing_authori
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("valid.sqlite");
     let (account, worker, route) = seed_v5(&path, true);
-    let db = crate::ControlDb::open(&path, 5_000).unwrap();
+    let db = crate::control_db::ControlDb::open(&path, 5_000).unwrap();
     crate::migrations::apply(&db, &SystemClock).unwrap();
     db.with_read(|connection| {
         let migrated = connection
@@ -111,7 +111,7 @@ fn localhost_worker_origin_migration_converts_routes_and_rejects_missing_authori
 
     let invalid_path = temp.path().join("missing-route.sqlite");
     seed_v5(&invalid_path, false);
-    let invalid = crate::ControlDb::open(&invalid_path, 5_000).unwrap();
+    let invalid = crate::control_db::ControlDb::open(&invalid_path, 5_000).unwrap();
     assert_eq!(
         crate::migrations::apply(&invalid, &SystemClock)
             .unwrap_err()

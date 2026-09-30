@@ -3,21 +3,7 @@
 use crate::cloudflare_v4::V4Error;
 use crate::r2_api::R2ApiState;
 use open_compute_core::{BindingKind, InstanceId, ResourceState};
-use open_compute_storage::ResourceRepository;
-
-pub(super) fn create_fingerprint(
-    api: &R2ApiState,
-    account_id: InstanceId,
-    name: &str,
-) -> Result<[u8; 32], V4Error> {
-    let input = serde_json::to_vec(&serde_json::json!({
-        "account": account_id,
-        "name": name,
-        "maxObjectBytes": api.config().max_object_bytes,
-    }))
-    .map_err(|_| V4Error::Internal)?;
-    Ok(api.storage().crypto().fingerprint_request(&input))
-}
+use open_compute_storage::resources::ResourceRepository;
 
 pub(super) fn put_idempotency_key(
     api: &R2ApiState,

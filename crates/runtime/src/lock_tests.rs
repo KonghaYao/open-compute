@@ -27,9 +27,13 @@ fn private_lock_helpers_cover_unavailable_target_and_visitor_contracts() {
             ]),
         },
         expected_version_output: "workerd 2026-08-30".to_owned(),
-        effective_compatibility_date: "2026-09-08".to_owned(),
-        required_compatibility_flags: Vec::new(),
+        system_compatibility_date: "2026-09-08".to_owned(),
         system_compatibility_flags: vec!["experimental".to_owned()],
+        binary_maximum_compatibility_date: "2026-09-25".to_owned(),
+        compatibility_catalog: CompatibilityCatalogPin {
+            schema_version: 1,
+            sha256: "ee".repeat(32),
+        },
         process_flags: vec!["--experimental".to_owned()],
         pyodide_bundle: PyodideBundlePin {
             version: "314.0.6_2026-08-17_2".to_owned(),

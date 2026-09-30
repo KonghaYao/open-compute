@@ -1,6 +1,6 @@
 #[test]
 fn durability_does_not_claim_safety_when_unclassified() {
-    use crate::FilesystemDurability;
+    use crate::lock::FilesystemDurability;
     assert!(
         FilesystemDurability::ApparentlyLocal
             .doctor_warning()

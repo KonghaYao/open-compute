@@ -5,10 +5,12 @@
 ## 最终结果
 
 - Stable Worker API 直接来自固定 `@cloudflare/workers-types`；不维护自有替代声明。
-- [`workerd.lock.json`](../../packages/runtime/workerd.lock.json) 固定 runtime、types、compatibility date／flags 和构建输入。
-- 工具链、descriptor 和 loader 使用同一 single-latest contract，不提供 tenant-selectable 历史 runtime 分支。
+- [`workerd.lock.json`](../../packages/runtime/workerd.lock.json) 固定 runtime、types、system Worker compatibility metadata、binary catalog 和构建输入。
+- 工具链、descriptor 和 loader 始终使用同一 pinned binary；tenant Version 各自保存 date／flags，并由该 binary 的
+  `CODE_VERSION` validation 判定，不选择历史 runtime 分支。
 - Generated `Env` 只组合部署声明的 binding；类型存在不等于 capability 已授予。
-- `fetch()`、`cloudflare:sockets.connect()`、`node:net` 和 `node:tls` 共用 public-only outbound；Service／DO connect 只走声明的 capability tunnel。
+- `fetch()`、`cloudflare:sockets.connect()`、`node:net` 和 `node:tls` 共用平台委派的 IP outbound；Service／DO connect
+  只走声明的 capability tunnel。地址过滤由宿主网络边界负责。
 - KV、R2、D1、Durable Objects、Queues、Cron、Workflows、Cache、Version Metadata 和 WebSocket hibernation 均映射到各自持久 authority。
 - Capability、case 和 deviation 的映射由 [`share/cloudflare-capabilities.json`](../../share/cloudflare-capabilities.json) 与
   [`test/conformance/catalog.json`](../../test/conformance/catalog.json) 持有。

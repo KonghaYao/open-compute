@@ -474,6 +474,7 @@ impl ServiceInvocationRegistry {
     }
 
     /// Drop state only when it still belongs to the named private-protocol generation.
+    #[cfg(any(test, feature = "test-support"))]
     pub fn clear_generation(&self, generation: &str) {
         let mut inner = self
             .inner
@@ -505,7 +506,7 @@ impl ServiceInvocationRegistry {
     ) -> Result<ServiceTargetPayload, PlatformError> {
         match (&target.service.target, &target.target) {
             (
-                open_compute_storage::ServiceTarget::Worker { worker_id },
+                open_compute_storage::services::ServiceTarget::Worker { worker_id },
                 ResolvedServiceDestination::Worker {
                     version_id,
                     worker_code_sha256,
@@ -522,7 +523,7 @@ impl ServiceInvocationRegistry {
                 props,
             }),
             (
-                open_compute_storage::ServiceTarget::Extension {
+                open_compute_storage::services::ServiceTarget::Extension {
                     name,
                     policy_revision,
                 },
@@ -680,7 +681,7 @@ impl ServiceInvocationRegistry {
                         target.caller_worker_id,
                         Some(target.service.version_id),
                         target.service.entrypoint.as_deref(),
-                    ) == Some(open_compute_storage::ServiceTarget::Extension {
+                    ) == Some(open_compute_storage::services::ServiceTarget::Extension {
                         name: name.clone(),
                         policy_revision: policy_revision.clone(),
                     })
@@ -710,7 +711,8 @@ impl ServiceInvocationRegistry {
                 ));
             };
             if request.operation != ServiceOperation::DefaultFetch
-                && *content_kind == open_compute_storage::VersionContentKind::AssetsOnly
+                && *content_kind
+                    == open_compute_storage::worker_repository::VersionContentKind::AssetsOnly
             {
                 return Err(PlatformError::new(
                     ErrorCode::ServiceEntrypointNotFound,

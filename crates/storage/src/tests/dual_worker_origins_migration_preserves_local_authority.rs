@@ -71,7 +71,7 @@ fn dual_worker_origins_migration_preserves_local_authority() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("valid.sqlite");
     let (_, worker, claim) = seed_v7(&path, false);
-    let db = crate::ControlDb::open(&path, 5_000).unwrap();
+    let db = crate::control_db::ControlDb::open(&path, 5_000).unwrap();
     crate::migrations::apply(&db, &SystemClock).unwrap();
     db.with_immediate(|tx| {
         let local: (String, String, String) = tx
@@ -263,7 +263,7 @@ fn dual_worker_origins_migration_preserves_local_authority() {
 
     let corrupt_path = temp.path().join("corrupt.sqlite");
     seed_v7(&corrupt_path, true);
-    let corrupt_db = crate::ControlDb::open(&corrupt_path, 5_000).unwrap();
+    let corrupt_db = crate::control_db::ControlDb::open(&corrupt_path, 5_000).unwrap();
     assert_eq!(
         crate::migrations::apply(&corrupt_db, &SystemClock)
             .unwrap_err()

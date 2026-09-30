@@ -1,6 +1,10 @@
 //! Offline local-authority snapshot preparation and manifest authentication.
 
-use crate::{ControlDb, DataDir, MasterKey, inspect_control_db, inspect_scheduler_db};
+use crate::control_db::ControlDb;
+use crate::data_dir::DataDir;
+use crate::inspect::inspect_control_db;
+use crate::master_key::MasterKey;
+use crate::scheduler::inspect_scheduler_db;
 use hmac::{Hmac, Mac};
 use open_compute_core::{
     ErrorCode, HardeningConfig, InstanceId, ObjectStorageKind, PlatformError,

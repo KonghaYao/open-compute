@@ -10,7 +10,7 @@ use axum::extract::{Path, Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use open_compute_artifacts::{R2HttpMetadata, R2PutOptions, R2StorageClass, UserObjectKey};
-use open_compute_storage::R2ObjectRepository;
+use open_compute_storage::r2_objects::R2ObjectRepository;
 
 pub(super) async fn usage(
     State(state): State<HttpState>,

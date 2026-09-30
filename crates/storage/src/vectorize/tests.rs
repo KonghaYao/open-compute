@@ -1,7 +1,7 @@
 use super::*;
-use crate::{
-    PlatformStorage, ReserveResourceCreate, ResourceCreateReservation, ResourceRecord,
-    ResourceRepository,
+use crate::PlatformStorage;
+use crate::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRecord, ResourceRepository,
 };
 use open_compute_core::config::DataConfig;
 use open_compute_core::{BindingKind, ErrorCode, RequestId, ResourceId, SystemClock};

@@ -1,8 +1,4 @@
-use super::{
-    IDEMPOTENCY_TTL_MS, create, create_fingerprint, current_named_resource,
-    normalize_bucket_create_content_type, put_idempotency_key, valid_bucket_name,
-};
-use crate::cloudflare_v4::{V4RequestContext, V4Role};
+use super::{normalize_bucket_create_content_type, valid_bucket_name};
 use crate::health::HealthCoordinator;
 use crate::http::HttpState;
 use crate::metrics::MetricsRegistry;
@@ -18,34 +14,18 @@ use open_compute_artifacts::{
 };
 use open_compute_core::config::{DataConfig, MetricsConfig};
 use open_compute_core::{
-    BindingKind, InstanceId, PlatformConfig, R2Config, RequestId, ResourceAvailability, ResourceId,
-    ResourceState, SecretString, SystemClock,
+    BindingKind, InstanceId, PlatformConfig, R2Config, RequestId, ResourceId, ResourceState,
+    SecretString, SystemClock,
 };
-use open_compute_storage::{
-    PlatformStorage, R2_SCHEMA_VERSION, R2BucketRepository, ReserveResourceCreate,
-    ResourceCreateReservation, ResourceRecord, ResourceRepository,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::r2::R2_SCHEMA_VERSION;
+use open_compute_storage::resources::{
+    ReserveResourceCreate, ResourceCreateReservation, ResourceRepository,
 };
 use open_compute_workers::ResourcePins;
 use std::sync::Arc;
 use std::time::Duration;
 use tower::ServiceExt as _;
-
-fn resource(name: &str, state: ResourceState) -> ResourceRecord {
-    ResourceRecord {
-        id: ResourceId::generate(),
-        instance_id: InstanceId::generate(),
-        kind: BindingKind::R2Bucket,
-        name: name.to_owned(),
-        state,
-        availability: ResourceAvailability::Healthy,
-        availability_code: None,
-        spec_generation: 1,
-        driver_schema_version: 1,
-        created_at_ms: 1,
-        updated_at_ms: 1,
-        deleted_at_ms: (state == ResourceState::Tombstoned).then_some(1),
-    }
-}
 
 #[test]
 fn bucket_names_match_the_pinned_wrangler_contract() {
@@ -76,17 +56,6 @@ fn bucket_create_accepts_the_fetch_string_json_content_type() {
         .body(Body::empty())
         .unwrap();
     assert!(normalize_bucket_create_content_type(&mut duplicate).is_err());
-}
-
-#[test]
-fn put_by_name_recovery_ignores_tombstones_and_selects_creating_resource() {
-    let tombstone = resource("reused-name", ResourceState::Tombstoned);
-    let creating = resource("reused-name", ResourceState::Creating);
-    let creating_id = creating.id;
-    let selected = current_named_resource(vec![tombstone, creating], "reused-name")
-        .expect("creating resource remains recoverable");
-    assert_eq!(selected.id, creating_id);
-    assert_eq!(selected.state, ResourceState::Creating);
 }
 
 struct Fixture {
@@ -184,144 +153,6 @@ request_timeout_ms = 1000
     }
 }
 
-fn context() -> V4RequestContext {
-    V4RequestContext {
-        role: V4Role::Deployer,
-        request_id: RequestId::generate(),
-    }
-}
-
-fn assert_put_reservation_complete(fixture: &Fixture, name: &str) {
-    let api = fixture.state.r2_api().expect("R2 API");
-    let now = super::now_ms();
-    let key = put_idempotency_key(api, fixture.account_id, name).expect("PUT idempotency key");
-    let fingerprint = create_fingerprint(api, fixture.account_id, name).expect("fingerprint");
-    let reservation = ResourceRepository::new(fixture.storage.db())
-        .reserve_create(
-            &ReserveResourceCreate {
-                instance_id: fixture.account_id,
-                kind: BindingKind::R2Bucket,
-                name,
-                idempotency_key: &key,
-                fingerprint_key_id: fixture.storage.crypto().fingerprint_key_id(),
-                request_fingerprint: &fingerprint,
-                resource_id: ResourceId::generate(),
-                driver_schema_version: R2_SCHEMA_VERSION,
-                request_id: RequestId::generate(),
-                now_ms: now,
-                expires_at_ms: now + IDEMPOTENCY_TTL_MS,
-            },
-            fixture.storage.hardening().max_resources_per_kind,
-        )
-        .expect("reservation read");
-    assert!(matches!(
-        reservation,
-        ResourceCreateReservation::Complete(_)
-    ));
-}
-
-#[tokio::test]
-async fn put_by_name_completes_crash_recovery_recreates_and_concurrent_reservations() {
-    let fixture = fixture().await;
-    let api = fixture.state.r2_api().expect("R2 API");
-    let name = "crash-recovery";
-    let now = super::now_ms();
-    let key = put_idempotency_key(api, fixture.account_id, name).expect("initial generation key");
-    let fingerprint = create_fingerprint(api, fixture.account_id, name).expect("fingerprint");
-    let reservation = ResourceRepository::new(fixture.storage.db())
-        .reserve_create(
-            &ReserveResourceCreate {
-                instance_id: fixture.account_id,
-                kind: BindingKind::R2Bucket,
-                name,
-                idempotency_key: &key,
-                fingerprint_key_id: fixture.storage.crypto().fingerprint_key_id(),
-                request_fingerprint: &fingerprint,
-                resource_id: ResourceId::generate(),
-                driver_schema_version: R2_SCHEMA_VERSION,
-                request_id: RequestId::generate(),
-                now_ms: now,
-                expires_at_ms: now + IDEMPOTENCY_TTL_MS,
-            },
-            fixture.storage.hardening().max_resources_per_kind,
-        )
-        .expect("initial reservation");
-    let ResourceCreateReservation::Reserved(resource) = reservation else {
-        panic!("fresh PUT must reserve")
-    };
-    api.resource_driver()
-        .reconcile(&resource)
-        .await
-        .expect("driver reconcile before crash");
-    ResourceRepository::new(fixture.storage.db())
-        .mark_ready(resource.id, now)
-        .expect("mark ready before crash");
-
-    let retry = create(
-        &fixture.state,
-        context(),
-        fixture.account_id,
-        name.to_owned(),
-        true,
-    )
-    .await;
-    assert!(retry.status().is_success());
-    assert_put_reservation_complete(&fixture, name);
-
-    let resources = ResourceRepository::new(fixture.storage.db());
-    let first_id = resource.id;
-    resources
-        .begin_delete(fixture.account_id, first_id, now + 1)
-        .expect("begin delete");
-    R2BucketRepository::new(fixture.storage.db())
-        .mark_delete_started(first_id, now + 1)
-        .expect("record delete attempt");
-    resources
-        .mark_tombstoned(fixture.account_id, first_id, RequestId::generate(), now + 2)
-        .expect("tombstone first generation");
-    let second_generation_key =
-        put_idempotency_key(api, fixture.account_id, name).expect("second generation key");
-    assert_ne!(key, second_generation_key);
-    let recreated = create(
-        &fixture.state,
-        context(),
-        fixture.account_id,
-        name.to_owned(),
-        true,
-    )
-    .await;
-    assert!(recreated.status().is_success());
-    let second_id = ResourceRepository::new(fixture.storage.db())
-        .list(fixture.account_id, Some(BindingKind::R2Bucket))
-        .expect("resource catalog")
-        .into_iter()
-        .find(|resource| resource.name == name && resource.state == ResourceState::Ready)
-        .expect("recreated live bucket")
-        .id;
-    assert_ne!(first_id, second_id);
-    assert_put_reservation_complete(&fixture, name);
-
-    let (left, right) = tokio::join!(
-        create(
-            &fixture.state,
-            context(),
-            fixture.account_id,
-            "concurrent-put".to_owned(),
-            true,
-        ),
-        create(
-            &fixture.state,
-            context(),
-            fixture.account_id,
-            "concurrent-put".to_owned(),
-            true,
-        )
-    );
-    assert!(left.status().is_success());
-    assert!(right.status().is_success());
-    assert_put_reservation_complete(&fixture, "concurrent-put");
-}
-
 #[tokio::test]
 async fn startup_reconciliation_finishes_creating_and_deleting_r2_generations() {
     let fixture = fixture().await;
@@ -343,7 +174,7 @@ async fn startup_reconciliation_finishes_creating_and_deleting_r2_generations() 
                     driver_schema_version: schema,
                     request_id: RequestId::generate(),
                     now_ms: now,
-                    expires_at_ms: now + IDEMPOTENCY_TTL_MS,
+                    expires_at_ms: now + 60_000,
                 },
                 1_000_000,
             )

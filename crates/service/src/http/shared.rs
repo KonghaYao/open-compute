@@ -68,13 +68,15 @@ impl SharedRoutes {
         if let Some(domain) = public_base_domain {
             open_compute_core::PublicGatewayConfig::validate_base_domain(domain)?;
         }
-        let admin_secret = state.admin_secret.clone().ok_or_else(invalid_routes)?;
+        let admin_secret = state.auth.admin_secret.clone().ok_or_else(invalid_routes)?;
         if let Some(daemon) = &self.daemon {
             let deployer = state
+                .auth
                 .deployer_secret
                 .as_deref()
                 .ok_or_else(invalid_routes)?;
             let read_only = state
+                .auth
                 .read_only_secret
                 .as_deref()
                 .ok_or_else(invalid_routes)?;
@@ -115,14 +117,14 @@ impl SharedRoutes {
             instance_id,
             InstanceRoutes {
                 generation,
-                dashboard_enabled: state.dashboard_enabled,
+                dashboard_enabled: state.dashboard.enabled,
                 public: super::public_router(state.clone()),
                 admin: super::admin_router(state.clone()),
                 gateway: public_base_domain.map(|_| super::gateway_router(state.clone())),
                 public_base_domain: public_base_domain.map(str::to_owned),
                 admin_secret,
-                deployer_secret: state.deployer_secret,
-                read_only_secret: state.read_only_secret,
+                deployer_secret: state.auth.deployer_secret,
+                read_only_secret: state.auth.read_only_secret,
             },
         );
         Ok(RouteLease {
@@ -538,8 +540,8 @@ fn signed_tail_path_instance(path: &str) -> Option<InstanceId> {
 
 fn tokens_overlap(state: &HttpState, entry: &InstanceRoutes) -> bool {
     let new_tokens = [
-        state.deployer_secret.as_deref(),
-        state.read_only_secret.as_deref(),
+        state.auth.deployer_secret.as_deref(),
+        state.auth.read_only_secret.as_deref(),
     ];
     let old_tokens = [
         Some(entry.admin_secret.as_ref()),

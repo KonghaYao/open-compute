@@ -17,7 +17,7 @@ async fn run_real_workerd_with_separate_admin_listener_and_maintenance_tick() {
             &open_compute_core::SystemClock,
         )
         .unwrap();
-        let repo = open_compute_storage::WorkerRepository::new(storage.db());
+        let repo = open_compute_storage::worker_repository::WorkerRepository::new(storage.db());
         let account = storage.identity().instance_id;
         let (worker, _) = repo
             .create_worker(
@@ -31,11 +31,11 @@ async fn run_real_workerd_with_separate_admin_listener_and_maintenance_tick() {
         for (index, timestamp) in [(1_u8, 2_i64), (2, 3)] {
             let version = open_compute_core::VersionId::generate();
             repo.insert_staging_version(
-                &open_compute_storage::NewVersion {
+                &open_compute_storage::worker_repository::NewVersion {
                     id: version,
                     instance_id: account,
                     worker_id: worker.id,
-                    content_kind: open_compute_storage::VersionContentKind::Worker,
+                    content_kind: open_compute_storage::worker_repository::VersionContentKind::Worker,
                     artifact_sha256: Some([index; 32]),
                     artifact_size: Some(u64::from(index)),
                     artifact_schema_version: Some(1),
@@ -44,19 +44,19 @@ async fn run_real_workerd_with_separate_admin_listener_and_maintenance_tick() {
                     compatibility_date: "2026-09-08".into(),
                     compatibility_flags: Vec::new(),
                     resource_limits:
-                        open_compute_storage::EffectiveResourceLimits::standard_defaults(),
+                        open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
                     vars: std::collections::BTreeMap::new(),
                     secrets: std::collections::BTreeMap::new(),
                     request_id: open_compute_core::RequestId::generate(),
                     now_ms: timestamp,
                 },
-                &open_compute_storage::NewVersionProducts::default(),
+                &open_compute_storage::worker_repository::NewVersionProducts::default(),
                 1_000_000,
             )
             .unwrap();
             repo.mark_rejected(
                 version,
-                open_compute_storage::VersionState::Staging,
+                open_compute_storage::worker_repository::VersionState::Staging,
                 ErrorCode::BundleInvalid,
                 timestamp,
             )

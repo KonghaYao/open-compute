@@ -5,11 +5,13 @@ use base64::Engine as _;
 use open_compute_core::{
     Clock, ErrorCode, KvConfig, OperationClass, PlatformError, ResourceAvailability,
 };
-use open_compute_storage::{
-    AuthorizedBinding, KV_MAX_LIST_LIMIT, KV_MIN_CACHE_TTL_SECONDS, KV_MIN_EXPIRATION_TTL_SECONDS,
-    KvEngine, KvEntry, KvEntryInfo, KvListRow, KvNamespaceRepository, KvPaths, KvPutOptions,
-    PlatformStorage, ResourceRepository, canonical_metadata,
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::bindings::AuthorizedBinding;
+use open_compute_storage::kv::{
+    KV_MAX_LIST_LIMIT, KV_MIN_CACHE_TTL_SECONDS, KV_MIN_EXPIRATION_TTL_SECONDS, KvEngine, KvEntry,
+    KvEntryInfo, KvListRow, KvNamespaceRepository, KvPaths, KvPutOptions, canonical_metadata,
 };
+use open_compute_storage::resources::ResourceRepository;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
@@ -235,6 +237,7 @@ impl SqliteKvBindingExecutor {
 
     /// Bind authority with an operator-selected hard connection ceiling.
     #[must_use]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn with_connection_limit(
         storage: Arc<PlatformStorage>,
         clock: Arc<dyn Clock>,

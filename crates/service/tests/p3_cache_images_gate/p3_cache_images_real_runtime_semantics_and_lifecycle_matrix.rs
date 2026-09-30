@@ -396,7 +396,10 @@ pub(super) async fn run() {
             "caller",
             CALLER_SOURCE,
             services,
-            VersionRuntimeFeatures::default(),
+            VersionRuntimeFeatures {
+                compatibility_date: "2026-09-08".to_owned(),
+                ..VersionRuntimeFeatures::default()
+            },
             true,
             40,
         ),

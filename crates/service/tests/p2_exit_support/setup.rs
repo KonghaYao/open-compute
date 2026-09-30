@@ -11,7 +11,9 @@ use open_compute_core::{
     VersionId, WorkflowId,
 };
 use open_compute_service::workflow_http::WorkflowApiState;
-use open_compute_storage::{PlatformStorage, WorkerRepository, WorkflowRepository};
+use open_compute_storage::PlatformStorage;
+use open_compute_storage::worker_repository::WorkerRepository;
+use open_compute_storage::workflows::WorkflowRepository;
 use open_compute_workers::{
     BundleLimits, CanonicalBundle, CreateQueueOutcome, CreateQueueRequest, CreateVersionRequest,
     ModuleInput, ModuleType, QueueConsumerInput, QueueController, ResourcePins,
@@ -90,8 +92,9 @@ pub(super) async fn prepare() -> Fixture {
         .await;
         bindings.insert(name.into(), binding(kind, id));
     }
-    let do_repository = open_compute_storage::DurableObjectRepository::new(&storage);
-    let do_plan = open_compute_storage::DurableObjectMigrationPlan {
+    let do_repository =
+        open_compute_storage::durable_objects::DurableObjectRepository::new(&storage);
+    let do_plan = open_compute_storage::durable_objects::DurableObjectMigrationPlan {
         declarative: false,
         old_tag: None,
         new_tag: "p2-chain-v1".to_owned(),
@@ -179,7 +182,10 @@ pub(super) async fn prepare() -> Fixture {
             secrets: Default::default(),
             bindings: bound,
             services: Default::default(),
-            runtime_features: Default::default(),
+            runtime_features: open_compute_workers::VersionRuntimeFeatures {
+                compatibility_date: "2026-09-08".to_owned(),
+                ..Default::default()
+            },
             queue_consumers: if index == 1 {
                 vec![QueueConsumerInput {
                     queue,
@@ -193,7 +199,7 @@ pub(super) async fn prepare() -> Fixture {
             crons: Vec::new(),
             observability: None,
             deployment_source: (index != 2)
-                .then_some(open_compute_storage::DeploymentSource::VersionsApi),
+                .then_some(open_compute_storage::worker_repository::DeploymentSource::VersionsApi),
             request_id: RequestId::generate(),
             now_ms: now_ms(),
         };
@@ -226,7 +232,7 @@ pub(super) async fn prepare() -> Fixture {
             .create_version(account, definition, version.id, "Flow".into())
             .await
             .unwrap();
-            if version.state != open_compute_storage::VersionState::Ready {
+            if version.state != open_compute_storage::worker_repository::VersionState::Ready {
                 let failed_pid = stack.supervisor.snapshot().pid.unwrap();
                 stack.supervisor.force_restart_for_test();
                 wait_pid_change(&stack.supervisor, failed_pid, Duration::from_secs(30)).await;
@@ -287,7 +293,10 @@ pub(super) async fn activate_future(fixture: &Fixture) {
     )
     .await
     .unwrap();
-    assert_eq!(version.state, open_compute_storage::VersionState::Ready);
+    assert_eq!(
+        version.state,
+        open_compute_storage::worker_repository::VersionState::Ready
+    );
     stack.stop().await;
 }
 

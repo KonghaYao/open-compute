@@ -2,7 +2,7 @@
 
 use open_compute_core::{ErrorCode, PlatformError, StartupId};
 use open_compute_runtime::{ProcessDiagnostics, supervisor::SanitizedExit};
-use open_compute_storage::{atomic_write, ensure_dir_secure};
+use open_compute_storage::fs::{atomic_write, ensure_dir_secure};
 use serde::Serialize;
 use sha2::{Digest as _, Sha256};
 use std::path::{Path, PathBuf};

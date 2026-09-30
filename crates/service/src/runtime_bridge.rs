@@ -20,9 +20,9 @@ use open_compute_runtime::{
     GenerationAuthRegistry, RuntimeFailureEvidence, SupervisorState, TOKEN_HEADER,
     WorkerdSupervisor,
 };
-use open_compute_storage::{
-    AuthorizedDurableObjectDelete, ClaimedJob, QUEUE_MAX_MESSAGE_BYTES, QueueContentType,
-};
+use open_compute_storage::durable_objects::AuthorizedDurableObjectDelete;
+use open_compute_storage::queues::QUEUE_MAX_MESSAGE_BYTES;
+use open_compute_storage::scheduler::{ClaimedJob, QueueContentType};
 use open_compute_workers::{
     RuntimeScope, RuntimeSource, RuntimeValidator, ValidationCandidate, VersionPins, loader_key,
     validate_env_name,
@@ -158,7 +158,7 @@ pub struct QueueDispatchMetadata {
 impl QueueDispatchMetadata {
     /// Copy scheduler metrics, converting the epoch sentinel to absence.
     #[must_use]
-    pub fn from_queue_metrics(metrics: open_compute_storage::QueueMetrics) -> Self {
+    pub fn from_queue_metrics(metrics: open_compute_storage::scheduler::QueueMetrics) -> Self {
         Self {
             metrics: QueueDispatchMetrics {
                 backlog_count: metrics.backlog_count,
