@@ -355,8 +355,9 @@ def resolve_targets(selected, workspace):
                 ('--list',),
                 (
                     'PATH', 'HOME', 'OPEN_COMPUTE_TEST_WORKERD',
-                    'OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE', 'BAILIAN_API_HOST',
-                    'BAILIAN_API_KEY', 'DEEPSEEK_API_KEY', 'COHERE_API_KEY',
+                    'OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE', 'OPEN_COMPUTE_BUILD_CADDY',
+                    'BAILIAN_API_HOST', 'BAILIAN_API_KEY', 'DEEPSEEK_API_KEY',
+                    'COHERE_API_KEY',
                 ),
                 1800,
                 'external-exclusive',

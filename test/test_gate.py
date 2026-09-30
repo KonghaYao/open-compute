@@ -352,6 +352,16 @@ class GateTests(unittest.TestCase):
         self.assertEqual(target.cases, ('production-preflight',))
         self.assertIn('OPEN_COMPUTE_TEST_R2_S3_SECRET_ACCESS_KEY', target.env_allowlist)
 
+    def test_ai_provider_qualification_forwards_pinned_build_inputs(self):
+        metadata = {'workspace_members': [], 'packages': []}
+        with patch.object(gate.subprocess, 'check_output', return_value=json.dumps(metadata)), \
+             patch.object(gate.shutil, 'which', side_effect=lambda name: '/bin/bun' if name == 'bun' else None):
+            targets = gate.resolve_targets(['p5-ai-provider-qualification'], False)
+        target = targets['p5-ai-provider-qualification']
+        # The harness rebuilds the Rust gate; build.rs requires both pinned runtime inputs.
+        self.assertIn('OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE', target.env_allowlist)
+        self.assertIn('OPEN_COMPUTE_BUILD_CADDY', target.env_allowlist)
+
     def test_final_workspace_runs_complete_inventory_once_and_only_timing_twice_more(self):
         targets = self.targets(['p0-1', 'p1-security', 'p2-1', 'workflow-product'])
         targets['unit'] = gate.Target('package', 'lib', 'lib', '/repo', False)
