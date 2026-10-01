@@ -490,7 +490,7 @@ pub(super) async fn run() {
         supervisor.last_diagnostics()
     );
     let egress_result: serde_json::Value = serde_json::from_str(&response.body).unwrap();
-    assert_eq!(egress_result["unreachable"], 9);
+    assert_eq!(egress_result["unreachable"], UNREACHABLE_TARGETS.len());
     let allowed = egress_result["allowed"].as_array().unwrap();
     assert_eq!(allowed.len(), egress_fixture.as_ref().map_or(0, |_| 5));
     assert!(allowed.iter().all(|value| value == "fixture-ok"));
