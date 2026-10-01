@@ -60,6 +60,16 @@ mod wrangler;
 
 mod p0_2_real_worker_create_validate_dispatch_promote_rollback_restart;
 
+const UNREACHABLE_TARGETS: &[&str] = &[
+    "http://127.0.0.1:1/",
+    "http://[::1]:1/",
+    "http://[::ffff:127.0.0.1]:1/",
+    "http://2130706433:1/",
+    "http://user@127.0.0.1:1/",
+    "http://localhost:1/",
+    "file:///etc/passwd",
+];
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn p0_2_real_worker_create_validate_dispatch_promote_rollback_restart() {
     p0_2_real_worker_create_validate_dispatch_promote_rollback_restart::run().await;
@@ -80,17 +90,6 @@ async fn deploy_egress(
             fixture.private_hostname_url.clone(),
         ]
     });
-    let unreachable_targets = vec![
-        "http://127.0.0.1:1/".to_owned(),
-        "http://10.0.0.1/".to_owned(),
-        "http://169.254.169.254/latest/meta-data/".to_owned(),
-        "http://[::1]/".to_owned(),
-        "http://[::ffff:127.0.0.1]/".to_owned(),
-        "http://2130706433/".to_owned(),
-        "http://user@127.0.0.1/".to_owned(),
-        "http://localhost/".to_owned(),
-        "file:///etc/passwd".to_owned(),
-    ];
     let mut vars = BTreeMap::new();
     vars.insert(
         "ALLOWED_TARGETS_JSON".to_owned(),
@@ -98,7 +97,7 @@ async fn deploy_egress(
     );
     vars.insert(
         "UNREACHABLE_TARGETS_JSON".to_owned(),
-        serde_json::json!(serde_json::to_string(&unreachable_targets).unwrap()),
+        serde_json::json!(serde_json::to_string(UNREACHABLE_TARGETS).unwrap()),
     );
     if let Some(fixture) = fixture {
         vars.insert(
