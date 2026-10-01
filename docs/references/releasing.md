@@ -229,8 +229,9 @@ macOS 使用 `shasum -a 256 -c` 校验筛选后的对应行。校验后仍应按
 
 ## 失败、重跑与修复版本
 
-- qualification 或 package 暴露源码/产物缺陷：若该 tag 尚未创建公开 GitHub Release，maintainer
-  明确授权后可以在保留失败 run 证据的前提下，用修复后的同版本 release commit 替换该 tag；
+- qualification 或 package 暴露源码/产物缺陷：一次明确的 stable release 请求即持续授权 maintainer
+  在保留失败 run 证据、确认尚未创建任何 GitHub Release（包括 Draft）并让修复重新通过完整
+  `main` → `release` 流程后，直接用修复后的同版本 release commit 重建该 tag，不再逐次请求确认；
   已公开的 Release 和 tag 仍不可移动，后续修复必须走新的 patch version PR。
 - runner、网络或 GitHub 服务的瞬时失败：输入未变化时可以对同一 tag rerun failed jobs；不得借重跑替换
   tag、源码或任何 package 输入。
