@@ -23,23 +23,23 @@ export default {
 } satisfies ExportedHandler<{ DB: D1Database }>;
 ```
 
-Bind an existing database with Wrangler's standard D1 field:
+Bind an existing database with cf's standard D1 field:
 
-```json
-{
-  "name": "d1-app",
-  "main": "src/index.ts",
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "app",
-      "database_id": "<d1-database-id>"
-    }
-  ]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "d1-app",
+    entrypoint: "src/index.ts",
+    env: {
+      DB: bindings.d1({ id: "<d1-database-id>", name: "app" }),
+    },
+  },
+});
 ```
 
-`database_id` identifies an existing database on this platform. Binding grammar: [bindings](/docs/workers/configuration/bindings/). Use project-local Wrangler for types and `ocd wrangler deploy` for a real target.
+`database_id` identifies an existing database on this platform. Binding grammar: [bindings](/docs/workers/configuration/bindings/). Use project-local cf for types and `ocd cf deploy` for a real target.
 
 ## Compatibility
 

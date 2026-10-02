@@ -152,6 +152,7 @@ pub(super) async fn clone_version(
             authority,
             worker.instance_id,
             worker.id,
+            &worker.name,
             None,
             false,
             true,

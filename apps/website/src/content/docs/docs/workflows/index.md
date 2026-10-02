@@ -28,19 +28,33 @@ export default {
 } satisfies ExportedHandler<{ FLOW: Workflow }>;
 ```
 
-Bind in `wrangler.jsonc` with Wrangler's standard Workflow field:
+Bind in `cloudflare.config.ts` with cf's standard Workflow field:
 
-```json
-{
-  "name": "flow-app",
-  "main": "src/index.ts",
-  "workflows": [
-    { "binding": "FLOW", "name": "flow", "class_name": "MyWorkflow" }
-  ]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "flow-app",
+    entrypoint: "src/index.ts",
+    exports: {
+      MyWorkflow: {
+        type: "workflow",
+        name: "flow",
+      },
+    },
+    env: {
+      FLOW: bindings.workflow({
+        name: "flow",
+        worker: "flow-app",
+        exportName: "MyWorkflow",
+      }),
+    },
+  },
+});
 ```
 
-Grammar: [bindings](/docs/workers/configuration/bindings/). Pinned Wrangler owns Workflow definition deployment; the official SDK owns instances and lifecycle operations.
+Grammar: [bindings](/docs/workers/configuration/bindings/). Pinned cf owns Workflow definition deployment; the official SDK owns instances and lifecycle operations.
 
 ## Compatibility
 
@@ -51,6 +65,6 @@ Grammar: [bindings](/docs/workers/configuration/bindings/). Pinned Wrangler owns
 | Callbacks                 | —                                                                    | At-least-once until result commit; replay skips durable-complete callbacks                                                       |
 | External side effects     | —                                                                    | Do not roll back with Workflow snapshots                                                                                         |
 | Dashboard / observability | Available                                                            | Not provided                                                                                                                     |
-| Binding                   | Wrangler                                                             | Standard `workflows[].binding/name/class_name`; `class_name` required                                                            |
+| Binding                   | cf                                                                   | Standard `bindings.workflow({name, worker, exportName})`; `class_name` required                                                  |
 
 Next: [Develop with bindings](/docs/develop/) · [Compatibility and limits](/docs/reference/)

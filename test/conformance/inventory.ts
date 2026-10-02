@@ -81,7 +81,7 @@ export interface CapabilityInventory {
   source: InventorySource;
   managementApi: Record<string, unknown>;
   workersObservability: Record<string, unknown>;
-  wrangler: Record<string, unknown>;
+  cf: Record<string, unknown>;
   products: Record<string, InventoryProduct>;
 }
 
@@ -450,7 +450,7 @@ export async function generateInventoryWithCoverage(): Promise<{
         p6.workersObservability,
         "P6 workersObservability",
       ),
-      wrangler: record(p6.wrangler, "P6 wrangler"),
+      cf: record(p6.cf, "P6 cf"),
       products,
     },
     coverage,

@@ -22,6 +22,7 @@ test-support = [
 ]
 
 [dependencies]
+semver.workspace = true
 axum.workspace = true
 base64.workspace = true
 blake3.workspace = true
@@ -157,8 +158,8 @@ path = "tests/p3_services_product/mod.rs"
 required-features = ["test-support"]
 
 [[test]]
-name = "p6_wrangler_resource_gate"
-path = "tests/p6_wrangler_resource_gate/mod.rs"
+name = "p6_cf_resource_gate"
+path = "tests/p6_cf_resource_gate/mod.rs"
 required-features = ["test-support"]
 
 [[test]]

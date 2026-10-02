@@ -2,13 +2,204 @@ use super::*;
 use axum::Json;
 use axum::body::to_bytes;
 use axum::response::IntoResponse as _;
-use open_compute_storage::worker_repository::VersionState;
+use open_compute_storage::worker_repository::{VersionContentKind, VersionState};
 
 #[derive(Serialize)]
 struct DeleteVersionResponse {
     errors: [serde_json::Value; 0],
     messages: [serde_json::Value; 0],
     success: bool,
+}
+
+pub(super) async fn list_beta_versions(
+    State(state): State<HttpState>,
+    Path((account, identifier)): Path<(String, String)>,
+    request: Request,
+) -> axum::response::Response {
+    let context = match authorize(&request, V4Permission::Read) {
+        Ok(value) => value,
+        Err(response) => return response.into_response(),
+    };
+    let result = (|| {
+        let query = query::version_list(request.uri().query(), false)?;
+        let account = domain::resolve_instance(&state, &account)?;
+        let api = worker_api(&state)?;
+        let authority = state.v4_instance_context().ok_or(V4Error::Unavailable)?;
+        let repository = WorkerRepository::new(api.storage.db());
+        let worker = worker_by_identifier(repository, authority, account, &identifier)
+            .map_err(|error| V4Error::from(&error))?;
+        let versions = repository
+            .list_versions(account, worker.id)
+            .map_err(|error| V4Error::from(&error))?
+            .into_iter()
+            .filter(|version| version.deleted_at_ms.is_none())
+            .collect::<Vec<_>>();
+        let total = versions.len();
+        let items = versions
+            .iter()
+            .skip(query.page.saturating_sub(1).saturating_mul(query.per_page))
+            .take(query.per_page)
+            .map(|version| {
+                let snapshot = repository
+                    .version_snapshot(account, worker.id, version.id, false)
+                    .map_err(|error| V4Error::from(&error))?;
+                beta_version_item(api, authority, &snapshot)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let info = V4ResultInfo {
+            page: query.page,
+            per_page: query.per_page,
+            count: items.len(),
+            total_count: total,
+            total_pages: total.div_ceil(query.per_page),
+        };
+        Ok((items, info))
+    })();
+    match result {
+        Ok((items, info)) => paginated_response(context, items, info),
+        Err(error) => error_response(error, context.request_id()),
+    }
+}
+
+pub(super) async fn get_beta_version(
+    State(state): State<HttpState>,
+    Path((account, identifier, requested)): Path<(String, String, String)>,
+    request: Request,
+) -> axum::response::Response {
+    let context = match authorize(&request, V4Permission::Read) {
+        Ok(value) => value,
+        Err(response) => return response.into_response(),
+    };
+    let result = async move {
+        let include =
+            url::form_urlencoded::parse(request.uri().query().unwrap_or_default().as_bytes())
+                .into_owned()
+                .collect::<Vec<_>>();
+        let include_modules = match include.as_slice() {
+            [] => false,
+            [(key, value)] if key == "include" && value == "modules" => true,
+            _ => return Err(V4Error::InvalidRequest),
+        };
+        let account = domain::resolve_instance(&state, &account)?;
+        let api = worker_api(&state)?;
+        let authority = state.v4_instance_context().ok_or(V4Error::Unavailable)?;
+        let repository = WorkerRepository::new(api.storage.db());
+        let worker = worker_by_identifier(repository, authority, account, &identifier)
+            .map_err(|error| V4Error::from(&error))?;
+        let version = resolve_version(repository, account, worker.id, &requested)?;
+        if version.deleted_at_ms.is_some() {
+            return Err(V4Error::NotFound);
+        }
+        let snapshot = repository
+            .version_snapshot(account, worker.id, version.id, false)
+            .map_err(|error| V4Error::from(&error))?;
+        let mut item = beta_version_item(api, authority, &snapshot)?;
+        if include_modules {
+            item["modules"] = beta_version_modules(api, &version).await?;
+        }
+        Ok(item)
+    }
+    .await;
+    respond(context, result)
+}
+
+fn beta_version_item(
+    api: &crate::workers_http::WorkerApiState,
+    authority: &crate::cloudflare_v4::accounts::V4InstanceContext,
+    snapshot: &VersionSnapshot,
+) -> Result<serde_json::Value, V4Error> {
+    let version = &snapshot.version;
+    let mut item = serde_json::json!({
+        "id":version.id, "number":version.version_number, "urls":[],
+        "created_on":crate::cloudflare_v4::iso_timestamp(version.created_at_ms)?,
+        "source":"open-compute", "annotations":snapshot.annotations,
+        "compatibility_date":version.compatibility_date,
+        "compatibility_flags":version.compatibility_flags,
+        "bindings":super::super::projection::public_bindings(api, authority, snapshot)
+            .map_err(|error| V4Error::from(&error))?,
+        "limits":{"cpu_ms":version.resource_limits.cpu_ms,"subrequests":version.resource_limits.sub_requests}
+    });
+    if let Some(main) = &version.main_module {
+        item["main_module"] = serde_json::json!(main);
+    }
+    Ok(item)
+}
+
+async fn beta_version_modules(
+    api: &crate::workers_http::WorkerApiState,
+    version: &VersionRecord,
+) -> Result<serde_json::Value, V4Error> {
+    use base64::Engine as _;
+    let (digest, size) = match (
+        version.content_kind,
+        version.artifact_sha256,
+        version.artifact_size,
+    ) {
+        (VersionContentKind::AssetsOnly, None, None) => return Ok(serde_json::json!([])),
+        (VersionContentKind::Worker, Some(digest), Some(size)) => (digest, size),
+        _ => return Err(V4Error::IntegrityFailure),
+    };
+    let artifact = open_compute_artifacts::ArtifactRef::new(
+        open_compute_artifacts::ARTIFACT_KEY_VERSION,
+        &hex::encode(digest),
+        size,
+    )
+    .map_err(|error| V4Error::from(&error))?;
+    let bytes = api
+        .artifacts
+        .open(&artifact)
+        .await
+        .map_err(|error| V4Error::from(&error))?;
+    let bundle = open_compute_workers::CanonicalBundle::parse(bytes.to_vec(), api.bundle_limits)
+        .map_err(|error| V4Error::from(&error))?;
+    let modules = bundle
+        .manifest()
+        .modules
+        .iter()
+        .map(|module| {
+            let bytes = bundle
+                .module_bytes(module)
+                .map_err(|error| V4Error::from(&error))?;
+            Ok(serde_json::json!({"name":module.name,
+            "content_type":super::super::download::module_content_type(module.module_type),
+            "content_base64":base64::engine::general_purpose::STANDARD.encode(bytes)}))
+        })
+        .collect::<Result<Vec<_>, V4Error>>()?;
+    Ok(serde_json::json!(modules))
+}
+
+pub(super) async fn delete_beta_worker(
+    State(state): State<HttpState>,
+    Path((account, identifier)): Path<(String, String)>,
+    request: Request,
+) -> axum::response::Response {
+    let context = match authorize(&request, V4Permission::ProductWrite) {
+        Ok(value) => value,
+        Err(response) => return response.into_response(),
+    };
+    let resolved = (|| {
+        let instance = domain::resolve_instance(&state, &account)?;
+        let api = worker_api(&state)?;
+        let authority = state.v4_instance_context().ok_or(V4Error::Unavailable)?;
+        worker_by_identifier(
+            WorkerRepository::new(api.storage.db()),
+            authority,
+            instance,
+            &identifier,
+        )
+        .map_err(|error| V4Error::from(&error))
+    })();
+    match resolved {
+        Ok(worker) => {
+            super::super::mutations::delete_script(
+                State(state),
+                Path((account, worker.name)),
+                request,
+            )
+            .await
+        }
+        Err(error) => error_response(error, context.request_id()),
+    }
 }
 
 pub(super) async fn get_beta_worker(
@@ -191,7 +382,10 @@ fn resolve_version(
         .list_versions(account, worker)
         .map_err(|error| V4Error::from(&error))?;
     if requested == "latest" {
-        return versions.into_iter().next().ok_or(V4Error::NotFound);
+        return versions
+            .into_iter()
+            .find(|version| version.deleted_at_ms.is_none())
+            .ok_or(V4Error::NotFound);
     }
     if let Ok(id) = VersionId::from_str(requested) {
         return versions
@@ -226,259 +420,5 @@ fn deleted() -> axum::response::Response {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::body::Body;
-    use axum::http::{Request, StatusCode, header};
-    use open_compute_core::{RequestId, SecretString};
-    use open_compute_storage::worker_repository::{
-        NewVersion, NewVersionProducts, VersionContentKind, WorkerRepository,
-    };
-    use std::collections::BTreeMap;
-    use tower::ServiceExt as _;
-
-    fn ready_version(
-        repository: WorkerRepository<'_>,
-        account: open_compute_core::InstanceId,
-        worker: open_compute_core::WorkerId,
-        now: i64,
-    ) -> VersionId {
-        let id = VersionId::generate();
-        repository
-            .insert_staging_version(
-                &NewVersion {
-                    id,
-                    instance_id: account,
-                    worker_id: worker,
-                    content_kind: VersionContentKind::Worker,
-                    artifact_sha256: Some([1; 32]),
-                    artifact_size: Some(1),
-                    artifact_schema_version: Some(1),
-                    main_module: Some("index.js".to_owned()),
-                    worker_code_sha256: [2; 32],
-                    compatibility_date: "2026-09-08".to_owned(),
-                    compatibility_flags: Vec::new(),
-                    resource_limits:
-                        open_compute_storage::worker_repository::EffectiveResourceLimits::standard_defaults(),
-                    vars: BTreeMap::new(),
-                    secrets: BTreeMap::new(),
-                    request_id: RequestId::generate(),
-                    now_ms: now,
-                },
-                &NewVersionProducts::default(),
-                100,
-            )
-            .unwrap();
-        repository.begin_validation(id).unwrap();
-        repository.mark_ready(id, now + 1).unwrap();
-        id
-    }
-
-    #[tokio::test]
-    async fn beta_delete_tombstones_only_non_active_versions_and_replays() {
-        let (_temp, _mock, state, account, storage) =
-            crate::tests::initialized_worker_http_fixture().await;
-        let repository = WorkerRepository::new(storage.db());
-        let worker = repository
-            .create_worker(account, "versions", RequestId::generate(), 1, 100)
-            .unwrap()
-            .0;
-        let historical = ready_version(repository, account, worker.id, 2);
-        let active = ready_version(repository, account, worker.id, 4);
-        repository
-            .promote(account, worker.id, active, None, RequestId::generate(), 6)
-            .unwrap();
-        let authority = crate::cloudflare_v4::accounts::V4InstanceContext::new(account, 1);
-        let worker_tag = authority.public_worker_tag(worker.id);
-        let worker_path = format!(
-            "/client/v4/accounts/{}/workers/workers/versions",
-            authority.public_id()
-        );
-        let prefix = format!(
-            "/client/v4/accounts/{}/workers/workers/versions/versions/",
-            authority.public_id()
-        );
-        let app = crate::http::admin_router(
-            state
-                .with_platform_storage(storage.clone())
-                .with_v4_tokens(
-                    SecretString::new("deployer-token"),
-                    SecretString::new("read-token"),
-                )
-                .with_v4_instance_context(authority),
-        );
-        assert_eq!(
-            app.clone()
-                .oneshot(
-                    Request::builder()
-                        .uri(&worker_path)
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap()
-                .status(),
-            StatusCode::UNAUTHORIZED
-        );
-        assert_eq!(
-            app.clone()
-                .oneshot(
-                    Request::builder()
-                        .uri(format!("{worker_path}?unexpected=true"))
-                        .header(header::AUTHORIZATION, "Bearer read-token")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap()
-                .status(),
-            StatusCode::BAD_REQUEST
-        );
-        assert_eq!(
-            app.clone()
-                .oneshot(
-                    Request::builder()
-                        .uri(worker_path.replace("/versions", "/missing"))
-                        .header(header::AUTHORIZATION, "Bearer read-token")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap()
-                .status(),
-            StatusCode::NOT_FOUND
-        );
-        let response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri(worker_path)
-                    .header(header::AUTHORIZATION, "Bearer read-token")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let body: serde_json::Value =
-            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
-                .unwrap();
-        assert_eq!(body["result"]["id"], worker_tag);
-        assert_eq!(body["result"]["subdomain"]["enabled"], false);
-        let send = |version: VersionId| {
-            Request::builder()
-                .method("DELETE")
-                .uri(format!("{prefix}{version}"))
-                .header(header::AUTHORIZATION, "Bearer deployer-token")
-                .body(Body::empty())
-                .unwrap()
-        };
-        for request in [
-            Request::builder()
-                .method("DELETE")
-                .uri(format!("{prefix}{historical}"))
-                .body(Body::empty())
-                .unwrap(),
-            Request::builder()
-                .method("DELETE")
-                .uri(format!("{prefix}{historical}?unexpected=true"))
-                .header(header::AUTHORIZATION, "Bearer deployer-token")
-                .body(Body::empty())
-                .unwrap(),
-            Request::builder()
-                .method("DELETE")
-                .uri(format!("{prefix}{historical}"))
-                .header(header::AUTHORIZATION, "Bearer deployer-token")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::empty())
-                .unwrap(),
-            Request::builder()
-                .method("DELETE")
-                .uri(format!("{prefix}{historical}"))
-                .header(header::AUTHORIZATION, "Bearer deployer-token")
-                .body(Body::from("x"))
-                .unwrap(),
-        ] {
-            assert!(
-                app.clone()
-                    .oneshot(request)
-                    .await
-                    .unwrap()
-                    .status()
-                    .is_client_error()
-            );
-        }
-        for requested in ["bad", "deadbeef"] {
-            let response = app
-                .clone()
-                .oneshot(
-                    Request::builder()
-                        .method("DELETE")
-                        .uri(format!("{prefix}{requested}"))
-                        .header(header::AUTHORIZATION, "Bearer deployer-token")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert!(response.status().is_client_error());
-        }
-        assert_eq!(
-            app.clone().oneshot(send(active)).await.unwrap().status(),
-            StatusCode::CONFLICT
-        );
-        assert_eq!(
-            app.clone()
-                .oneshot(send(historical))
-                .await
-                .unwrap()
-                .status(),
-            StatusCode::OK
-        );
-        assert_eq!(
-            app.oneshot(send(historical)).await.unwrap().status(),
-            StatusCode::OK
-        );
-        assert_eq!(
-            repository
-                .list_versions(account, worker.id)
-                .unwrap()
-                .into_iter()
-                .find(|version| version.id == historical)
-                .unwrap()
-                .state,
-            VersionState::Tombstoned
-        );
-        assert_eq!(
-            resolve_version(repository, account, worker.id, "latest")
-                .unwrap()
-                .id,
-            active
-        );
-        let historical_text = historical.to_string();
-        let active_text = active.to_string();
-        assert_eq!(
-            resolve_version(repository, account, worker.id, &historical_text[..8]).unwrap_err(),
-            V4Error::Conflict
-        );
-        let unique_prefix_len = (historical_text
-            .bytes()
-            .zip(active_text.bytes())
-            .position(|(historical, active)| historical != active)
-            .unwrap()
-            + 1)
-        .max(8);
-        assert!(unique_prefix_len < historical_text.len());
-        assert_eq!(
-            resolve_version(
-                repository,
-                account,
-                worker.id,
-                &historical_text[..unique_prefix_len],
-            )
-            .unwrap()
-            .id,
-            historical
-        );
-    }
-}
+#[path = "versions_tests.rs"]
+mod tests;

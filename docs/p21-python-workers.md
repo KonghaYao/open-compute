@@ -242,8 +242,7 @@ uv run pywrangler dev
 uv run pywrangler deploy
 ```
 
-`pywrangler` 继续调用 Wrangler 的标准命令和 Cloudflare v4 endpoint。open-compute 不 fork CLI；只在需要选择 open-compute
-account/base URL 时提供与现有 Wrangler integration 相同的配置/launcher。所有 network package resolution 都发生在开发机，
+`pywrangler` 当前调用 Wrangler 的标准命令和 Cloudflare v4 endpoint，属于待资格的 Python 专项输入。P20 删除通用 Wrangler launcher；P21 必须先验证 Python 产物能由官方 cf 消费，再通过唯一 `ocd cf` 目标入口部署，不恢复旧 launcher。所有 network package resolution 都发生在开发机，
 上传物是完整、自包含、可做 digest 的 module set。
 
 qualification fixture 必须包含：

@@ -22,17 +22,23 @@ export default {
 } satisfies ExportedHandler<{ KV: KVNamespace }>;
 ```
 
-在 `wrangler.jsonc` 中绑定已存在的 namespace：
+在 `cloudflare.config.ts` 中绑定已存在的 namespace：
 
-```json
-{
-  "name": "kv-app",
-  "main": "src/index.ts",
-  "kv_namespaces": [{ "binding": "KV", "id": "<kv-namespace-id>" }]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "kv-app",
+    entrypoint: "src/index.ts",
+    env: {
+      KV: bindings.kv({ id: "<kv-namespace-id>" }),
+    },
+  },
+});
 ```
 
-`id` 必须指向 account 中已有的 namespace。语法见[绑定](/zh/docs/workers/configuration/bindings/)。namespace 与 value 操作使用固定 Wrangler 或官方 SDK。
+`id` 必须指向 account 中已有的 namespace。语法见[绑定](/zh/docs/workers/configuration/bindings/)。namespace 与 value 操作使用固定 cf 或官方 SDK。
 
 ## 兼容性
 

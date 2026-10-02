@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "types": [],
+    "lib": ["ES2024"]
+  },
+  "include": [
+    "worker/**/*.ts",
+    "app/api/env/route.ts",
+    ".cloudflare/types/**/*.d.ts"
+  ]
+}

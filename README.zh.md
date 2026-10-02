@@ -111,7 +111,7 @@ open-compute 补上了这一层，并把它交付为一个文件。
 | Cloudflare v4 API            | █████████░ 90% — 本地 `/client/v4` 可与 Wrangler 及官方 SDK 配合使用 |
 | Wrangler                     | █████████▉ 99% ✅ — Wrangler `4.143.0` 可部署和管理已支持产品        |
 | Dashboard                    | ████████░░ 80% — 基于同一套 `/client/v4` API 的 operator UI          |
-| Workers Logs / realtime tail | █████████░ 90% — 单机 logs、query、`wrangler tail` 与 live tail      |
+| Workers Logs / realtime tail | █████████░ 90% — 单机 logs、query、Dashboard Live Tail               |
 
 ### 部分支持
 
@@ -175,12 +175,13 @@ curl -fsSL https://open-compute.dev/install.sh | sudo sh
 sudo ocd setup --system --yes
 ```
 
-Wrangler 继续作为 Worker 项目的本地 dependency。本地开发直接使用 Wrangler，部署到 open-compute 时使用 `ocd wrangler`：
+应用使用 `cloudflare.config.ts` 和官方 cf + Vite 插件 v2，由 Node.js 22.18+ 执行 cf，`ocd cf` 选择部署目标。内部 CI 固定 cf 1.0.0-beta.12；用户的非 1.0.x 版本仅警告：
 
 ```sh
-npm install --save-dev wrangler@4.143.0
-npx wrangler dev
-ocd wrangler deploy
+npm install --save-dev cf@1.0.0-beta.12 @cloudflare/vite-plugin@beta vite typescript
+npm run dev
+npm run build
+ocd cf deploy --prebuilt --mode production
 ```
 
 生产环境仍然只需要**一个发布二进制和一个共享 daemon**，每个 instance 显式拥有自己的配置与数据目录。runtime payload 已内嵌并经过校验；daemon 启动时不会下载 workerd，也不会在 `PATH` 中查找它。

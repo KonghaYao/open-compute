@@ -80,9 +80,9 @@ CARGO_TARGETS = {
     # Coverage instrumentation makes this real-workerd/search/provider matrix
     # contend with other process-heavy Gates and produce spurious backend failures.
     'p5-search': ('open-compute-service', 'p5_search_gate', True),
-    'p6-wrangler-resources': ('open-compute-service', 'p6_wrangler_resource_gate', False),
+    'p6-cf-resources': ('open-compute-service', 'p6_cf_resource_gate', False),
     'p6-cloudflare-sdk': ('open-compute-service', 'cloudflare_sdk_gate', False),
-    'p12-wrangler': ('open-compute-service', 'p12_wrangler_workflow', False),
+    'p20-cf-cli': ('open-compute-service', 'p20_cf_cli', False),
     # Finish independent work together before the remaining exclusive barriers.
     'workflow-product': ('open-compute-service', 'workflow_product_gate', True),
     'runtime': ('open-compute-runtime', 'supervisor', True),
@@ -334,7 +334,7 @@ def resolve_targets(selected, workspace):
                 (
                     'PATH', 'HOME', 'OPEN_COMPUTE_CF_MUTATION_ACK',
                     'OPEN_COMPUTE_CF_ACCOUNT_ID', 'OPEN_COMPUTE_CF_ACCOUNT_ALIAS',
-                    'OPEN_COMPUTE_CF_WRANGLER', 'CLOUDFLARE_API_TOKEN',
+                    'OPEN_COMPUTE_CF_CLI', 'CLOUDFLARE_API_TOKEN',
                     'OPEN_COMPUTE_ENDPOINT', 'OPEN_COMPUTE_ACCOUNT_ID',
                     'OPEN_COMPUTE_ADMIN_TOKEN',
                 ),
@@ -585,12 +585,11 @@ def execute_target(name, executable, directory, target, *, list_only=False):
     if isinstance(target, TypedTarget):
         env = {key: os.environ[key] for key in target.env_allowlist if key in os.environ}
         env.update(TMPDIR=str(temporary), TMP=str(temporary), TEMP=str(temporary))
-        # Bun and Node otherwise materialize caches under the isolated TMPDIR,
-        # which is a harness leak even for read-only discovery and contract checks.
-        env['BUN_RUNTIME_TRANSPILER_CACHE_PATH'] = '0'
-        env['NODE_DISABLE_COMPILE_CACHE'] = '1'
     else:
         env = dict(os.environ, TMPDIR=str(temporary), TMP=str(temporary), TEMP=str(temporary))
+    # Native tests also spawn cf/Bun. Their compile caches must not leak into TMPDIR.
+    env['BUN_RUNTIME_TRANSPILER_CACHE_PATH'] = '0'
+    env['NODE_DISABLE_COMPILE_CACHE'] = '1'
     if name == 'p5-search':
         env.setdefault('OPEN_COMPUTE_TEST_EMBEDDING_API_KEY', 'fixture-secret')
     # Repetition belongs only to this runner, including when a test spawns its own fixture.

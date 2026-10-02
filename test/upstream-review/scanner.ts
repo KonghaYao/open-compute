@@ -1,6 +1,6 @@
 // Cloudflare upstream refresh scanner: read-only discovery and three-way
 // classification of the OpenAPI snapshot, official TypeScript SDK, and
-// Wrangler identities against the repository pin.
+// Cf identities against the repository pin.
 //
 // The scanner is shared by local review and the scheduled workflow. It only
 // ever writes downloads and reports under `.temp/upstream-review/`, never
@@ -8,11 +8,21 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanOfficialPackage } from "../../packages/sdk/scripts/sdk-scan.ts";
-import { buildSubset } from "../conformance/p6-contract.mjs";
+import {
+  buildSubset,
+  officialCfSchema,
+  prettierJson,
+} from "../conformance/p6-contract.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const REVIEW_ROOT = resolve(REPO_ROOT, ".temp/upstream-review");
@@ -38,7 +48,7 @@ export interface NpmIdentity {
   npmIntegrity: string;
 }
 
-export interface WranglerEvidence {
+export interface CfEvidence {
   packageSha256: string;
   packageJsonSha256: string;
   configSchemaSha256: string;
@@ -57,14 +67,14 @@ export interface UpstreamReport {
     openapiRevision: string;
     openapiSha256: string;
     cloudflareSdkVersion: string;
-    wranglerVersion: string;
+    cfVersion: string;
   };
   candidate: {
     openapiRevision: string | null;
     openapiSha256: string | null;
     cloudflareSdk: NpmIdentity | null;
-    wrangler: NpmIdentity | null;
-    wranglerEvidence: WranglerEvidence | null;
+    cf: NpmIdentity | null;
+    cfEvidence: CfEvidence | null;
   };
   selectedOperations: number;
   changedOperations: string[];
@@ -79,12 +89,12 @@ export interface ScanInput {
     openapiRevision: string;
     openapiSha256: string;
     cloudflareSdkVersion: string;
-    wranglerVersion: string;
+    cfVersion: string;
   };
   candidateSchema: { revision: string; bytes: Buffer };
   candidateCloudflare: NpmIdentity;
-  candidateWrangler: NpmIdentity;
-  candidateWranglerEvidence: WranglerEvidence;
+  candidateCf: NpmIdentity;
+  candidateCfEvidence: CfEvidence;
   /**
    * (METHOD normalized-path) routes implemented by the candidate official
    * SDK, extracted statically from its published resources.
@@ -180,16 +190,15 @@ export function classify(input: ScanInput): UpstreamReport {
     removedOperations.length > 0;
   const sdkChanged =
     input.candidateCloudflare.version !== input.baseline.cloudflareSdkVersion;
-  const wranglerChanged =
-    input.candidateWrangler.version !== input.baseline.wranglerVersion;
-  const wranglerBreaking = [
-    ...input.candidateWranglerEvidence.missingConfigFields.map(
+  const cfChanged = input.candidateCf.version !== input.baseline.cfVersion;
+  const cfBreaking = [
+    ...input.candidateCfEvidence.missingConfigFields.map(
       (field) => `config field ${field}`,
     ),
-    ...input.candidateWranglerEvidence.missingBindings.map(
+    ...input.candidateCfEvidence.missingBindings.map(
       (binding) => `binding ${binding}`,
     ),
-    ...input.candidateWranglerEvidence.missingCommands.map(
+    ...input.candidateCfEvidence.missingCommands.map(
       (command) => `command ${command}`,
     ),
   ];
@@ -200,7 +209,7 @@ export function classify(input: ScanInput): UpstreamReport {
   if (
     !schemaChanged &&
     !sdkChanged &&
-    !wranglerChanged &&
+    !cfChanged &&
     unmappedOperations.length === 0
   ) {
     classification = "unchanged";
@@ -216,9 +225,9 @@ export function classify(input: ScanInput): UpstreamReport {
       `the candidate official SDK no longer implements mapped operations: ${lostOperations.join(", ")}`,
     );
     classification = "breaking";
-  } else if (wranglerBreaking.length > 0) {
+  } else if (cfBreaking.length > 0) {
     reasons.push(
-      `the candidate Wrangler removed selected surface: ${wranglerBreaking.join(", ")}`,
+      `the candidate Cf removed selected surface: ${cfBreaking.join(", ")}`,
     );
     classification = "breaking";
   } else {
@@ -227,11 +236,11 @@ export function classify(input: ScanInput): UpstreamReport {
         "manifest-excluded operations remain unimplemented by the candidate official SDK; the exclusion stays authoritative",
       );
     }
-    if (input.candidateWranglerEvidence.unknownDifferences.length > 0) {
+    if (input.candidateCfEvidence.unknownDifferences.length > 0) {
       reasons.push(
-        `candidate Wrangler evidence could not be interpreted: ${input.candidateWranglerEvidence.unknownDifferences.join(", ")}`,
+        `candidate Cf evidence could not be interpreted: ${input.candidateCfEvidence.unknownDifferences.join(", ")}`,
       );
-      waitingOn.push("Wrangler selected-surface review");
+      waitingOn.push("Cf selected-surface review");
       classification = "blocked";
     } else if (schemaChanged && !sdkChanged && routesMoved) {
       reasons.push(
@@ -250,9 +259,9 @@ export function classify(input: ScanInput): UpstreamReport {
           `official SDK candidate ${input.candidateCloudflare.version} implements the selected contract closure`,
         );
       }
-      if (wranglerChanged) {
+      if (cfChanged) {
         reasons.push(
-          `Wrangler candidate ${input.candidateWrangler.version} preserves the selected config, binding, and command surface`,
+          `Cf candidate ${input.candidateCf.version} preserves the selected config, binding, and command surface`,
         );
       }
       classification = "ready";
@@ -267,14 +276,14 @@ export function classify(input: ScanInput): UpstreamReport {
       openapiRevision: input.baseline.openapiRevision,
       openapiSha256: input.baseline.openapiSha256,
       cloudflareSdkVersion: input.baseline.cloudflareSdkVersion,
-      wranglerVersion: input.baseline.wranglerVersion,
+      cfVersion: input.baseline.cfVersion,
     },
     candidate: {
       openapiRevision: input.candidateSchema.revision,
       openapiSha256: sha256Hex(input.candidateSchema.bytes),
       cloudflareSdk: input.candidateCloudflare,
-      wrangler: input.candidateWrangler,
-      wranglerEvidence: input.candidateWranglerEvidence,
+      cf: input.candidateCf,
+      cfEvidence: input.candidateCfEvidence,
     },
     selectedOperations: input.selectedOperations.length,
     changedOperations,
@@ -289,7 +298,7 @@ interface LockBaseline {
   revision: string;
   sha256: string;
   cloudflareSdk: { version: string };
-  wrangler: { version: string; packageSha256: string };
+  cf: { version: string; packageSha256: string };
 }
 
 interface ExtractedPackage {
@@ -423,51 +432,77 @@ async function candidateSdkRoutesFor(
   return routes;
 }
 
-function wranglerEvidence(root: string): WranglerEvidence {
+function cfEvidence(root: string): CfEvidence {
   const source = JSON.parse(readFileSync(CAPABILITY_SOURCE_PATH, "utf8")) as {
-    wrangler: {
+    cf: {
       supportedFields: string[];
       supportedBindings: string[];
       supportedCommands: string[];
     };
   };
   const packageBytes = readFileSync(join(root, "package.json"));
-  const configBytes = readFileSync(join(root, "config-schema.json"));
-  const cliBytes = readFileSync(join(root, "wrangler-dist/cli.js"));
-  const schema = JSON.parse(configBytes.toString("utf8")) as {
-    definitions?: { RawConfig?: { properties?: Record<string, unknown> } };
-  };
-  const properties = schema.definitions?.RawConfig?.properties;
-  const cli = cliBytes.toString("utf8");
+  const cliBytes = readFileSync(join(root, "dist/index.mjs"));
+  let schema: { properties?: Record<string, unknown> } | undefined;
+  let configBytes: Buffer = Buffer.alloc(0);
+  const unknownDifferences: string[] = [];
+  try {
+    schema = officialCfSchema(root);
+    configBytes = Buffer.from(
+      prettierJson(`${JSON.stringify(schema, null, 2)}\n`),
+    );
+  } catch {
+    unknownDifferences.push(
+      "candidate cf/config dependencies are unavailable; install the exact candidate and qualify the P20 workflow before applying it",
+    );
+  }
+  const cli = readdirSync(join(root, "dist"))
+    .filter((name) => name.endsWith(".mjs"))
+    .map((name) => readFileSync(join(root, "dist", name), "utf8"))
+    .join("\n");
+  const missingCommands: string[] = [];
+  if (schema !== undefined) {
+    for (const command of source.cf.supportedCommands) {
+      const result = spawnSync(
+        "node",
+        [join(root, "bin/cf"), ...command.split(" "), "--help"],
+        {
+          encoding: "utf8",
+          timeout: 10_000,
+          env: {
+            ...process.env,
+            CF_SEND_TELEMETRY: "false",
+            DO_NOT_TRACK: "1",
+          },
+        },
+      );
+      if (result.status !== 0 || !result.stdout.includes(`cf ${command}`))
+        missingCommands.push(command);
+    }
+  }
   return {
     packageSha256: "",
     packageJsonSha256: sha256Hex(packageBytes),
     configSchemaSha256: sha256Hex(configBytes),
     cliSha256: sha256Hex(cliBytes),
     missingConfigFields:
-      properties === undefined
+      schema === undefined
         ? []
-        : source.wrangler.supportedFields.filter(
-            (field) => properties[field] === undefined,
+        : source.cf.supportedFields.filter(
+            (field) => schema.properties?.[field] === undefined,
           ),
-    missingBindings: source.wrangler.supportedBindings.filter(
-      (binding) => !cli.includes(`"${binding}"`),
+    missingBindings: source.cf.supportedBindings.filter(
+      (binding) => !cli.includes(binding),
     ),
-    missingCommands: source.wrangler.supportedCommands.filter(
-      (command) => !cli.includes(`command: "wrangler ${command}"`),
-    ),
-    unknownDifferences:
-      properties === undefined
-        ? ["config schema has no RawConfig properties"]
-        : [],
+    missingCommands,
+    unknownDifferences,
   };
 }
 
 function summarize(report: UpstreamReport): string {
   const lines = [
     `classification: ${report.classification}`,
-    `baseline openapi ${report.baseline.openapiRevision.slice(0, 12)} sdk ${report.baseline.cloudflareSdkVersion} wrangler ${report.baseline.wranglerVersion}`,
-    `candidate openapi ${report.candidate.openapiRevision?.slice(0, 12) ?? "-"} sdk ${report.candidate.cloudflareSdk?.version ?? "-"} wrangler ${report.candidate.wrangler?.version ?? "-"}`,
+    `baseline openapi ${report.baseline.openapiRevision.slice(0, 12)} sdk ${report.baseline.cloudflareSdkVersion} cf ${report.baseline.cfVersion}`,
+    `candidate openapi ${report.candidate.openapiRevision?.slice(0, 12) ?? "-"} sdk ${report.candidate.cloudflareSdk?.version ?? "-"} cf ${report.candidate.cf?.version ?? "-"}`,
     `selected operations: ${report.selectedOperations}`,
     `changed operations (${report.changedOperations.length}): ${report.changedOperations.slice(0, 20).join(", ")}`,
     `removed operations (${report.removedOperations.length})`,
@@ -490,33 +525,24 @@ async function main(): Promise<void> {
   };
   const revision = headRevision();
   const candidateSchemaBytes = await downloadSchema(revision);
-  const [cloudflare, wrangler] = await Promise.all([
+  const [cloudflare, cf] = await Promise.all([
     npmIdentity("cloudflare"),
-    npmIdentity("wrangler"),
+    npmIdentity("cf"),
   ]);
   const sdkRoutes = await candidateSdkRoutesFor(cloudflare);
-  const baselineWrangler = baseline.wrangler;
-  const wranglerPackage =
-    wrangler.version === baselineWrangler.version
+  const baselineCf = baseline.cf;
+  const cfPackage =
+    cf.version === baselineCf.version
       ? {
-          root: resolve(REPO_ROOT, "packages/toolchain/node_modules/wrangler"),
-          packageSha256: baselineWrangler.packageSha256,
+          root: resolve(REPO_ROOT, "node_modules/cf"),
+          packageSha256: baselineCf.packageSha256,
           packageJsonSha256: sha256Hex(
-            readFileSync(
-              resolve(
-                REPO_ROOT,
-                "packages/toolchain/node_modules/wrangler/package.json",
-              ),
-            ),
+            readFileSync(resolve(REPO_ROOT, "node_modules/cf/package.json")),
           ),
         }
-      : await extractCandidatePackage(
-          "wrangler",
-          wrangler,
-          "candidate-wrangler",
-        );
-  const candidateWranglerEvidence = wranglerEvidence(wranglerPackage.root);
-  candidateWranglerEvidence.packageSha256 = wranglerPackage.packageSha256;
+      : await extractCandidatePackage("cf", cf, "candidate-cf");
+  const candidateCfEvidence = cfEvidence(cfPackage.root);
+  candidateCfEvidence.packageSha256 = cfPackage.packageSha256;
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, "utf8"));
   const surface = JSON.parse(
     readFileSync(join(REPO_ROOT, "packages/sdk/surface.json"), "utf8"),
@@ -526,12 +552,12 @@ async function main(): Promise<void> {
       openapiRevision: baseline.revision,
       openapiSha256: baseline.sha256,
       cloudflareSdkVersion: baseline.cloudflareSdk.version,
-      wranglerVersion: baseline.wrangler.version,
+      cfVersion: baseline.cf.version,
     },
     candidateSchema: { revision, bytes: candidateSchemaBytes },
     candidateCloudflare: cloudflare,
-    candidateWrangler: wrangler,
-    candidateWranglerEvidence,
+    candidateCf: cf,
+    candidateCfEvidence,
     candidateSdkRoutes: sdkRoutes,
     manifest,
     sdkExcludedOperations: selections.excluded,

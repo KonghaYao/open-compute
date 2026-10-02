@@ -10,7 +10,6 @@ FRONTEND_ROOTS = {
     "sdk": "packages/sdk/",
     "dashboard": "apps/dashboard/",
     "website": "apps/website/",
-    "toolchain": "packages/toolchain/",
 }
 
 RELEASE_TOOLING = {

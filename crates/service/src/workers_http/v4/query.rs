@@ -69,7 +69,10 @@ pub(super) fn queue_consumers(query: Option<&str>) -> Result<QueueConsumerListQu
     Ok(result)
 }
 
-pub(super) fn version_list(query: Option<&str>) -> Result<VersionListQuery, V4Error> {
+pub(super) fn version_list(
+    query: Option<&str>,
+    allow_deployable: bool,
+) -> Result<VersionListQuery, V4Error> {
     let mut result = VersionListQuery {
         deployable: false,
         page: 1,
@@ -81,7 +84,7 @@ pub(super) fn version_list(query: Option<&str>) -> Result<VersionListQuery, V4Er
             return Err(V4Error::InvalidRequest);
         }
         match key.as_ref() {
-            "deployable" if matches!(value.as_ref(), "true" | "false") => {
+            "deployable" if allow_deployable && matches!(value.as_ref(), "true" | "false") => {
                 result.deployable = value == "true";
             }
             "page" => {

@@ -30,17 +30,23 @@ export default {
 } satisfies ExportedHandler<{ KV: KVNamespace }>;
 ```
 
-Bind an existing namespace with Wrangler's standard KV field:
+Bind an existing namespace with cf's standard KV field:
 
-```json
-{
-  "name": "kv-app",
-  "main": "src/index.ts",
-  "kv_namespaces": [{ "binding": "KV", "id": "<kv-namespace-id>" }]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "kv-app",
+    entrypoint: "src/index.ts",
+    env: {
+      KV: bindings.kv({ id: "<kv-namespace-id>" }),
+    },
+  },
+});
 ```
 
-`id` is an existing namespace in the account. Binding grammar: [Workers configuration · bindings](/docs/workers/configuration/bindings/). Use pinned Wrangler or the official SDK for namespace and value operations.
+`id` is an existing namespace in the account. Binding grammar: [Workers configuration · bindings](/docs/workers/configuration/bindings/). Use pinned cf or the official SDK for namespace and value operations.
 
 ## Compatibility
 

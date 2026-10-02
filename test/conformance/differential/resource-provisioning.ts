@@ -27,19 +27,19 @@ export async function provisionResources(
   configs: DifferentialConfigs,
   context: DifferentialContext,
 ): Promise<void> {
-  const { wrangler, cloudflareEnv, openComputeEnv, journalPath } = context;
+  const { cf, cloudflareEnv, openComputeEnv, journalPath } = context;
   for (const workflow of resources.workflows) {
     await ensureWorkflowAbsent(
       workflow.name,
       configs.cloudflarePreflight,
-      wrangler,
+      cf,
       cloudflareEnv,
     );
     workflow.cloudflareAbsent = true;
     await ensureWorkflowAbsent(
       workflow.name,
       configs.openComputePreflight,
-      wrangler,
+      cf,
       openComputeEnv,
     );
     workflow.openComputeAbsent = true;
@@ -48,14 +48,14 @@ export async function provisionResources(
     await ensureCloudflareKvAbsent(
       namespace.name,
       configs.cloudflarePreflight,
-      wrangler,
+      cf,
       cloudflareEnv,
     );
     namespace.cloudflareAbsent = true;
     await ensureCloudflareKvAbsent(
       namespace.name,
       configs.openComputePreflight,
-      wrangler,
+      cf,
       openComputeEnv,
     );
     namespace.openComputeAbsent = true;
@@ -63,7 +63,7 @@ export async function provisionResources(
     namespace.cloudflareId = await createCloudflareKv(
       namespace.name,
       configs.cloudflarePreflight,
-      wrangler,
+      cf,
       cloudflareEnv,
     );
     await recordOwnership(journalPath, {
@@ -77,7 +77,7 @@ export async function provisionResources(
     namespace.openComputeId = await createCloudflareKv(
       namespace.name,
       configs.openComputePreflight,
-      wrangler,
+      cf,
       openComputeEnv,
     );
     await recordOwnership(journalPath, {
@@ -92,14 +92,14 @@ export async function provisionResources(
     await ensureCloudflareD1Absent(
       database.name,
       configs.cloudflarePreflight,
-      wrangler,
+      cf,
       cloudflareEnv,
     );
     database.cloudflareAbsent = true;
     await ensureCloudflareD1Absent(
       database.name,
       configs.openComputePreflight,
-      wrangler,
+      cf,
       openComputeEnv,
     );
     database.openComputeAbsent = true;
@@ -107,7 +107,7 @@ export async function provisionResources(
     database.cloudflareId = await createCloudflareD1(
       database.name,
       configs.cloudflarePreflight,
-      wrangler,
+      cf,
       cloudflareEnv,
     );
     await recordOwnership(journalPath, {
@@ -121,7 +121,7 @@ export async function provisionResources(
     database.openComputeId = await createCloudflareD1(
       database.name,
       configs.openComputePreflight,
-      wrangler,
+      cf,
       openComputeEnv,
     );
     await recordOwnership(journalPath, {
@@ -136,14 +136,14 @@ export async function provisionResources(
     await ensureCloudflareR2Absent(
       bucket.name,
       configs.cloudflarePreflight,
-      wrangler,
+      cf,
       cloudflareEnv,
     );
     bucket.cloudflareAbsent = true;
     await ensureCloudflareR2Absent(
       bucket.name,
       configs.openComputePreflight,
-      wrangler,
+      cf,
       openComputeEnv,
     );
     bucket.openComputeAbsent = true;
@@ -151,7 +151,7 @@ export async function provisionResources(
     await createCloudflareR2(
       bucket.name,
       configs.cloudflarePreflight,
-      wrangler,
+      cf,
       cloudflareEnv,
     );
     await recordOwnership(journalPath, {
@@ -164,7 +164,7 @@ export async function provisionResources(
     await createCloudflareR2(
       bucket.name,
       configs.openComputePreflight,
-      wrangler,
+      cf,
       openComputeEnv,
     );
     await recordOwnership(journalPath, {
@@ -178,14 +178,14 @@ export async function provisionResources(
     await ensureQueueAbsent(
       queue.name,
       configs.cloudflarePreflight,
-      wrangler,
+      cf,
       cloudflareEnv,
     );
     queue.cloudflareAbsent = true;
     await ensureQueueAbsent(
       queue.name,
       configs.openComputePreflight,
-      wrangler,
+      cf,
       openComputeEnv,
     );
     queue.openComputeAbsent = true;
@@ -193,7 +193,7 @@ export async function provisionResources(
     await createQueue(
       queue.name,
       configs.cloudflarePreflight,
-      wrangler,
+      cf,
       cloudflareEnv,
     );
     await recordOwnership(journalPath, {
@@ -206,7 +206,7 @@ export async function provisionResources(
     await createQueue(
       queue.name,
       configs.openComputePreflight,
-      wrangler,
+      cf,
       openComputeEnv,
     );
     await recordOwnership(journalPath, {

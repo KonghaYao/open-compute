@@ -13,13 +13,19 @@ export default {
 } satisfies ExportedHandler<Env>;
 ```
 
-```json
-{
-  "name": "front",
-  "main": "src/index.ts",
-  "services": [{ "binding": "AUTH", "service": "auth-worker" }],
-  "version_metadata": { "binding": "VERSION", "tag": "release-1" }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "front",
+    entrypoint: "src/index.ts",
+    env: {
+      AUTH: bindings.worker({ worker: "auth-worker" }),
+      VERSION: bindings.versionMetadata(),
+    },
+  },
+});
 ```
 
 Service Binding：默认/具名 `fetch` 和 RPC。目标是同 instance、可解析的唯一 Worker 名、operator 配置的[扩展](/zh/docs/extension/) slug，或固定[私网 HTTP target](/zh/docs/ocd/configuration/)；部署时冻结 target identity 与 policy revision。可选 `entrypoint`。私网 HTTP target 只暴露 `fetch`。没有新的公开 Binding 类型。

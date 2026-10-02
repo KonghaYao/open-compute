@@ -3,7 +3,7 @@
   "managementApi": {
     "authority": "openapi/p6-capability.json",
     "status": "planned",
-    "routeCount": 211,
+    "routeCount": 214,
     "legacyRouteCount": 4,
     "deviations": [
       "OC-ACCOUNT-SUBDOMAIN-001",
@@ -12,14 +12,6 @@
       "OC-AI-SEARCH-TOKEN-001",
       "OC-OBSERVABILITY-001"
     ]
-  },
-  "wrangler": {
-    "authority": "openapi/p6-capability.json",
-    "version": "4.143.0",
-    "status": "planned",
-    "fieldCount": 95,
-    "bindingCount": 30,
-    "commandCount": 71
   },
   "contracts": [
     {
@@ -68,11 +60,11 @@
         }
       ],
       "positiveCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart",
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart",
         "p3-cf-diff::workers/portable/dynamic-loader"
       ],
       "negativeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart",
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart",
         "p3-cf-diff::workers/portable/dynamic-loader"
       ],
       "deviations": ["OC-WKR-LIMIT-001"]
@@ -578,7 +570,9 @@
         }
       ],
       "positiveCases": [],
-      "negativeCases": ["p3-contract::unsupported-config-rejection"],
+      "negativeCases": [
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
+      ],
       "deviations": [],
       "forbiddenTypes": [
         "AnalyticsEngineDataset",
@@ -611,10 +605,10 @@
         }
       ],
       "positiveCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "negativeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": ["OC-ARTIFACTS-001"]
     }
@@ -3199,7 +3193,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": ["OC-WKR-LIMIT-001"]
     },
@@ -3210,7 +3204,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": ["OC-WKR-LIMIT-001"]
     },
@@ -3221,7 +3215,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3232,7 +3226,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3243,7 +3237,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3254,7 +3248,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3265,7 +3259,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3276,7 +3270,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3287,7 +3281,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3305,7 +3299,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3316,7 +3310,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3327,7 +3321,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3338,7 +3332,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3350,7 +3344,7 @@
       ],
       "runtimeCases": [
         "p0-2::resource_limits_recovery::w2_resource_limits_protect_neighbors_and_recover_a_wedged_generation",
-        "p6-wrangler-resources::w2_wrangler_limits_settings_clone_and_restart"
+        "p6-cf-resources::w2_cf_limits_settings_clone_and_restart"
       ]
     },
     {
@@ -3360,7 +3354,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3371,7 +3365,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3389,7 +3383,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3400,7 +3394,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": ["OC-WKR-LIMIT-001"]
     },
@@ -3411,7 +3405,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": ["OC-WKR-LIMIT-001"]
     },
@@ -3423,7 +3417,7 @@
       ],
       "runtimeCases": [
         "p0-2::resource_limits_recovery::w2_resource_limits_protect_neighbors_and_recover_a_wedged_generation",
-        "p6-wrangler-resources::w2_wrangler_limits_settings_clone_and_restart"
+        "p6-cf-resources::w2_cf_limits_settings_clone_and_restart"
       ]
     },
     {
@@ -3433,7 +3427,7 @@
         "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
       ],
       "runtimeCases": [
-        "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+        "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
       ],
       "deviations": []
     },
@@ -3445,7 +3439,7 @@
       ],
       "runtimeCases": [
         "p0-2::resource_limits_recovery::w2_resource_limits_protect_neighbors_and_recover_a_wedged_generation",
-        "p6-wrangler-resources::w2_wrangler_limits_settings_clone_and_restart"
+        "p6-cf-resources::w2_cf_limits_settings_clone_and_restart"
       ]
     },
     {
@@ -3456,7 +3450,7 @@
       ],
       "runtimeCases": [
         "p0-2::resource_limits_recovery::w2_resource_limits_protect_neighbors_and_recover_a_wedged_generation",
-        "p6-wrangler-resources::w2_wrangler_limits_settings_clone_and_restart"
+        "p6-cf-resources::w2_cf_limits_settings_clone_and_restart"
       ]
     },
     {
@@ -30621,7 +30615,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30630,7 +30624,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30639,7 +30633,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30648,7 +30642,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30657,7 +30651,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30666,7 +30660,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30675,7 +30669,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30684,7 +30678,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30693,7 +30687,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30702,7 +30696,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30711,7 +30705,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30720,7 +30714,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30729,7 +30723,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30738,7 +30732,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30747,7 +30741,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30756,7 +30750,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30765,7 +30759,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30774,7 +30768,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30783,7 +30777,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30792,7 +30786,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30801,7 +30795,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30810,7 +30804,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30819,7 +30813,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30828,7 +30822,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30837,7 +30831,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30846,7 +30840,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30855,7 +30849,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30864,7 +30858,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30873,7 +30867,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30882,7 +30876,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30891,7 +30885,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30900,7 +30894,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30909,7 +30903,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30918,7 +30912,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30927,7 +30921,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30936,7 +30930,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30945,7 +30939,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30954,7 +30948,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30963,7 +30957,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30972,7 +30966,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30981,7 +30975,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30990,7 +30984,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -30999,7 +30993,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -31008,7 +31002,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -31017,7 +31011,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -31026,7 +31020,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -31035,7 +31029,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -31044,7 +31038,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -31053,7 +31047,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -31062,7 +31056,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -31071,7 +31065,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -31080,7 +31074,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     },
@@ -31089,7 +31083,7 @@
       "status": "supported",
       "compileCases": ["ts::test/conformance/fixtures/artifacts-surface.ts"],
       "runtimeCases": [
-        "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+        "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
       ],
       "deviations": []
     }
@@ -31103,5 +31097,13 @@
       ],
       "reason": "The public P1 subset does not grant experimental trust or accept non-empty streaming tails. Upstream public declarations remain intact; these options are not claimed as supported."
     }
-  ]
+  ],
+  "cf": {
+    "authority": "openapi/p6-capability.json",
+    "version": "1.0.0-beta.12",
+    "status": "planned",
+    "fieldCount": 23,
+    "bindingCount": 30,
+    "commandCount": 36
+  }
 }

@@ -111,7 +111,7 @@ Write standard module workers (`export default { fetch }`) with the bindings you
 | Cloudflare v4 API            | █████████░ 90% — local `/client/v4` works with Wrangler and the official SDK      |
 | Wrangler                     | █████████▉ 99% ✅ — Wrangler `4.143.0` deploys and manages the supported products |
 | Dashboard                    | ████████░░ 80% — operator UI built on the same `/client/v4` API                   |
-| Workers Logs / realtime tail | █████████░ 90% — logs, queries, `wrangler tail`, and live tail on one node        |
+| Workers Logs / realtime tail | █████████░ 90% — logs, queries, Dashboard Live Tail on one node                   |
 
 ### Partial
 
@@ -175,12 +175,13 @@ curl -fsSL https://open-compute.dev/install.sh | sudo sh
 sudo ocd setup --system --yes
 ```
 
-In a normal Worker project, keep Wrangler project-local for development and use `ocd wrangler` for a real open-compute target:
+Use `cloudflare.config.ts` and the official cf + Vite plugin v2 workflow. Node.js 22.18+ runs cf; `ocd cf` selects the deployment target. CI pins cf 1.0.0-beta.12; user versions outside 1.0.x only warn:
 
 ```sh
-npm install --save-dev wrangler@4.143.0
-npx wrangler dev
-ocd wrangler deploy
+npm install --save-dev cf@1.0.0-beta.12 @cloudflare/vite-plugin@beta vite typescript
+npm run dev
+npm run build
+ocd cf deploy --prebuilt --mode production
 ```
 
 Production remains **one release executable and one shared daemon**, with explicit per-instance configuration and data directories. Runtime payloads are embedded and verified; daemon startup does not download or search `PATH` for workerd.

@@ -10,7 +10,7 @@
 
 ## 已转交或撤销的方向
 
-原 `wrangler.toml` 项目输入与 Wrangler transport 待办撤销，由 [P20：Cloudflare CLI 单轨迁移与官方应用构建链](p20-cf-cli-migration.md) 统一接管。OCD 不实现旧项目兼容层；检测旧配置后提示用户显式运行官方 `cf migrate --bundler vite`。
+原 `wrangler.toml` 项目输入与 Wrangler transport 待办撤销，由 [P20：Cloudflare CLI 单轨迁移与官方应用构建链](implemented/p20-cf-cli-migration.md) 统一接管。OCD 不实现旧项目兼容层；检测旧配置后提示用户显式运行官方 `cf migrate --bundler vite`。
 
 上面的 `.env` 待办只针对 instance 配置，不是应用项目 dotenv；应用配置与 CLI 凭据文件规则由官方 cf 负责，见 P20。
 

@@ -13,7 +13,7 @@ interface LockAuthority {
   schemaVersion: number;
   revision: string;
   sha256: string;
-  wrangler: { version: string };
+  cf: { version: string };
   cloudflareSdk: {
     version: string;
     npmIntegrity: string;

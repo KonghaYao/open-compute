@@ -22,17 +22,23 @@ export default {
 } satisfies ExportedHandler<{ IMAGES: ImagesBinding }>;
 ```
 
-在 `wrangler.jsonc` 中声明。Images 不是 `bindings` 中的资源 ID，使用顶层字段：
+在 `cloudflare.config.ts` 中声明。Images 不是 `bindings` 中的资源 ID，使用顶层字段：
 
-```json
-{
-  "name": "img-app",
-  "main": "src/index.ts",
-  "images": { "binding": "IMAGES" }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "img-app",
+    entrypoint: "src/index.ts",
+    env: {
+      IMAGES: bindings.images(),
+    },
+  },
+});
 ```
 
-语法见[绑定](/zh/docs/workers/configuration/bindings/)。类型生成使用项目内 Wrangler，真实 target 部署使用 `ocd wrangler deploy`。
+语法见[绑定](/zh/docs/workers/configuration/bindings/)。类型生成使用项目内 cf，真实 target 部署使用 `ocd cf deploy`。
 
 ## 兼容性
 
@@ -45,6 +51,6 @@ export default {
 | URL 变换    | 提供                   | 不提供                                                                        |
 | 视频        | 提供                   | 不提供                                                                        |
 | AI 放大     | 提供                   | 不提供                                                                        |
-| 配置        | wrangler `images`      | `"images": { "binding": "IMAGES" }`                                           |
+| 配置        | cf `images`            | `"images": { "binding": "IMAGES" }`                                           |
 
 下一步：[使用 bindings 开发](/zh/docs/develop/) · [兼容性与限制](/zh/docs/reference/)

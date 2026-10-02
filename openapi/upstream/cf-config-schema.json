@@ -1,0 +1,709 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "compatibilityDate": {
+      "type": "string"
+    },
+    "compatibilityFlags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "assets": {
+      "type": "object",
+      "properties": {
+        "htmlHandling": {
+          "type": "string",
+          "enum": [
+            "auto-trailing-slash",
+            "drop-trailing-slash",
+            "force-trailing-slash",
+            "none"
+          ]
+        },
+        "notFoundHandling": {
+          "type": "string",
+          "enum": ["single-page-application", "404-page", "none"]
+        },
+        "runWorkerFirst": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "email"
+              },
+              "addresses": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["type", "addresses"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "fetch"
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "zone": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "pattern"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "queue"
+              },
+              "name": {
+                "type": "string"
+              },
+              "deadLetterQueue": {
+                "type": "string"
+              },
+              "maxBatchSize": {
+                "type": "number"
+              },
+              "maxBatchTimeout": {
+                "type": "number"
+              },
+              "maxConcurrency": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "maxRetries": {
+                "type": "number"
+              },
+              "retryDelay": {
+                "type": "number"
+              },
+              "visibilityTimeoutMs": {
+                "type": "number"
+              }
+            },
+            "required": ["type", "name"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "scheduled"
+              },
+              "schedule": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "schedule"],
+            "additionalProperties": false
+          },
+          {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "connect"
+                  },
+                  "protocol": {
+                    "type": "string",
+                    "const": "tcp"
+                  },
+                  "port": {
+                    "type": "number"
+                  },
+                  "address": {
+                    "type": "string"
+                  }
+                },
+                "required": ["type", "protocol", "port"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "connect"
+                  },
+                  "protocol": {
+                    "type": "string",
+                    "const": "udp"
+                  },
+                  "port": {
+                    "type": "number"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "idleTimeoutMs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "maxPendingBytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  }
+                },
+                "required": ["type", "protocol", "port"],
+                "additionalProperties": false
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "tailConsumers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "worker": {
+            "type": "string"
+          },
+          "streaming": {
+            "type": "boolean"
+          }
+        },
+        "required": ["worker"],
+        "additionalProperties": false
+      }
+    },
+    "cache": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "crossVersionCache": {
+          "type": "boolean"
+        }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false
+    },
+    "placement": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["off", "smart"]
+            },
+            "hint": {
+              "type": "string"
+            }
+          },
+          "required": ["mode"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "const": "targeted"
+            },
+            "region": {
+              "type": "string"
+            }
+          },
+          "required": ["region"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "const": "targeted"
+            },
+            "host": {
+              "type": "string"
+            }
+          },
+          "required": ["host"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "const": "targeted"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          },
+          "required": ["hostname"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "cpuMs": {
+          "type": "number"
+        },
+        "subrequests": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "logpush": {
+      "type": "boolean"
+    },
+    "observability": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "headSamplingRate": {
+          "type": "number"
+        },
+        "redactQueryString": {
+          "type": "boolean"
+        },
+        "issues": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "logs": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "headSamplingRate": {
+              "type": "number"
+            },
+            "invocationLogs": {
+              "type": "boolean"
+            },
+            "persist": {
+              "type": "boolean"
+            },
+            "destinations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "traces": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "headSamplingRate": {
+              "type": "number"
+            },
+            "persist": {
+              "type": "boolean"
+            },
+            "destinations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "workersDev": {
+      "type": "boolean"
+    },
+    "previewUrls": {
+      "type": "boolean"
+    },
+    "firstPartyWorker": {
+      "type": "boolean"
+    },
+    "unsafe": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        },
+        "capnp": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "basePath": {
+                  "type": "string"
+                },
+                "sourceSchemas": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "compiledSchema": {
+                  "not": {}
+                }
+              },
+              "required": ["basePath", "sourceSchemas"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "basePath": {
+                  "not": {}
+                },
+                "sourceSchemas": {
+                  "not": {}
+                },
+                "compiledSchema": {
+                  "type": "string"
+                }
+              },
+              "required": ["compiledSchema"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "env": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "exports": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "durable-object"
+              },
+              "state": {
+                "type": "string",
+                "const": "created"
+              },
+              "storage": {
+                "type": "string",
+                "const": "sqlite"
+              },
+              "container": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "storage"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "durable-object"
+              },
+              "state": {
+                "type": "string",
+                "const": "created"
+              },
+              "storage": {
+                "type": "string",
+                "const": "legacy-kv"
+              }
+            },
+            "required": ["type", "storage"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "durable-object"
+              },
+              "state": {
+                "type": "string",
+                "const": "deleted"
+              }
+            },
+            "required": ["type", "state"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "durable-object"
+              },
+              "state": {
+                "type": "string",
+                "const": "renamed"
+              },
+              "renamedTo": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "state", "renamedTo"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "durable-object"
+              },
+              "state": {
+                "type": "string",
+                "const": "transferred"
+              },
+              "transferredTo": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "state", "transferredTo"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "durable-object"
+              },
+              "state": {
+                "type": "string",
+                "const": "expecting-transfer"
+              },
+              "storage": {
+                "type": "string",
+                "const": "sqlite"
+              },
+              "transferFrom": {
+                "type": "string"
+              },
+              "container": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "state", "storage", "transferFrom"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "durable-object"
+              },
+              "state": {
+                "type": "string",
+                "const": "expecting-transfer"
+              },
+              "storage": {
+                "type": "string",
+                "const": "legacy-kv"
+              },
+              "transferFrom": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "state", "storage", "transferFrom"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "worker"
+              },
+              "cache": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["enabled"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "workflow"
+              },
+              "name": {
+                "type": "string"
+              },
+              "limits": {
+                "type": "object",
+                "properties": {
+                  "steps": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "additionalProperties": false
+              },
+              "concurrency": {
+                "type": "object",
+                "properties": {
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "additionalProperties": false
+              },
+              "schedules": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                ]
+              },
+              "defaultRetention": {
+                "type": "object",
+                "properties": {
+                  "successRetention": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "errorRetention": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["type", "name"],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "entrypoint": {
+      "type": "string"
+    }
+  },
+  "required": ["name", "compatibilityDate"],
+  "additionalProperties": false
+}

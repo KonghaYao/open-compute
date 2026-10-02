@@ -22,14 +22,20 @@ export default {
 } satisfies ExportedHandler<{ VECTORIZE: Vectorize }>;
 ```
 
-Create an index (Wrangler or v4), then bind it:
+Create an index (cf or v4), then bind it:
 
-```json
-{
-  "name": "vector-app",
-  "main": "src/index.ts",
-  "vectorize": [{ "binding": "VECTORIZE", "index_name": "embeddings" }]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "vector-app",
+    entrypoint: "src/index.ts",
+    env: {
+      VECTORIZE: bindings.vectorize({ name: "embeddings" }),
+    },
+  },
+});
 ```
 
 Official reference: [Cloudflare Vectorize](https://developers.cloudflare.com/vectorize/). Binding grammar: [bindings](/docs/workers/configuration/bindings/).

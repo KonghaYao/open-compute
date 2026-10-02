@@ -10,7 +10,6 @@ const CASES = [
   "public-types-surface",
   "compile-fixtures",
   "conformance-self-tests",
-  "unsupported-config-rejection",
   "portable-fixture-inventory",
   "cloudflare-runner-safety",
 ] as const;
@@ -41,8 +40,6 @@ const checks: Record<CaseId, () => Promise<void>> = {
     (await import("./checks/types.ts")).compileFixtures(),
   "conformance-self-tests": async () =>
     (await import("./checks/types.ts")).conformanceSelfTests(),
-  "unsupported-config-rejection": async () =>
-    (await import("./checks/types.ts")).unsupportedConfigRejection(),
   "portable-fixture-inventory": async () =>
     (await import("./checks/runner.ts")).portableFixtureInventory(),
   "cloudflare-runner-safety": async () =>

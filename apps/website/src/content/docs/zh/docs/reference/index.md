@@ -5,7 +5,7 @@ description: "open-compute 的兼容性、限制、配置、API、认证和 runt
 
 Reference 用于查询稳定合同。教程与操作流程分别位于[开发应用](/zh/docs/develop/)和[运行与运维](/zh/docs/operate/)。
 
-- [兼容性](/zh/docs/platform/compatibility/)：产品、Worker API、Wrangler 与单机拓扑
+- [兼容性](/zh/docs/platform/compatibility/)：产品、Worker API、cf 与单机拓扑
 - [行为差异](/zh/docs/platform/deviations/)：相对 Cloudflare 托管平台的明确差异
 - [限制](/zh/docs/platform/limits/)：配置与 release 拥有的边界；live 值使用 `ocd capabilities --json`
 - [未提供能力](/zh/docs/platform/unsupported/)：被拒绝或尚未实现的能力

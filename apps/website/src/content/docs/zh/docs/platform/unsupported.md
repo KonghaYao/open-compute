@@ -3,7 +3,7 @@ title: "未提供能力"
 description: "open-compute 当前未提供的 Cloudflare 平台能力。"
 ---
 
-upstream type 或 Wrangler field 的存在不代表 open-compute 会注入对应 capability。不支持的配置会在 admission 阶段失败，不会创建 placeholder binding。
+upstream type 或 cf field 的存在不代表 open-compute 会注入对应 capability。不支持的配置会在 admission 阶段失败，不会创建 placeholder binding。
 
 ## 当前排除项
 

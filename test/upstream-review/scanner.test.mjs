@@ -61,7 +61,7 @@ function fixtureInput(overrides = {}) {
       openapiRevision: REVISION_A,
       openapiSha256: "1".repeat(64),
       cloudflareSdkVersion: "7.2.0",
-      wranglerVersion: "4.127.1",
+      cfVersion: "1.0.0-beta.11",
     },
     candidateSchema: { revision: REVISION_A, bytes: schemaBytesValue },
     candidateCloudflare: {
@@ -69,12 +69,12 @@ function fixtureInput(overrides = {}) {
       npmShasum: "0".repeat(40),
       npmIntegrity: "sha512-",
     },
-    candidateWrangler: {
-      version: "4.127.1",
+    candidateCf: {
+      version: "1.0.0-beta.11",
       npmShasum: "0".repeat(40),
       npmIntegrity: "sha512-",
     },
-    candidateWranglerEvidence: {
+    candidateCfEvidence: {
       packageSha256: "2".repeat(64),
       packageJsonSha256: "3".repeat(64),
       configSchemaSha256: "4".repeat(64),
@@ -183,10 +183,10 @@ test("a baseline-mapped operation lost from the candidate SDK is breaking", () =
   );
 });
 
-test("a wrangler-only move with equivalent selected surface is ready", () => {
+test("a cf-only move with equivalent selected surface is ready", () => {
   const report = classify(
     fixtureInput({
-      candidateWrangler: {
+      candidateCf: {
         version: "4.131.2",
         npmShasum: "0".repeat(40),
         npmIntegrity: "sha512-",
@@ -197,16 +197,16 @@ test("a wrangler-only move with equivalent selected surface is ready", () => {
   assert.match(report.reasons.join(" "), /preserves the selected/);
 });
 
-test("a Wrangler selected config or command removal is breaking", () => {
+test("a Cf selected config or command removal is breaking", () => {
   const report = classify(
     fixtureInput({
-      candidateWrangler: {
+      candidateCf: {
         version: "4.131.2",
         npmShasum: "0".repeat(40),
         npmIntegrity: "sha512-",
       },
-      candidateWranglerEvidence: {
-        ...fixtureInput().candidateWranglerEvidence,
+      candidateCfEvidence: {
+        ...fixtureInput().candidateCfEvidence,
         missingConfigFields: ["ai_search"],
         missingCommands: ["ai-search search"],
       },
@@ -217,22 +217,22 @@ test("a Wrangler selected config or command removal is breaking", () => {
   assert.match(report.reasons.join(" "), /command ai-search search/);
 });
 
-test("unknown Wrangler selected-surface drift is blocked", () => {
+test("unknown Cf selected-surface drift is blocked", () => {
   const report = classify(
     fixtureInput({
-      candidateWrangler: {
+      candidateCf: {
         version: "4.131.2",
         npmShasum: "0".repeat(40),
         npmIntegrity: "sha512-",
       },
-      candidateWranglerEvidence: {
-        ...fixtureInput().candidateWranglerEvidence,
+      candidateCfEvidence: {
+        ...fixtureInput().candidateCfEvidence,
         unknownDifferences: ["config schema has no RawConfig properties"],
       },
     }),
   );
   assert.equal(report.classification, "blocked");
-  assert.deepEqual(report.waitingOn, ["Wrangler selected-surface review"]);
+  assert.deepEqual(report.waitingOn, ["Cf selected-surface review"]);
 });
 
 test("manifest-excluded operations do not force blocked or breaking", () => {

@@ -157,7 +157,6 @@ jobs:
             *,website,*) bun run --filter @open-compute/website build ;;
           esac
           case ",$COMPONENTS," in
-            *,toolchain,*) bun run --filter @open-compute/toolchain build ;;
           esac
           case ",$COMPONENTS," in
             *,docs,*) bun scripts/check-docs.ts ;;

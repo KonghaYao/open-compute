@@ -4,23 +4,28 @@ title: "Static Assets"
 
 Static files freeze into the same immutable deployment. Configure them under `assets`.
 
-```json
-{
-  "name": "site",
-  "main": "src/index.ts",
-  "assets": {
-    "directory": "./public",
-    "binding": "ASSETS",
-    "run_worker_first": false,
-    "html_handling": "auto-trailing-slash",
-    "not_found_handling": "none"
-  }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "site",
+    entrypoint: "src/index.ts",
+    assets: {
+      runWorkerFirst: false,
+      htmlHandling: "auto-trailing-slash",
+      notFoundHandling: "none",
+    },
+    env: {
+      ASSETS: bindings.assets(),
+    },
+  },
+});
 ```
 
-`html_handling`: `auto-trailing-slash` (default), `force-trailing-slash`, `drop-trailing-slash`, `none`. `not_found_handling`: `none` (default), `404-page`, `single-page-application`. `run_worker_first` may be a boolean or a list of path rules starting with `/` or `!/`. Assets-only projects omit `main` and cannot declare an execution environment or Worker-first.
+`worker.assets.htmlHandling`: `auto-trailing-slash` (default), `force-trailing-slash`, `drop-trailing-slash`, `none`. `worker.assets.notFoundHandling`: `none` (default), `404-page`, `single-page-application`. `worker.assets.runWorkerFirst` may be a boolean or a list of path rules starting with `/` or `!/`. Assets-only projects omit `worker.entrypoint` and cannot declare an execution environment or Worker-first.
 
-Optional `publish_source_maps`. When a binding is present, `env.<binding>.fetch()` serves assets only and never enters the tenant Worker.
+When a binding is present, `env.<binding>.fetch()` serves assets only and never enters the tenant Worker.
 
 ## Compatibility
 
@@ -30,3 +35,5 @@ Optional `publish_source_maps`. When a binding is present, `env.<binding>.fetch(
 | Object storage                                                                     | Global CDN                                                                                 | Immutable objects on the selected Local/S3 authority, served from this node |
 | Global CDN placement / replication / purge propagation / product quotas            | Yes                                                                                        | Not provided                                                                |
 | Pages migration wizard                                                             | Yes                                                                                        | Not provided                                                                |
+
+Set the assets directory with Vite `publicDir`; declare the fetch binding with `bindings.assets()`. Configure source map output with Vite `build.sourcemap`.

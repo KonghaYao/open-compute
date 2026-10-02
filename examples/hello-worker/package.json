@@ -3,15 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy:ci": "wrangler deploy --env production",
-    "deploy:dev": "ocd wrangler deploy --env dev",
-    "deploy:production": "ocd wrangler --target production deploy --env production",
-    "deploy:staging": "ocd wrangler --target staging deploy --env staging",
-    "dev": "wrangler dev",
-    "logs:production": "ocd wrangler --target production tail --env production"
+    "build": "bun run typecheck && cf build --mode production",
+    "deploy:ci": "cf deploy --prebuilt --mode production",
+    "deploy:dev": "ocd cf deploy --mode dev",
+    "deploy:production": "ocd cf --target production deploy --prebuilt --mode production",
+    "deploy:staging": "ocd cf --target staging deploy --prebuilt --mode staging",
+    "dev": "cf dev",
+    "typecheck": "cf workers types --mode production && tsc --noEmit"
   },
   "devDependencies": {
-    "@open-compute/workers-types": "workspace:*",
-    "wrangler": "catalog:"
+    "@cloudflare/vite-plugin": "catalog:",
+    "cf": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
   }
 }

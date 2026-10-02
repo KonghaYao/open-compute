@@ -24,7 +24,7 @@ export function cloudflareDeploymentUrl(
     .map((candidate) => new URL(candidate).origin)
     .filter((candidate, index, values) => values.indexOf(candidate) === index);
   if (urls.length !== 1)
-    throw new Error("Wrangler did not report one unambiguous workers.dev URL");
+    throw new Error("Cf did not report one unambiguous workers.dev URL");
   return `${urls[0]}/`;
 }
 

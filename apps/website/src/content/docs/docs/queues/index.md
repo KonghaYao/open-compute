@@ -25,20 +25,23 @@ export default {
 } satisfies ExportedHandler<{ QUEUE: Queue }>;
 ```
 
-Bind a producer with Wrangler's standard Queues field:
+Bind a producer with cf's standard Queues field:
 
-```json
-{
-  "name": "queue-app",
-  "main": "src/index.ts",
-  "queues": {
-    "producers": [{ "binding": "QUEUE", "queue": "jobs" }],
-    "consumers": [{ "queue": "jobs", "max_batch_size": 10 }]
-  }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "queue-app",
+    entrypoint: "src/index.ts",
+    env: {
+      QUEUE: bindings.queue({ name: "jobs" }),
+    },
+  },
+});
 ```
 
-A consumer targets the Worker's `queue` handler through `queues.consumers`. Binding grammar: [bindings](/docs/workers/configuration/bindings/). Pinned Wrangler owns queue provisioning and consumer configuration.
+A consumer targets the Worker's `queue` handler through `worker.triggers`. Binding grammar: [bindings](/docs/workers/configuration/bindings/). Pinned cf owns queue provisioning and consumer configuration.
 
 The management SDK also exposes Cloudflare's official producer routes:
 
@@ -66,6 +69,6 @@ These calls commit to the same durable queue authority as Worker `send()` / `sen
 | Global FIFO             | Available                                                                                         | Not provided                                                                                                                               |
 | Unknown native dispatch | —                                                                                                 | May retain the lease; duplicate attempt numbers possible                                                                                   |
 | Pull consumer           | Available                                                                                         | Not provided                                                                                                                               |
-| Binding                 | Wrangler `queues`                                                                                 | Standard `producers` and `consumers` entries                                                                                               |
+| Binding                 | cf `queues`                                                                                       | Standard `producers` and `consumers` entries                                                                                               |
 
 Next: [Develop with bindings](/docs/develop/) · [Compatibility and limits](/docs/reference/)

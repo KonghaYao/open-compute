@@ -22,14 +22,20 @@ export default {
 } satisfies ExportedHandler<{ VECTORIZE: Vectorize }>;
 ```
 
-创建索引（Wrangler 或 v4）后绑定：
+创建索引（cf 或 v4）后绑定：
 
-```json
-{
-  "name": "vector-app",
-  "main": "src/index.ts",
-  "vectorize": [{ "binding": "VECTORIZE", "index_name": "embeddings" }]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "vector-app",
+    entrypoint: "src/index.ts",
+    env: {
+      VECTORIZE: bindings.vectorize({ name: "embeddings" }),
+    },
+  },
+});
 ```
 
 官方文档：[Cloudflare Vectorize](https://developers.cloudflare.com/vectorize/)。绑定语法见[绑定](/zh/docs/workers/configuration/bindings/)。

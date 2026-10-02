@@ -54,7 +54,7 @@ export async function cleanupFixtureResources({
   ownership,
   context,
 }: CleanupInput): Promise<CleanupOutcome> {
-  const { wrangler, cloudflareEnv, openComputeEnv, journalPath } = context;
+  const { cf, cloudflareEnv, openComputeEnv, journalPath } = context;
   if (
     resources.r2Buckets.length > 0 ||
     resources.durableObjectNamespaces.length > 0 ||
@@ -71,7 +71,7 @@ export async function cleanupFixtureResources({
   }
 
   const cfWorker = ownership.cloudflareOwned
-    ? await cleanupCloudflare(name, configs.cloudflare, wrangler, cloudflareEnv)
+    ? await cleanupCloudflare(name, configs.cloudflare, cf, cloudflareEnv)
     : notCreated(ownership.cloudflareAbsent);
   const cfBindings: JsonRecord[] = [];
   for (const namespace of [...resources.kvNamespaces].reverse()) {
@@ -81,7 +81,7 @@ export async function cleanupFixtureResources({
             namespace.name,
             namespace.cloudflareId,
             configs.cloudflarePreflight,
-            wrangler,
+            cf,
             cloudflareEnv,
           )
         : notCreated(namespace.cloudflareAbsent),
@@ -95,7 +95,7 @@ export async function cleanupFixtureResources({
             database.name,
             database.cloudflareId,
             configs.cloudflarePreflight,
-            wrangler,
+            cf,
             cloudflareEnv,
           )
         : notCreated(database.cloudflareAbsent),
@@ -108,7 +108,7 @@ export async function cleanupFixtureResources({
         ? await cleanupCloudflareR2(
             bucket.name,
             configs.cloudflarePreflight,
-            wrangler,
+            cf,
             cloudflareEnv,
           )
         : notCreated(bucket.cloudflareAbsent),
@@ -121,7 +121,7 @@ export async function cleanupFixtureResources({
         ? await cleanupQueue(
             queue.name,
             configs.cloudflarePreflight,
-            wrangler,
+            cf,
             cloudflareEnv,
           )
         : notCreated(queue.cloudflareAbsent),
@@ -146,7 +146,7 @@ export async function cleanupFixtureResources({
         ? await cleanupWorkflow(
             workflow.name,
             configs.cloudflarePreflight,
-            wrangler,
+            cf,
             cloudflareEnv,
           )
         : notCreated(workflow.cloudflareAbsent),
@@ -154,12 +154,7 @@ export async function cleanupFixtureResources({
   }
 
   const ocWorker = ownership.openComputeOwned
-    ? await cleanupCloudflare(
-        name,
-        configs.openCompute,
-        wrangler,
-        openComputeEnv,
-      )
+    ? await cleanupCloudflare(name, configs.openCompute, cf, openComputeEnv)
     : notCreated(ownership.openComputeAbsent);
   const ocBindings: JsonRecord[] = [];
   for (const namespace of [...resources.kvNamespaces].reverse()) {
@@ -169,7 +164,7 @@ export async function cleanupFixtureResources({
             namespace.name,
             namespace.openComputeId,
             configs.openComputePreflight,
-            wrangler,
+            cf,
             openComputeEnv,
           )
         : notCreated(namespace.openComputeAbsent),
@@ -183,7 +178,7 @@ export async function cleanupFixtureResources({
             database.name,
             database.openComputeId,
             configs.openComputePreflight,
-            wrangler,
+            cf,
             openComputeEnv,
           )
         : notCreated(database.openComputeAbsent),
@@ -196,7 +191,7 @@ export async function cleanupFixtureResources({
         ? await cleanupCloudflareR2(
             bucket.name,
             configs.openComputePreflight,
-            wrangler,
+            cf,
             openComputeEnv,
           )
         : notCreated(bucket.openComputeAbsent),
@@ -209,7 +204,7 @@ export async function cleanupFixtureResources({
         ? await cleanupQueue(
             queue.name,
             configs.openComputePreflight,
-            wrangler,
+            cf,
             openComputeEnv,
           )
         : notCreated(queue.openComputeAbsent),
@@ -235,7 +230,7 @@ export async function cleanupFixtureResources({
         ? await cleanupWorkflow(
             workflow.name,
             configs.openComputePreflight,
-            wrangler,
+            cf,
             openComputeEnv,
           )
         : notCreated(workflow.openComputeAbsent),

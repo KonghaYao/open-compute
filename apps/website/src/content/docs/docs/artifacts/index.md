@@ -1,13 +1,13 @@
 ---
 title: "Artifacts"
-description: "Git-backed artifact repositories through Wrangler, the Cloudflare-compatible API, and Worker bindings."
+description: "Git-backed artifact repositories through cf, the Cloudflare-compatible API, and Worker bindings."
 ---
 
-Artifacts provides account-scoped namespaces and Git-backed repositories. Use the certified Wrangler, the compatible `/client/v4` API, Git Smart HTTP, or an `artifacts` Worker binding to create, import, fork, read, and manage repositories and scoped tokens.
+Artifacts provides account-scoped namespaces and Git-backed repositories. Use the certified cf, the compatible `/client/v4` API, Git Smart HTTP, or an `artifacts` Worker binding to create, import, fork, read, and manage repositories and scoped tokens.
 
 Repository metadata is authoritative in SQLite; bare Git data lives under the platform data directory. Tokens are returned only when created and are stored as digests. Snapshot and restore include repository files and immutable Worker Version bindings.
 
-Standard framework output may declare Wrangler's `artifacts` array. The toolchain retains the local namespace resource identity while validating the provider namespace, and Script/Version multipart uploads accept the same `{ type: "artifacts", name, namespace }` binding. Namespace names are stable account containers: repository and token deletion are supported, but namespace deletion is not part of the current Cloudflare API or open-compute surface.
+Standard framework output may declare cf's `artifacts` array. The toolchain retains the local namespace resource identity while validating the provider namespace, and Script/Version multipart uploads accept the same `{ type: "artifacts", name, namespace }` binding. Namespace names are stable account containers: repository and token deletion are supported, but namespace deletion is not part of the current Cloudflare API or open-compute surface.
 
 ## Current boundary
 

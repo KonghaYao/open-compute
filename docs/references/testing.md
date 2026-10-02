@@ -258,3 +258,5 @@ Linux 受控 egress 仍需显式 `OPEN_COMPUTE_EGRESS_FIXTURE_ALLOW_SUDO=1`，�
 `./test/test-p0-2-egress-linux.sh`；它变更 loopback 与 `/etc/hosts`，
 不能在未授权宿主上运行。正式发行文件需另行授权构建，再以 `OPEN_COMPUTE_TEST_OCD`
 传给 `single-binary`，本地未包装的二进制测试不能声称正式发布已通过。
+
+Native 与 typed Gate 进程统一关闭 Bun runtime transpiler cache 和 Node compile cache，避免 cf/SDK 子进程在隔离 TMPDIR 留下缓存。临时文件残留仍判失败并保留证据，不设置缓存 allowlist。

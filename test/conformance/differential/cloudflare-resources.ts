@@ -50,27 +50,18 @@ export async function verifyOpenComputeAccount(
   return accountId;
 }
 
-export async function verifyWranglerAccount(
-  wrangler: string,
+export async function verifyCfAccount(
+  cf: string,
   accountId: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<void> {
-  const result = await readOnlyWrangler(
-    wrangler,
-    ["whoami", "--json"],
-    environment,
-  );
-  if (result.status !== 0)
-    throw new Error("Wrangler account verification failed");
+  const result = await readOnlyCf(cf, ["accounts", "list"], environment);
+  if (result.status !== 0) throw new Error("Cf account verification failed");
   const identity: unknown = JSON.parse(result.stdout);
-  if (
-    identity === null ||
-    typeof identity !== "object" ||
-    !Array.isArray(Reflect.get(identity, "accounts"))
-  ) {
-    throw new Error("Wrangler identity response is invalid");
+  if (!Array.isArray(identity)) {
+    throw new Error("Cf identity response is invalid");
   }
-  const accounts = Reflect.get(identity, "accounts") as unknown[];
+  const accounts: unknown[] = identity;
   if (
     !accounts.some(
       (account) =>
@@ -80,7 +71,7 @@ export async function verifyWranglerAccount(
     )
   ) {
     throw new Error(
-      "Wrangler is not authenticated for the explicitly selected Cloudflare account",
+      "Cf is not authenticated for the explicitly selected Cloudflare account",
     );
   }
 }
@@ -88,13 +79,22 @@ export async function verifyWranglerAccount(
 export async function ensureCloudflareAbsent(
   name: string,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<void> {
-  const result = await readOnlyWrangler(
-    wrangler,
-    ["deployments", "list", "--name", name, "--config", config, "--json"],
+  const result = await readOnlyCf(
+    cf,
+    [
+      "workers",
+      "deployments",
+      "list",
+      "--worker",
+      name,
+      "--mode",
+      "production",
+    ],
     environment,
+    dirname(config),
   );
   if (result.status === 0)
     throw new Error("refusing to overwrite a pre-existing Cloudflare Worker");
@@ -112,13 +112,14 @@ interface CloudflareKvNamespace {
 
 async function listCloudflareKv(
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<CloudflareKvNamespace[]> {
-  const result = await readOnlyWrangler(
-    wrangler,
-    ["kv", "namespace", "list", "--config", config],
+  const result = await readOnlyCf(
+    cf,
+    ["kv", "namespaces", "list", "--mode", "production"],
     environment,
+    dirname(config),
   );
   if (result.status !== 0)
     throw new Error("Cloudflare KV namespace inventory failed");
@@ -151,11 +152,11 @@ async function listCloudflareKv(
 export async function ensureCloudflareKvAbsent(
   name: string,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<void> {
   if (
-    (await listCloudflareKv(config, wrangler, environment)).some(
+    (await listCloudflareKv(config, cf, environment)).some(
       (item) => item.title === name,
     )
   ) {
@@ -168,14 +169,14 @@ export async function ensureCloudflareKvAbsent(
 export async function createCloudflareKv(
   name: string,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<string> {
   const created = await command(
-    wrangler,
-    ["kv", "namespace", "create", name, "--config", config],
+    cf,
+    ["kv", "namespaces", "create", "--title", name, "--mode", "production"],
     {
-      cwd: ROOT,
+      cwd: dirname(config),
       env: environment,
       timeout: 120_000,
     },
@@ -188,12 +189,10 @@ export async function createCloudflareKv(
     .map((match) => match[1]!)
     .filter((id, index, values) => values.indexOf(id) === index);
   if (ids.length !== 1)
-    throw new Error(
-      "Wrangler did not report one unambiguous KV namespace identity",
-    );
-  const matches = (
-    await listCloudflareKv(config, wrangler, environment)
-  ).filter((item) => item.id === ids[0] || item.title === name);
+    throw new Error("Cf did not report one unambiguous KV namespace identity");
+  const matches = (await listCloudflareKv(config, cf, environment)).filter(
+    (item) => item.id === ids[0] || item.title === name,
+  );
   if (
     matches.length !== 1 ||
     matches[0]!.id !== ids[0] ||
@@ -218,13 +217,14 @@ function validD1Id(value: unknown): value is string {
 
 async function listCloudflareD1(
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<CloudflareD1Database[]> {
-  const result = await readOnlyWrangler(
-    wrangler,
-    ["d1", "list", "--config", config, "--json"],
+  const result = await readOnlyCf(
+    cf,
+    ["d1", "list", "--mode", "production"],
     environment,
+    dirname(config),
   );
   if (result.status !== 0)
     throw new Error("Cloudflare D1 database inventory failed");
@@ -252,11 +252,11 @@ async function listCloudflareD1(
 export async function ensureCloudflareD1Absent(
   name: string,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<void> {
   if (
-    (await listCloudflareD1(config, wrangler, environment)).some(
+    (await listCloudflareD1(config, cf, environment)).some(
       (item) => item.name === name,
     )
   ) {
@@ -269,32 +269,30 @@ export async function ensureCloudflareD1Absent(
 export async function createCloudflareD1(
   name: string,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<string> {
   const created = await command(
-    wrangler,
-    ["d1", "create", name, "--config", config],
+    cf,
+    ["d1", "create", "--name", name, "--mode", "production"],
     {
-      cwd: ROOT,
+      cwd: dirname(config),
       env: environment,
       timeout: 120_000,
     },
   );
   const ids = [
     ...`${created.stdout}\n${created.stderr}`.matchAll(
-      /"database_id"\s*:\s*"((?:[0-9a-f]{32}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}))"/g,
+      /"uuid"\s*:\s*"((?:[0-9a-f]{32}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}))"/g,
     ),
   ]
     .map((match) => match[1]!)
     .filter((id, index, values) => values.indexOf(id) === index);
   if (ids.length !== 1)
-    throw new Error(
-      "Wrangler did not report one unambiguous D1 database identity",
-    );
-  const matches = (
-    await listCloudflareD1(config, wrangler, environment)
-  ).filter((item) => item.id === ids[0] || item.name === name);
+    throw new Error("Cf did not report one unambiguous D1 database identity");
+  const matches = (await listCloudflareD1(config, cf, environment)).filter(
+    (item) => item.id === ids[0] || item.name === name,
+  );
   if (
     matches.length !== 1 ||
     matches[0]!.id !== ids[0] ||
@@ -314,20 +312,33 @@ function cloudflareR2Name(value: string): string {
 
 async function listCloudflareR2(
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<string[]> {
-  const result = await readOnlyWrangler(
-    wrangler,
-    ["r2", "bucket", "list", "--config", config],
+  const result = await readOnlyCf(
+    cf,
+    ["r2", "buckets", "list", "--mode", "production"],
     environment,
+    dirname(config),
   );
   if (result.status !== 0)
     throw new Error("Cloudflare R2 bucket inventory failed");
-  const plain = result.stdout.replaceAll(/\u001b\[[0-9;]*m/g, "");
-  const names = [...plain.matchAll(/^name:\s+(\S+)\s*$/gm)].map((match) =>
-    cloudflareR2Name(match[1]!),
-  );
+  const listed: unknown = JSON.parse(result.stdout);
+  if (
+    listed === null ||
+    typeof listed !== "object" ||
+    !Array.isArray(Reflect.get(listed, "buckets"))
+  )
+    throw new Error("R2 inventory is invalid");
+  const names = (Reflect.get(listed, "buckets") as unknown[]).map((item) => {
+    if (
+      item === null ||
+      typeof item !== "object" ||
+      typeof Reflect.get(item, "name") !== "string"
+    )
+      throw new Error("R2 bucket is invalid");
+    return cloudflareR2Name(String(Reflect.get(item, "name")));
+  });
   if (new Set(names).size !== names.length)
     throw new Error("Cloudflare R2 bucket inventory contains duplicate names");
   return names;
@@ -336,11 +347,11 @@ async function listCloudflareR2(
 export async function ensureCloudflareR2Absent(
   name: string,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<void> {
   cloudflareR2Name(name);
-  if ((await listCloudflareR2(config, wrangler, environment)).includes(name)) {
+  if ((await listCloudflareR2(config, cf, environment)).includes(name)) {
     throw new Error(
       "refusing to overwrite a pre-existing Cloudflare R2 bucket",
     );
@@ -350,21 +361,21 @@ export async function ensureCloudflareR2Absent(
 export async function createCloudflareR2(
   name: string,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<void> {
   await command(
-    wrangler,
-    ["r2", "bucket", "create", name, "--config", config],
+    cf,
+    ["r2", "buckets", "create", "--name", name, "--mode", "production"],
     {
-      cwd: ROOT,
+      cwd: dirname(config),
       env: environment,
       timeout: 120_000,
     },
   );
-  const matches = (
-    await listCloudflareR2(config, wrangler, environment)
-  ).filter((item) => item === name);
+  const matches = (await listCloudflareR2(config, cf, environment)).filter(
+    (item) => item === name,
+  );
   if (matches.length !== 1)
     throw new Error("Cloudflare R2 bucket creation could not be verified");
 }
@@ -372,14 +383,14 @@ export async function createCloudflareR2(
 export async function cleanupCloudflare(
   name: string,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<JsonRecord> {
   const removed = await commandStatus(
-    wrangler,
-    ["delete", "--name", name, "--config", config],
+    cf,
+    ["workers", "delete", name, "--force"],
     {
-      cwd: ROOT,
+      cwd: dirname(config),
       env: environment,
       timeout: 120_000,
     },
@@ -387,9 +398,17 @@ export async function cleanupCloudflare(
   const deadline = Date.now() + 30_000;
   let delayMs = 250;
   while (true) {
-    const verify = await readOnlyWrangler(
-      wrangler,
-      ["deployments", "list", "--name", name, "--config", config, "--json"],
+    const verify = await readOnlyCf(
+      cf,
+      [
+        "workers",
+        "deployments",
+        "list",
+        "--worker",
+        name,
+        "--mode",
+        "production",
+      ],
       environment,
     );
     if (verify.status !== 0) {
@@ -416,13 +435,13 @@ export async function cleanupCloudflareKv(
   name: string,
   knownId: string | undefined,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<JsonRecord> {
   try {
-    const matches = (
-      await listCloudflareKv(config, wrangler, environment)
-    ).filter((item) => item.title === name || item.id === knownId);
+    const matches = (await listCloudflareKv(config, cf, environment)).filter(
+      (item) => item.title === name || item.id === knownId,
+    );
     if (matches.length === 0)
       return { deleted: true, status: "already-absent" };
     if (
@@ -434,24 +453,15 @@ export async function cleanupCloudflareKv(
     }
     const id = matches[0]!.id;
     const removed = await commandStatus(
-      wrangler,
-      [
-        "kv",
-        "namespace",
-        "delete",
-        "--namespace-id",
-        id,
-        "--skip-confirmation",
-        "--config",
-        config,
-      ],
-      { cwd: ROOT, env: environment, timeout: 120_000 },
+      cf,
+      ["kv", "namespaces", "delete", id, "--force"],
+      { cwd: dirname(config), env: environment, timeout: 120_000 },
     );
     if (removed.status !== 0)
       return { deleted: false, status: "delete-failed" };
-    const remaining = (
-      await listCloudflareKv(config, wrangler, environment)
-    ).some((item) => item.id === id || item.title === name);
+    const remaining = (await listCloudflareKv(config, cf, environment)).some(
+      (item) => item.id === id || item.title === name,
+    );
     return {
       deleted: !remaining,
       status: remaining ? "still-present" : "absent",
@@ -466,13 +476,13 @@ export async function cleanupCloudflareD1(
   name: string,
   knownId: string | undefined,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<JsonRecord> {
   try {
-    const matches = (
-      await listCloudflareD1(config, wrangler, environment)
-    ).filter((item) => item.name === name || item.id === knownId);
+    const matches = (await listCloudflareD1(config, cf, environment)).filter(
+      (item) => item.name === name || item.id === knownId,
+    );
     if (matches.length === 0)
       return { deleted: true, status: "already-absent" };
     if (
@@ -484,13 +494,13 @@ export async function cleanupCloudflareD1(
     }
     const id = matches[0]!.id;
     const removed = await commandStatus(
-      wrangler,
-      ["d1", "delete", id, "--skip-confirmation", "--config", config],
-      { cwd: ROOT, env: environment, timeout: 120_000 },
+      cf,
+      ["d1", "delete", id, "--force", "--mode", "production"],
+      { cwd: dirname(config), env: environment, timeout: 120_000 },
     );
-    const remaining = (
-      await listCloudflareD1(config, wrangler, environment)
-    ).some((item) => item.id === id || item.name === name);
+    const remaining = (await listCloudflareD1(config, cf, environment)).some(
+      (item) => item.id === id || item.name === name,
+    );
     return {
       deleted: !remaining,
       status: remaining
@@ -510,24 +520,24 @@ export async function cleanupCloudflareD1(
 export async function cleanupCloudflareR2(
   name: string,
   config: string,
-  wrangler: string,
+  cf: string,
   environment: Readonly<Record<string, string>>,
 ): Promise<JsonRecord> {
   try {
-    const matches = (
-      await listCloudflareR2(config, wrangler, environment)
-    ).filter((item) => item === name);
+    const matches = (await listCloudflareR2(config, cf, environment)).filter(
+      (item) => item === name,
+    );
     if (matches.length === 0)
       return { deleted: true, status: "already-absent" };
     if (matches.length !== 1)
       return { deleted: false, status: "ambiguous-owned-bucket" };
     const removed = await commandStatus(
-      wrangler,
-      ["r2", "bucket", "delete", name, "--config", config],
-      { cwd: ROOT, env: environment, timeout: 120_000 },
+      cf,
+      ["r2", "buckets", "delete", name, "--force"],
+      { cwd: dirname(config), env: environment, timeout: 120_000 },
     );
     const remaining = (
-      await listCloudflareR2(config, wrangler, environment)
+      await listCloudflareR2(config, cf, environment)
     ).includes(name);
     return {
       deleted: !remaining,
@@ -545,15 +555,16 @@ export async function cleanupCloudflareR2(
   }
 }
 
-async function readOnlyWrangler(
-  wrangler: string,
+async function readOnlyCf(
+  cf: string,
   args: readonly string[],
   environment: Readonly<Record<string, string>>,
+  cwd: string = ROOT,
 ): Promise<CommandResult> {
   let result: CommandResult = { status: -1, stdout: "", stderr: "" };
   for (let attempt = 0; attempt < 3; attempt++) {
-    result = await commandStatus(wrangler, args, {
-      cwd: ROOT,
+    result = await commandStatus(cf, args, {
+      cwd,
       env: environment,
       timeout: 60_000,
     });

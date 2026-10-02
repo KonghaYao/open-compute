@@ -5,7 +5,7 @@ description: "Compatibility, limits, configuration, API, authentication, and run
 
 Use reference pages to look up stable contracts. Tutorials and operational procedures live in [Develop](/docs/develop/) and [Operate](/docs/operate/).
 
-- [Compatibility](/docs/platform/compatibility/) — supported products, Worker APIs, Wrangler, and single-node topology
+- [Compatibility](/docs/platform/compatibility/) — supported products, Worker APIs, cf, and single-node topology
 - [Behavior differences](/docs/platform/deviations/) — intentional differences from Cloudflare's hosted platform
 - [Limits](/docs/platform/limits/) — configured and release-owned bounds; inspect live values with `ocd capabilities --json`
 - [Not available](/docs/platform/unsupported/) — rejected or unimplemented capabilities

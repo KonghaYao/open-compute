@@ -426,6 +426,19 @@ async fn active_script_management_routes_project_and_mutate_day1_state() {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         let result = response_json(response).await["result"].clone();
+        if path.ends_with("/services/settings-worker") {
+            assert_eq!(
+                result["default_environment"]["script"]["last_deployed_from"],
+                "open-compute"
+            );
+        }
+        if path.contains("/versions/") {
+            assert_eq!(result["metadata"]["source"], "open-compute");
+            assert_eq!(
+                result["resources"]["script"]["last_deployed_from"],
+                "open-compute"
+            );
+        }
         match collection_key {
             Some("") => assert!(!result.as_array().unwrap().is_empty()),
             Some(key) => assert!(!result[key].as_array().unwrap().is_empty()),
@@ -876,4 +889,91 @@ async fn exercise_settings_and_delete(
             .deleted_at_ms
             .is_some()
     );
+}
+
+#[tokio::test]
+async fn beta_worker_delete_resolves_public_identity_and_enforces_authority() {
+    let (_temp, _mock, state, account, storage) =
+        crate::tests::initialized_worker_http_fixture().await;
+    let seeded = seed_script_versions(&storage, account);
+    let authority = crate::cloudflare_v4::accounts::V4InstanceContext::new(account, 1);
+    let public_account = authority.public_id().to_owned();
+    let worker_tag = authority.public_worker_tag(seeded.worker.id);
+    let prefix = format!(
+        "/client/v4/accounts/{}/workers/workers/{worker_tag}",
+        authority.public_id()
+    );
+    let app = crate::http::admin_router(
+        state
+            .with_platform_storage(storage.clone())
+            .with_v4_tokens(
+                SecretString::new("deployer-token"),
+                SecretString::new("read-token"),
+            )
+            .with_v4_instance_context(authority),
+    );
+    for (uri, token, expected) in [
+        (prefix.clone(), "read-token", StatusCode::FORBIDDEN),
+        (
+            format!("{prefix}?force=invalid"),
+            "deployer-token",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            prefix.replace(&worker_tag, "missing-worker"),
+            "deployer-token",
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            prefix.replace(
+                &format!("/accounts/{public_account}/"),
+                "/accounts/foreign-account/",
+            ),
+            "deployer-token",
+            StatusCode::NOT_FOUND,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::DELETE)
+                    .uri(uri)
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+        assert!(
+            WorkerRepository::new(storage.db())
+                .get_worker(account, seeded.worker.id)
+                .unwrap()
+                .deleted_at_ms
+                .is_none()
+        );
+    }
+    let deleted = app
+        .clone()
+        .oneshot(request(
+            Method::DELETE,
+            &format!("{prefix}?force=true"),
+            Body::empty(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), StatusCode::OK);
+    assert!(
+        WorkerRepository::new(storage.db())
+            .get_worker(account, seeded.worker.id)
+            .unwrap()
+            .deleted_at_ms
+            .is_some()
+    );
+    let missing = app
+        .oneshot(request(Method::GET, &prefix, Body::empty()))
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 }

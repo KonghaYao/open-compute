@@ -314,10 +314,9 @@ Worker Version upload 取得的 Workflow reservation 在共用 validation pipeli
 publish，再把 Worker Version 标记 ready。确定性 probe 失败会拒绝已 stage Workflow versions 与 Worker Version；transient failure
 保留 validating 状态供既有恢复路径重试，避免 ready Worker 引用 stale Workflow definition。官方 Beta Worker Version DELETE 仅
 tombstone 非 active、无 pin/持久 referrer 的历史 Version，并释放 binding referrer；外部产品数据不级联删除。
-固定 Wrangler 4.143.0 在 Script upload 后读取官方 Beta Worker GET；本地响应投影 immutable Worker identity、时间戳与空 references，
+官方 Beta Worker GET 按当前 account 的名称或 public Worker tag 读取；本地响应投影 immutable Worker identity、时间戳与空 references，
 并明确返回 `subdomain.enabled=false`、`previews_enabled=false`，不伪造 workers.dev DNS 或 Preview 可达性。
-同一版本在 upload 与 deployment 默认发送 `code_update_strategy={mode:"deferred",max_delay:300}`。本地 closed decoder 验证
-官方 mode、范围与毫秒精度，但单机 runtime 仍原子切换 generation，不模拟 Cloudflare 托管 Durable Object 的 hibernation rollout；
+upload 与 deployment 显式提供 `code_update_strategy` 时，本地 closed decoder 验证官方 mode、范围与毫秒精度，但单机 runtime 仍原子切换 generation，不模拟 Cloudflare 托管 Durable Object 的 hibernation rollout；
 该语义差异归入 `OC-DEPLOY-001`。
 
 AI Search upload 按官方 `namespace` 字段解析 public instance key；省略时使用 `default`。authority lookup 同时固定 namespace 与
@@ -363,3 +362,13 @@ qualification 仍是有效证据，但当前 token 不能生成新的合并报�
 本地证据由 `p3-contract` 的 type/catalog/config/deviation/source 双射、产品 Gates、真实 pinned
 workerd、SQLite 与选定的 Local/S3 object authority、restart/crash tests 和最终 workspace/coverage 共同组成。最终命令、报告和
 实际限制记录在归档完成报告中；机器可读 capability/catalog 仍是支持状态的唯一 authority。
+
+P20 当前应用入口为项目内 cf 与官方 Vite 插件 v2。内部 CI 固定 cf 1.0.0-beta.12；用户的非 1.0.x 版本警告后仍执行。旧 Wrangler 项目需显式使用 `cf migrate <exact-file> --bundler vite`。终端流式 tail 尚无等价 cf 入口，使用 Dashboard Live Tail。
+
+P20 支持 cf 当前 Beta Version GET/list 的扁平响应、分页与 `include=modules`；模块来自校验后的不可变 artifact，secret 只返回 binding 名称。版本与 Service 元数据以 `open-compute` 标识平台 producer，不冒充某个客户端品牌或 Cloudflare Dashboard。cf/Vite 动态导入分片的 `./` 模块前缀在上传入口规范化；路径穿越与规范化后的重复名称仍拒绝。Workflow export 与同 Script binding 引用复用现有 definition reservation 和 WorkerId，不开放跨 Script 引用。
+
+P20 的应用 Env 由官方 cf 生成（其 runtime types 输入为 workerd 1.20261001.1）；这不替换平台固定 stable workers-types 或扩大 runtime inventory。新声明全集尚未资格化；实际绑定仍受服务端 admission 和既有 capability 子集约束。
+
+cf 1.0.0-beta.12 的已有 Worker redeploy 先 POST Version（带 observability），再创建 Deployment 并 PATCH script-settings。该非版本化字段在上传入口完整验证；单独 Version POST 不更改现有 Script 日志策略，Script PUT 或显式 script-settings PATCH 才更新。正式 OpenAPI 的 Version POST metadata 尚未列出该字段；这是当前官方 cf producer 的已记录差异，不引入客户端版本选择或另一路持久化实现。
+
+AI Search 实例创建使用 `cf ai-search create <namespace> <id> --body '{"id":"<id>","embedding_model":"<operator-alias>","chunk_size":64}'`。当前 cf 的逐项 flags 自动加入已明确不支持的 hosted cache / hybrid 字段，并将 `@cf/…` 形式的模型别名按文件参数读取；显式 JSON body 保留已声明配置，服务端仍拒绝 unsupported 字段，不静默剥除或忽略。其余 instance 查询、更新、搜索及 jobs 操作按官方命令执行。

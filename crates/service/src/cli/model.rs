@@ -77,21 +77,21 @@ pub enum Command {
         #[command(subcommand)]
         command: CacheCommand,
     },
-    /// Manage explicit remote open-compute Wrangler targets.
+    /// Manage explicit remote open-compute Cf targets.
     Target {
         /// Target subcommand.
         #[command(subcommand)]
         command: TargetCommand,
     },
-    /// Run the exact project-local Wrangler against one selected open-compute target.
-    Wrangler {
+    /// Run the exact project-local Cf against one selected open-compute target.
+    Cf {
         /// Explicit remote target name; mutually exclusive with --instance and --config.
         #[arg(long, conflicts_with_all = ["instance", "config"])]
         target: Option<open_compute_core::TargetName>,
         /// Project directory used as the executable resolution root and child cwd.
         #[arg(long)]
         project: Option<PathBuf>,
-        /// Wrangler command and its opaque trailing arguments.
+        /// Cf command and its opaque trailing arguments.
         #[arg(required = true, num_args = 1.., allow_hyphen_values = true, trailing_var_arg = true)]
         arguments: Vec<OsString>,
     },

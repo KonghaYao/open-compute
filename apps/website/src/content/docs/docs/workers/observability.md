@@ -3,25 +3,22 @@ title: "Logs and live tail"
 description: "Persist, query, and tail Worker logs on the selected open-compute instance."
 ---
 
-open-compute implements the Cloudflare Workers observability settings, telemetry query routes, and selected-script live tail on the local instance. `ocd wrangler tail` uses the same Cloudflare-compatible `/client/v4` surface.
-
-```sh
-ocd wrangler tail --env staging
-```
+Inspect logs through Dashboard Live Tail or the existing SDK/API queries. cf currently has no equivalent terminal streaming tail command; server logs and live tail remain available.
 
 ## Configure logs
 
-Use Wrangler's `observability` configuration. Log enablement, sampling, invocation logs, and persistence are supported. External log destinations and traces are not.
+Use cf's `observability` configuration. Log enablement, sampling, invocation logs, and persistence are supported. External log destinations and traces are not.
 
-```json
-{
-  "observability": {
-    "enabled": true,
-    "head_sampling_rate": 1,
-    "logs": { "enabled": true, "invocation_logs": true, "persist": true },
-    "traces": { "enabled": false }
-  }
-}
+```ts
+// worker.observability in cloudflare.config.ts
+({
+  observability: {
+    enabled: true,
+    headSamplingRate: 1,
+    logs: { enabled: true, invocationLogs: true, persist: true },
+    traces: { enabled: false },
+  },
+});
 ```
 
 Persisted telemetry supports the `events` and `invocations` query views, keys and values discovery, filters, and one live-tail session scoped to a selected script. Retention, database size, invocation log size, query timeframe and event count, ingest queue capacity, tail session count, and tail client buffering are bounded by the instance configuration.

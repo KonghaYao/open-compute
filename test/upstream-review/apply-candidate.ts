@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
+import { officialCfSchema, prettierJson } from "../conformance/p6-contract.mjs";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../..");
 const REVIEW_ROOT = resolve(REPO_ROOT, ".temp/upstream-review");
@@ -32,10 +33,10 @@ const candidate = report.candidate;
 const schemaRevision = candidate.openapiRevision;
 const schemaSha256 = candidate.openapiSha256;
 const sdk = candidate.cloudflareSdk;
-const wrangler = candidate.wrangler;
+const cf = candidate.cf;
 if (
   sdk === null ||
-  wrangler === null ||
+  cf === null ||
   typeof schemaRevision !== "string" ||
   typeof schemaSha256 !== "string"
 )
@@ -127,12 +128,12 @@ const extractedSdk = await extractPackage(
   sdk.npmIntegrity,
   "cloudflare",
 );
-const extractedWrangler = await extractPackage(
-  "wrangler",
-  wrangler.version,
-  wrangler.npmShasum,
-  wrangler.npmIntegrity,
-  "wrangler",
+const extractedCf = await extractPackage(
+  "cf",
+  cf.version,
+  cf.npmShasum,
+  cf.npmIntegrity,
+  "cf",
 );
 
 // 3. Preserve the already-verified tag when the SDK did not move; otherwise
@@ -160,7 +161,7 @@ if (lock.cloudflareSdk.version !== sdk.version) {
 // 4. Update the dependency catalog and lock identities.
 const catalogPackage = JSON.parse(readFileSync(CATALOG_PATH, "utf8"));
 catalogPackage.catalog.cloudflare = sdk.version;
-catalogPackage.catalog.wrangler = wrangler.version;
+catalogPackage.catalog.cf = cf.version;
 writeFileSync(CATALOG_PATH, `${JSON.stringify(catalogPackage, null, 2)}\n`);
 
 lock.revision = schemaRevision;
@@ -186,15 +187,22 @@ lock.cloudflareSdk = {
     "resources/workers/scripts/scripts.mjs",
   ),
 };
-lock.wrangler = {
-  ...lock.wrangler,
-  version: wrangler.version,
-  npmIntegrity: wrangler.npmIntegrity,
-  npmShasum: wrangler.npmShasum,
-  packageSha256: extractedWrangler.tarballSha256,
-  packageJsonSha256: extractedWrangler.packageJsonSha256,
-  configSchemaSha256: fileSha(extractedWrangler.root, "config-schema.json"),
-  cliSha256: fileSha(extractedWrangler.root, "wrangler-dist/cli.js"),
+run("bun", ["install", "--ignore-scripts"]);
+lock.cf = {
+  ...lock.cf,
+  version: cf.version,
+  npmIntegrity: cf.npmIntegrity,
+  npmShasum: cf.npmShasum,
+  packageSha256: extractedCf.tarballSha256,
+  packageJsonSha256: extractedCf.packageJsonSha256,
+  configSchemaSha256: sha256(
+    Buffer.from(
+      prettierJson(
+        `${JSON.stringify(officialCfSchema(join(REPO_ROOT, "node_modules/cf")), null, 2)}\n`,
+      ),
+    ),
+  ),
+  cliSha256: fileSha(extractedCf.root, "dist/index.mjs"),
 };
 writeFileSync(LOCK_PATH, `${JSON.stringify(lock, null, 2)}\n`);
 
@@ -204,10 +212,10 @@ run("bun", [
   "generate",
   "--openapi",
   schemaPath,
-  "--wrangler-root",
-  extractedWrangler.root,
+  "--cf-root",
+  join(REPO_ROOT, "node_modules/cf"),
 ]);
-run("bun", ["install"]);
+
 for (const [field, path] of [
   ["subsetSha256", "openapi/cloudflare-v4-subset.json"],
   ["subsetManifestSha256", "openapi/cloudflare-subset-manifest.json"],
@@ -223,5 +231,5 @@ run("bun", ["packages/sdk/scripts/generate.ts"]);
 run("bun", ["test/conformance/inventory.ts", "generate"]);
 
 console.log(
-  `applied candidate: openapi ${schemaRevision.slice(0, 12)}, cloudflare ${sdk.version}, wrangler ${wrangler.version}`,
+  `applied candidate: openapi ${schemaRevision.slice(0, 12)}, cloudflare ${sdk.version}, cf ${cf.version}`,
 );

@@ -194,7 +194,9 @@ class GateTests(unittest.TestCase):
     def test_harness_preparation_only_lists_tests_in_a_separate_process(self):
         with tempfile.TemporaryDirectory() as temp, \
              patch.object(gate.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run, \
-             patch.dict(os.environ, OPEN_COMPUTE_GATE_ROUNDS='3'):
+             patch.dict(os.environ, OPEN_COMPUTE_GATE_ROUNDS='3',
+                        BUN_RUNTIME_TRANSPILER_CACHE_PATH='unowned-cache',
+                        NODE_DISABLE_COMPILE_CACHE='0'):
             target = self.targets(['p0-2'])['p0-2']
             result = gate.execute_target('p0-2', '/compiled/test', Path(temp)/'prepare', target,
                                          list_only=True)
@@ -202,6 +204,8 @@ class GateTests(unittest.TestCase):
             self.assertEqual(run.call_args.args[0], ['/compiled/test', '--list'])
             self.assertEqual(run.call_args.kwargs['timeout'], 600)
             self.assertNotIn('OPEN_COMPUTE_GATE_ROUNDS', run.call_args.kwargs['env'])
+            self.assertEqual(run.call_args.kwargs['env']['BUN_RUNTIME_TRANSPILER_CACHE_PATH'], '0')
+            self.assertEqual(run.call_args.kwargs['env']['NODE_DISABLE_COMPILE_CACHE'], '1')
 
     def test_p5_search_defaults_fixture_embedding_key(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(gate, 'ROOT', Path(temp)):

@@ -26,14 +26,30 @@ export default {
 
 绑定 namespace 和/或 instance；需要 Markdown Conversion 时再声明平台 `ai` binding：
 
-```json
-{
-  "name": "search-app",
-  "main": "src/index.ts",
-  "ai_search_namespaces": [{ "binding": "SEARCH_NS", "namespace": "team" }],
-  "ai_search": [{ "binding": "SEARCH", "instance_name": "docs" }],
-  "ai": { "binding": "AI" }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "search-app",
+    entrypoint: "src/index.ts",
+    ai_search_namespaces: [
+      {
+        binding: "SEARCH_NS",
+        namespace: "team",
+      },
+    ],
+    ai_search: [
+      {
+        binding: "SEARCH",
+        instance_name: "docs",
+      },
+    ],
+    env: {
+      AI: bindings.ai(),
+    },
+  },
+});
 ```
 
 ## 手动外部 source（open-compute 扩展）

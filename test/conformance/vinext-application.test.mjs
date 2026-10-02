@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -59,12 +60,20 @@ test("vinext offline checks reject changed frozen inputs and installed packages"
   t.after(() => rmSync(sandbox, { recursive: true, force: true }));
   const files = execFileSync(
     "git",
-    ["ls-files", "-z", "--", "test/applications/vinext"],
+    [
+      "ls-files",
+      "-z",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "--",
+      "test/applications/vinext",
+    ],
     { cwd: root },
   )
     .toString()
     .split("\0")
-    .filter(Boolean);
+    .filter((name) => name.length > 0 && existsSync(resolve(root, name)));
   files.push(
     "bun.lock",
     "test/conformance/catalog.json",

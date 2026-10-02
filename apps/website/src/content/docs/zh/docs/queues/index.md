@@ -25,20 +25,23 @@ export default {
 } satisfies ExportedHandler<{ QUEUE: Queue }>;
 ```
 
-在 `wrangler.jsonc` 中绑定生产者：
+在 `cloudflare.config.ts` 中绑定生产者：
 
-```json
-{
-  "name": "queue-app",
-  "main": "src/index.ts",
-  "queues": {
-    "producers": [{ "binding": "QUEUE", "queue": "jobs" }],
-    "consumers": [{ "queue": "jobs", "max_batch_size": 10 }]
-  }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "queue-app",
+    entrypoint: "src/index.ts",
+    env: {
+      QUEUE: bindings.queue({ name: "jobs" }),
+    },
+  },
+});
 ```
 
-消费者通过 `queues.consumers` 指向 Worker 的 `queue` handler。语法见[绑定](/zh/docs/workers/configuration/bindings/)。固定 Wrangler 负责 queue provisioning 与 consumer 配置。
+消费者通过 `worker.triggers` 指向 Worker 的 `queue` handler。语法见[绑定](/zh/docs/workers/configuration/bindings/)。固定 cf 负责 queue provisioning 与 consumer 配置。
 
 管理 SDK 也暴露 Cloudflare 的官方 producer 路径：
 
@@ -66,6 +69,6 @@ await client.queues.messages.bulkPush(queueId, {
 | 全局 FIFO                  | 提供                                                                                              | 不提供                                                                                                                                    |
 | 无法识别的 native dispatch | —                                                                                                 | 可能保留消息 lease，后续投递可能使用同一 attempt 编号                                                                                     |
 | Pull consumer              | 提供                                                                                              | 不提供                                                                                                                                    |
-| 绑定                       | Wrangler `queues`                                                                                 | 标准 `producers` 与 `consumers` 条目                                                                                                      |
+| 绑定                       | cf `queues`                                                                                       | 标准 `producers` 与 `consumers` 条目                                                                                                      |
 
 下一步：[使用 bindings 开发](/zh/docs/develop/) · [兼容性与限制](/zh/docs/reference/)

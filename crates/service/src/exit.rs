@@ -48,7 +48,8 @@ pub fn exit_class_for(code: ErrorCode) -> ExitClass {
         ErrorCode::TargetInvalid
         | ErrorCode::TargetNotFound
         | ErrorCode::TargetRegistryInvalid
-        | ErrorCode::WranglerInvalid => ExitClass::Config,
+        | ErrorCode::CfInvalid
+        | ErrorCode::WranglerProjectUnsupported => ExitClass::Config,
         _ => ExitClass::Run,
     }
 }

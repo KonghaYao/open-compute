@@ -4,11 +4,11 @@ use crate::config_load::LoadedConfig;
 use crate::embedded_dashboard::embedded_dashboard_assets_sha256;
 use open_compute_core::config::ObservabilityConfig;
 use open_compute_core::{
-    CacheConfig, CapabilityInventoryV1, D1Config, DurableObjectsConfig, ErrorCode, HardeningConfig,
-    KvConfig, ManagementApiCapabilitiesV1, PlatformCapabilitiesV1, PlatformConfig, PlatformError,
-    PlatformReleaseIdentityV1, PlatformReleaseMetadataV1, ProductCapabilityV1, R2Config,
-    RuntimeCapabilityV1, SchedulerConfig, TypeSourceIdentityV1, WorkersConfig,
-    WorkersObservabilityCapabilitiesV1, WranglerCapabilitiesV1,
+    CacheConfig, CapabilityInventoryV1, CfCapabilitiesV1, D1Config, DurableObjectsConfig,
+    ErrorCode, HardeningConfig, KvConfig, ManagementApiCapabilitiesV1, PlatformCapabilitiesV1,
+    PlatformConfig, PlatformError, PlatformReleaseIdentityV1, PlatformReleaseMetadataV1,
+    ProductCapabilityV1, R2Config, RuntimeCapabilityV1, SchedulerConfig, TypeSourceIdentityV1,
+    WorkersConfig, WorkersObservabilityCapabilitiesV1,
 };
 use open_compute_runtime::{embedded_runtime_assets_sha256, embedded_runtime_lock};
 use open_compute_storage::queues::{
@@ -51,7 +51,7 @@ type ProductRegistry = (
     BTreeMap<String, ProductCapabilityV1>,
     ManagementApiCapabilitiesV1,
     WorkersObservabilityCapabilitiesV1,
-    WranglerCapabilitiesV1,
+    CfCapabilitiesV1,
 );
 
 /// Build the complete production capability registry from embedded release inputs.
@@ -76,8 +76,7 @@ pub fn platform_capabilities(
         facade_capability_version: FACADE_CAPABILITY_VERSION,
         snapshot_format_version: SNAPSHOT_FORMAT_VERSION,
     };
-    let (type_source, products, management_api, workers_observability, wrangler) =
-        product_registry()?;
+    let (type_source, products, management_api, workers_observability, cf) = product_registry()?;
     let limits = limit_registry(config);
     let capabilities = PlatformCapabilitiesV1 {
         schema_version: 1,
@@ -95,7 +94,7 @@ pub fn platform_capabilities(
         products,
         management_api,
         workers_observability,
-        wrangler,
+        cf,
         limits,
     };
     if !capabilities.validate() {
@@ -225,7 +224,7 @@ fn product_registry() -> Result<ProductRegistry, PlatformError> {
         inventory.products,
         inventory.management_api,
         inventory.workers_observability,
-        inventory.wrangler,
+        inventory.cf,
     ))
 }
 

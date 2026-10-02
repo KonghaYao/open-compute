@@ -22,17 +22,23 @@ export default {
 } satisfies ExportedHandler<{ IMAGES: ImagesBinding }>;
 ```
 
-Declare it in `wrangler.jsonc`. Images is not a resource id in `bindings`. Use top-level `"images": { "binding": "IMAGES" }` only:
+Declare it in `cloudflare.config.ts`. Images is not a resource id in `bindings`. Use top-level `"images": { "binding": "IMAGES" }` only:
 
-```json
-{
-  "name": "img-app",
-  "main": "src/index.ts",
-  "images": { "binding": "IMAGES" }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "img-app",
+    entrypoint: "src/index.ts",
+    env: {
+      IMAGES: bindings.images(),
+    },
+  },
+});
 ```
 
-See [bindings](/docs/workers/configuration/bindings/). Use project-local Wrangler for types and `ocd wrangler deploy` for a real target.
+See [bindings](/docs/workers/configuration/bindings/). Use project-local cf for types and `ocd cf deploy` for a real target.
 
 ## Compatibility
 
@@ -45,6 +51,6 @@ See [bindings](/docs/workers/configuration/bindings/). Use project-local Wrangle
 | URL transform    | Available                | Not provided                                                                        |
 | Video            | Available                | Not provided                                                                        |
 | AI upscale       | Available                | Not provided                                                                        |
-| Binding          | wrangler `images`        | `"images": { "binding": "IMAGES" }`                                                 |
+| Binding          | cf `images`              | `"images": { "binding": "IMAGES" }`                                                 |
 
 Next: [Develop with bindings](/docs/develop/) · [Compatibility and limits](/docs/reference/)

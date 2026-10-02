@@ -22,7 +22,7 @@ ocd --config /var/lib/open-compute/instances/default/compute.toml capabilities -
 | startup CPU                       |                            1,000 ms |
 | 等待响应头的 outbound connections |                每次 invocation 6 个 |
 
-可配置的两个维度使用普通 Wrangler schema：
+可配置的两个维度使用普通 cf schema：
 
 ```jsonc
 {

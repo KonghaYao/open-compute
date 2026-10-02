@@ -495,14 +495,16 @@ pub enum ErrorCode {
     InstanceAmbiguous,
     /// The local instance registry is missing, corrupt, or fails closed checks.
     InstanceRegistryInvalid,
-    /// A remote Wrangler target name, URL, instance, or record is invalid.
+    /// A remote Cf target name, URL, instance, or record is invalid.
     TargetInvalid,
-    /// The requested remote Wrangler target does not exist.
+    /// The requested remote Cf target does not exist.
     TargetNotFound,
     /// The per-user remote target registry failed closed validation.
     TargetRegistryInvalid,
-    /// The selected Wrangler executable or certified version is invalid.
-    WranglerInvalid,
+    /// The selected Cf executable or certified version is invalid.
+    CfInvalid,
+    /// A legacy project requires explicit official migration.
+    WranglerProjectUnsupported,
 }
 
 impl ErrorCode {
@@ -763,7 +765,8 @@ impl ErrorCode {
             Self::TargetInvalid => "TARGET_INVALID",
             Self::TargetNotFound => "TARGET_NOT_FOUND",
             Self::TargetRegistryInvalid => "TARGET_REGISTRY_INVALID",
-            Self::WranglerInvalid => "WRANGLER_INVALID",
+            Self::CfInvalid => "CF_INVALID",
+            Self::WranglerProjectUnsupported => "WRANGLER_PROJECT_UNSUPPORTED",
         }
     }
 }

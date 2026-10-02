@@ -15,5 +15,6 @@
     "functions/**/*.ts",
     "scripts/**/*.ts",
     "astro.config.ts"
-  ]
+  ],
+  "exclude": ["src/worker.ts"]
 }

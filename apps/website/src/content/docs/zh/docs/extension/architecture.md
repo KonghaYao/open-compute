@@ -9,7 +9,7 @@ description: "用户 Worker、facade、ocd、workerd 与 native Provider 如何�
 
 | 参与者      | 角色                                                                                                                                           |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| 用户 Worker | 声明 `services` + `props`。调用 facade RPC，例如 `env.FILES.list()`。看不到 `HOST`。                                                           |
+| 用户 Worker | 声明 `bindings.worker` + `props`。调用 facade RPC，例如 `env.FILES.list()`。看不到 `HOST`。                                                    |
 | Facade      | 来自 `extension.toml` `[worker].main` 的 operator JavaScript。读取 `this.ctx.props`。调用 `env.HOST`。                                         |
 | workerd     | 目标实例受监督的 pinned runtime。持有私有 `HostExtensionFactory`、broker fd 4 和 session Cap'n Proto client。                                  |
 | `ocd`       | 实例启动时加载扩展、签发 session identity、经纪一对 socketpair、等待 Provider ACK，然后离开数据路径。                                          |

@@ -31,19 +31,32 @@ export default {
 } satisfies ExportedHandler<{ COUNTER: DurableObjectNamespace }>;
 ```
 
-在 `wrangler.jsonc` 中使用 Wrangler 标准 Durable Object 字段绑定：
+在 `cloudflare.config.ts` 中使用 cf 标准 Durable Object 字段绑定：
 
-```json
-{
-  "name": "do-app",
-  "main": "src/index.ts",
-  "durable_objects": {
-    "bindings": [{ "name": "COUNTER", "class_name": "Counter" }]
-  }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "do-app",
+    entrypoint: "src/index.ts",
+    exports: {
+      Counter: {
+        type: "durable-object",
+        storage: "sqlite",
+      },
+    },
+    env: {
+      COUNTER: bindings.durableObject({
+        worker: "do-app",
+        exportName: "Counter",
+      }),
+    },
+  },
+});
 ```
 
-class 随 Worker 上传；Durable Object migration 使用 Wrangler 标准 `migrations` 字段。语法见[绑定](/zh/docs/workers/configuration/bindings/)。
+class 随 Worker 上传；Durable Object migration 使用 cf 标准 `migrations` 字段。语法见[绑定](/zh/docs/workers/configuration/bindings/)。
 
 ## 兼容性
 
@@ -53,7 +66,7 @@ class 随 Worker 上传；Durable Object migration 使用 Wrangler 标准 `migra
 | 对象位置            | 按地区调度，`locationHint` / jurisdiction / migration                         | 全部位于所属实例的本机 workerd；`locationHint` / jurisdiction / migration 不产生地理效果                                                                        |
 | Alarms              | 提供                                                                          | 提供：`getAlarm` / `setAlarm` / `deleteAlarm` 与 `alarm()`                                                                                                      |
 | Hibernation         | 提供                                                                          | 提供                                                                                                                                                            |
-| 绑定                | Wrangler `durable_objects`                                                    | 标准 `name` 与 `class_name`，必须指定 `class_name`                                                                                                              |
+| 绑定                | cf `bindings.durableObject`                                                   | 标准 `name` 与 `class_name`，必须指定 `class_name`                                                                                                              |
 | `Fetcher.connect()` | 通用出站                                                                      | 使用绑定声明的连接，而非第二条通用出站通道                                                                                                                      |
 
 下一步：[Alarms](/zh/docs/durable-objects/alarms/) · [使用 bindings 开发](/zh/docs/develop/) · [兼容性与限制](/zh/docs/reference/)

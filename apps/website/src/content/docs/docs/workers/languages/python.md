@@ -9,16 +9,21 @@ open-compute supports Python modules inside a native [Worker Loader](/docs/worke
 
 ## Configure the parent Worker
 
-Declare a Worker Loader binding in the parent project's `wrangler.jsonc`:
+Declare a Worker Loader binding in the parent project's `cloudflare.config.ts`:
 
-```json
-{
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "python-loader",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-09-08",
-  "worker_loaders": [{ "binding": "LOADER" }]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "python-loader",
+    entrypoint: "src/index.ts",
+    compatibilityDate: "2026-09-08",
+    env: {
+      LOADER: bindings.workerLoader(),
+    },
+  },
+});
 ```
 
 ## Load a Python child
@@ -56,10 +61,10 @@ export default {
 } satisfies ExportedHandler<Env>;
 ```
 
-Deploy the parent with the project-local certified Wrangler:
+Deploy the parent with the project-local certified cf:
 
 ```sh
-ocd wrangler deploy
+ocd cf deploy
 ```
 
 Direct deployment of a Python file as an ordinary Worker's `main` through `pywrangler` is not currently part of open-compute's public upload contract. Use the Worker Loader path above. Structured-clone values and Service Bindings can be passed through `env`; KV, D1, R2, and Queue resources use the documented [`open-compute:worker-loader` forwarding helper](/docs/workers/runtime-apis/bindings/#dynamic-workers). Child CPU, memory, and subrequest limits are validated against the configured local ceilings.

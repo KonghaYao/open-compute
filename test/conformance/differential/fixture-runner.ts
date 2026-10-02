@@ -1,5 +1,5 @@
-import { cp, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { cp, mkdir, symlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { command } from "../adapters/command.ts";
 import { observe } from "../adapters/observations.ts";
 import {
@@ -8,6 +8,7 @@ import {
   openComputeBaseProject,
   openComputeProject,
 } from "../adapters/projects.ts";
+import { CF_PROJECT_MANIFEST } from "../adapters/runtime-contract.ts";
 import { cloudflareDeploymentUrl } from "../adapters/transport.ts";
 import type { JsonRecord, PortableFixture } from "../adapters/types.ts";
 import { ensureCloudflareAbsent } from "./cloudflare-resources.ts";
@@ -52,15 +53,33 @@ async function prepareFixtureFiles(
   const configs: DifferentialConfigs = {
     cloudflarePreflight: join(
       projectRoot,
-      "wrangler-cloudflare-preflight.jsonc",
+      "cloudflare",
+      "cloudflare.config.ts",
     ),
-    cloudflare: join(projectRoot, "wrangler-cloudflare.jsonc"),
+    cloudflare: join(projectRoot, "cloudflare", "cloudflare.config.ts"),
     openComputePreflight: join(
       projectRoot,
-      "wrangler-open-compute-preflight.jsonc",
+      "open-compute",
+      "cloudflare.config.ts",
     ),
-    openCompute: join(projectRoot, "wrangler-open-compute.jsonc"),
+    openCompute: join(projectRoot, "open-compute", "cloudflare.config.ts"),
   };
+  for (const target of ["cloudflare", "open-compute"]) {
+    const directory = join(projectRoot, target);
+    await mkdir(directory);
+    await writeFile(
+      join(directory, "package.json"),
+      `${JSON.stringify(CF_PROJECT_MANIFEST)}\n`,
+    );
+    await symlink(
+      join(context.root, "node_modules"),
+      join(directory, "node_modules"),
+    );
+    await writeFile(
+      join(directory, "vite.config.ts"),
+      "import {cloudflare} from '@cloudflare/vite-plugin'; export default {plugins:[cloudflare({types:{generate:false}})]};\n",
+    );
+  }
   await writeFile(
     join(projectRoot, "tsconfig.json"),
     `${JSON.stringify(
@@ -76,8 +95,16 @@ async function prepareFixtureFiles(
   );
   await writeFile(
     configs.cloudflarePreflight,
-    `${JSON.stringify(
-      cloudflareBaseProject(fixture, name, context.accountId),
+    `export default ${JSON.stringify(
+      cloudflareBaseProject(
+        {
+          ...fixture,
+          source: join(projectRoot, "src/index.ts"),
+          root: dirname(configs.cloudflare),
+        },
+        name,
+        context.accountId,
+      ),
       null,
       2,
     )}\n`,
@@ -85,8 +112,16 @@ async function prepareFixtureFiles(
   );
   await writeFile(
     configs.openComputePreflight,
-    `${JSON.stringify(
-      openComputeBaseProject(fixture, name, context.openComputeAccount),
+    `export default ${JSON.stringify(
+      openComputeBaseProject(
+        {
+          ...fixture,
+          source: join(projectRoot, "src/index.ts"),
+          root: dirname(configs.openCompute),
+        },
+        name,
+        context.openComputeAccount,
+      ),
       null,
       2,
     )}\n`,
@@ -105,9 +140,13 @@ async function writeDeploymentConfigs(
   const names = bindingNames(resources);
   await writeFile(
     configs.cloudflare,
-    `${JSON.stringify(
+    `export default ${JSON.stringify(
       cloudflareProject(
-        fixture,
+        {
+          ...fixture,
+          source: join(dirname(configs.cloudflare), "../src/index.ts"),
+          root: dirname(configs.cloudflare),
+        },
         name,
         context.accountId,
         bindingIds(resources, "cloudflare"),
@@ -120,9 +159,13 @@ async function writeDeploymentConfigs(
   );
   await writeFile(
     configs.openCompute,
-    `${JSON.stringify(
+    `export default ${JSON.stringify(
       openComputeProject(
-        fixture,
+        {
+          ...fixture,
+          source: join(dirname(configs.openCompute), "../src/index.ts"),
+          root: dirname(configs.openCompute),
+        },
         name,
         context.openComputeAccount,
         bindingIds(resources, "open-compute"),
@@ -137,7 +180,6 @@ async function writeDeploymentConfigs(
 
 async function deployCloudflare(
   context: DifferentialContext,
-  projectRoot: string,
   configs: DifferentialConfigs,
   resources: OwnedResources,
   ownership: WorkerOwnership,
@@ -146,18 +188,10 @@ async function deployCloudflare(
   ownership.cloudflareOwned = true;
   for (const workflow of resources.workflows) workflow.cloudflareOwned = true;
   const deployed = await command(
-    context.wrangler,
-    [
-      "deploy",
-      "--name",
-      name,
-      "--config",
-      configs.cloudflare,
-      "--latest=false",
-      "--strict",
-    ],
+    context.cf,
+    ["deploy", "--mode", "production"],
     {
-      cwd: projectRoot,
+      cwd: dirname(configs.cloudflare),
       env: context.cloudflareEnv,
       timeout: 300_000,
     },
@@ -171,7 +205,7 @@ async function deployCloudflare(
     await verifyWorkflowCreated(
       workflow.name,
       configs.cloudflarePreflight,
-      context.wrangler,
+      context.cf,
       context.cloudflareEnv,
     );
     await recordOwnership(context.journalPath, {
@@ -189,7 +223,6 @@ async function deployCloudflare(
 
 async function deployOpenCompute(
   context: DifferentialContext,
-  projectRoot: string,
   configs: DifferentialConfigs,
   resources: OwnedResources,
   ownership: WorkerOwnership,
@@ -199,23 +232,11 @@ async function deployOpenCompute(
   for (const namespace of resources.durableObjectNamespaces)
     namespace.openComputeOwned = true;
   for (const workflow of resources.workflows) workflow.openComputeOwned = true;
-  await command(
-    context.wrangler,
-    [
-      "deploy",
-      "--name",
-      name,
-      "--config",
-      configs.openCompute,
-      "--latest=false",
-      "--strict",
-    ],
-    {
-      cwd: projectRoot,
-      env: context.openComputeEnv,
-      timeout: 300_000,
-    },
-  );
+  await command(context.cf, ["deploy", "--mode", "production"], {
+    cwd: dirname(configs.openCompute),
+    env: context.openComputeEnv,
+    timeout: 300_000,
+  });
   await recordOwnership(context.journalPath, {
     target: "open-compute",
     kind: "worker",
@@ -235,7 +256,7 @@ async function deployOpenCompute(
     await verifyWorkflowCreated(
       workflow.name,
       configs.openComputePreflight,
-      context.wrangler,
+      context.cf,
       context.openComputeEnv,
     );
     await recordOwnership(context.journalPath, {
@@ -254,12 +275,7 @@ export async function runFixture(
   index: number,
 ): Promise<FixtureRunResult> {
   const name = `${context.prefix}-${index}`;
-  const { projectRoot, configs } = await prepareFixtureFiles(
-    context,
-    fixture,
-    index,
-    name,
-  );
+  const { configs } = await prepareFixtureFiles(context, fixture, index, name);
   const resources = ownedResources(fixture, name);
   const ownership: WorkerOwnership = {
     cloudflareAbsent: false,
@@ -279,14 +295,14 @@ export async function runFixture(
     await ensureCloudflareAbsent(
       name,
       configs.cloudflarePreflight,
-      context.wrangler,
+      context.cf,
       context.cloudflareEnv,
     );
     ownership.cloudflareAbsent = true;
     await ensureCloudflareAbsent(
       name,
       configs.openComputePreflight,
-      context.wrangler,
+      context.cf,
       context.openComputeEnv,
     );
     ownership.openComputeAbsent = true;
@@ -294,20 +310,12 @@ export async function runFixture(
     await writeDeploymentConfigs(context, fixture, name, resources, configs);
     ownership.cloudflareUrl = await deployCloudflare(
       context,
-      projectRoot,
       configs,
       resources,
       ownership,
       name,
     );
-    await deployOpenCompute(
-      context,
-      projectRoot,
-      configs,
-      resources,
-      ownership,
-      name,
-    );
+    await deployOpenCompute(context, configs, resources, ownership, name);
     const cloudflare = await observe(
       ownership.cloudflareUrl,
       fixture,

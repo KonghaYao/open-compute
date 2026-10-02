@@ -26,17 +26,23 @@ export default {
 } satisfies ExportedHandler<{ BUCKET: R2Bucket }>;
 ```
 
-在 `wrangler.jsonc` 中绑定已存在的 bucket：
+在 `cloudflare.config.ts` 中绑定已存在的 bucket：
 
-```json
-{
-  "name": "r2-app",
-  "main": "src/index.ts",
-  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "files" }]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "r2-app",
+    entrypoint: "src/index.ts",
+    env: {
+      BUCKET: bindings.r2({ name: "files" }),
+    },
+  },
+});
 ```
 
-`bucket_name` 必须指向 account 中已有的逻辑 bucket。语法见[绑定](/zh/docs/workers/configuration/bindings/)。bucket 与 object 操作使用固定 Wrangler 或官方 SDK。
+`bucket_name` 必须指向 account 中已有的逻辑 bucket。语法见[绑定](/zh/docs/workers/configuration/bindings/)。bucket 与 object 操作使用固定 cf 或官方 SDK。
 
 ## 兼容性
 

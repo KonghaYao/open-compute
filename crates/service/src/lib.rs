@@ -19,6 +19,8 @@ pub mod cache_backend;
 pub(crate) mod cache_images_http;
 mod caddy_cli;
 pub mod capabilities;
+pub mod cf_launcher;
+mod cf_project;
 mod challenge_dns;
 pub mod cli;
 mod cloudflare_v4;
@@ -102,7 +104,6 @@ mod worker_cli;
 pub mod workers_http;
 pub mod workflow_backend;
 pub mod workflow_http;
-pub mod wrangler_launcher;
 
 /// Compose the production promotion owner for real-process integration fixtures.
 /// This entry point is absent from ordinary production builds.

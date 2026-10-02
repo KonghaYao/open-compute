@@ -18,22 +18,22 @@
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-server-dom-webpack": "19.2.7",
-    "vite": "8.2.2",
-    "@cloudflare/vite-plugin": "1.54.2",
+    "vite": "8.3.0",
+    "@cloudflare/vite-plugin": "2.0.0-beta.sha-52b0dc0e9",
     "@vitejs/plugin-react": "6.1.1",
     "@vitejs/plugin-rsc": "0.5.34",
-    "wrangler": "4.143.0",
     "@playwright/test": "1.62.1",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "cf": "1.0.0-beta.12"
   },
   "toolchain": {
     "bun": "1.3.14",
     "compatibilityDate": "2026-09-08",
     "compatibilityFlags": ["nodejs_compat"]
   },
-  "rootLockSha256": "685f6c5c5f8f5d0327a675e606c137d773bdbbfefd29a11c4533d33823ab332b",
-  "fixtureTreeSha256": "44dc779679326454c394bc18991f4917c6d07516ac513ae6498364d21995597d",
-  "casesSha256": "7f31ba60393c371a57d63a1ecef9a9fbae68f1a47b953cf99ac4dfa443dc3c9d",
+  "rootLockSha256": "6894bed75faaf797b2e228a6e46ae75c4be0aa65b1e882130c6a73c1cd6f2d05",
+  "fixtureTreeSha256": "205122f48f2b696dba6d9b164339ba7621b48ce5905b60ebc1de80c1d33d3012",
+  "casesSha256": "da8016338267ddb8be6fb9d35d9d85ad83271d8f28ee6e4b11b2967844b6b4e3",
   "browser": {
     "name": "chromium",
     "playwrightVersion": "1.62.1",

@@ -35,7 +35,7 @@ pub(super) struct RawPart {
 /// Fully validated upload ready for the immutable Version pipeline.
 #[derive(Clone, Debug)]
 pub(crate) struct ParsedWorkerUpload {
-    /// Closed metadata emitted by the pinned Wrangler multipart generator.
+    /// Closed metadata emitted by the Cloudflare multipart generator.
     pub metadata: WorkerUploadMetadata,
     /// Canonical Worker bundle bytes, absent only for an assets-only Version.
     pub bundle: Option<Vec<u8>>,
@@ -50,7 +50,6 @@ pub(crate) async fn parse_worker_upload(
     let mut metadata_total = 0_usize;
     let mut module_count = 0_usize;
     let mut metadata_field_count = 0_usize;
-    let mut names = BTreeSet::new();
     let mut parts = Vec::new();
     while let Some(mut field) = multipart.next_field().await.map_err(|_| invalid())? {
         let name = field.name().ok_or_else(invalid)?.to_owned();
@@ -126,11 +125,6 @@ pub(crate) async fn parse_worker_upload(
         });
     }
     super::sdk_multipart::normalize_parts(&mut parts)?;
-    for part in &parts {
-        if !names.insert(part.name.clone()) {
-            return Err(invalid());
-        }
-    }
     parse_parts(parts, limits)
 }
 
@@ -138,6 +132,15 @@ fn parse_parts(
     mut parts: Vec<RawPart>,
     limits: BundleLimits,
 ) -> Result<ParsedWorkerUpload, PlatformError> {
+    let mut names = BTreeSet::new();
+    for part in &mut parts {
+        if part.name != METADATA_PART {
+            normalize_module_name(&mut part.name)?;
+        }
+        if !names.insert(part.name.clone()) {
+            return Err(invalid());
+        }
+    }
     if parts
         .iter()
         .filter(|part| part.name == METADATA_PART)
@@ -160,8 +163,25 @@ fn parse_parts(
     {
         return Err(invalid());
     }
-    let metadata: WorkerUploadMetadata =
+    let mut metadata: WorkerUploadMetadata =
         serde_json::from_slice(&metadata_part.bytes).map_err(|_| invalid())?;
+    for name in metadata
+        .main_module
+        .iter_mut()
+        .chain(metadata.body_part.iter_mut())
+    {
+        normalize_module_name(name)?;
+    }
+    for binding in &mut metadata.bindings {
+        match binding {
+            super::model::WorkerUploadBinding::WasmModule { part, .. }
+            | super::model::WorkerUploadBinding::TextBlob { part, .. }
+            | super::model::WorkerUploadBinding::DataBlob { part, .. } => {
+                normalize_module_name(part)?;
+            }
+            _ => {}
+        }
+    }
     validate_metadata(&metadata)?;
     let entrypoint = match (&metadata.main_module, &metadata.body_part) {
         (Some(main), None) => Some((main.as_str(), ModuleType::EsModule)),
@@ -239,7 +259,18 @@ fn validate_metadata(metadata: &WorkerUploadMetadata) -> Result<(), PlatformErro
             if name != "default" {
                 validate_binding_name(name)?;
             }
-            let _ = export;
+            if let super::model::WorkerUploadExport::Workflow {
+                name: workflow_name,
+            } = export
+            {
+                open_compute_core::workflow::validate_workflow_name(workflow_name)?;
+                if metadata.bindings.iter().any(|binding| matches!(binding,
+                    super::model::WorkerUploadBinding::Workflow { workflow_name: bound_name, class_name: Some(class), .. }
+                    if class == name && bound_name != workflow_name
+                )) {
+                    return Err(invalid());
+                }
+            }
         }
     }
     let mut names = BTreeSet::new();
@@ -360,7 +391,17 @@ fn module_type(content_type: Option<&str>) -> Result<ModuleType, PlatformError> 
     }
 }
 
+fn normalize_module_name(name: &mut String) -> Result<(), PlatformError> {
+    validate_part_name(name)?;
+    // cf/Vite prefixes split modules with ./; persisted bundles use canonical names.
+    if name.starts_with("./") {
+        name.drain(..2);
+    }
+    Ok(())
+}
+
 pub(super) fn validate_part_name(name: &str) -> Result<(), PlatformError> {
+    let name = name.strip_prefix("./").unwrap_or(name);
     if name.is_empty()
         || name.len() > 1_024
         || name.starts_with('/')

@@ -1,67 +1,35 @@
 ---
 title: "Develop applications"
-description: "Use Wrangler projects, local development, open-compute targets, deployments, logs, and CI."
+description: "Official cf, application builds, target selection, and CI."
 ---
 
-import { Code, TabItem, Tabs } from "@astrojs/starlight/components";
-
-Keep each application as a standard Wrangler project: `wrangler.jsonc`, TypeScript source, a project-local Wrangler dependency, and a committed lockfile.
-
-## Development workflow
-
-<Tabs syncKey="package-manager">
-  <TabItem label="npm">
-    <Code code={`npm ci\nnpm exec -- wrangler dev`} lang="sh" />
-  </TabItem>
-  <TabItem label="pnpm">
-    <Code
-      code={`pnpm install --frozen-lockfile\npnpm exec wrangler dev`}
-      lang="sh"
-    />
-  </TabItem>
-  <TabItem label="bun">
-    <Code
-      code={`bun install --frozen-lockfile\nbun run wrangler dev`}
-      lang="sh"
-    />
-  </TabItem>
-</Tabs>
-
-Deploy and inspect logs through open-compute:
+Each application uses `cloudflare.config.ts`, the official Vite plugin v2, and project-local cf. Bun manages dependencies; Node.js 22.18+ runs cf. See [Get started](/docs/get-started/) for type generation and build configuration.
 
 ```sh
-ocd wrangler deploy --env staging
-ocd wrangler tail --env staging
+bun install --frozen-lockfile
+bun run dev
+bun run build
+ocd cf --target staging deploy --prebuilt --mode staging
 ```
 
-`wrangler dev` is the fast local loop. `ocd wrangler ...` selects a real open-compute authority, injects only the required deployer credential into the child process, and preserves Wrangler's output, signals, and exit status.
+`cf dev` uses official local simulations. `ocd cf` selects a real OCD authority, injects target credentials, and preserves argv, output, signals, and exit status. It never installs or upgrades tools. Internal CI pins `cf@1.0.0-beta.12`; users may choose their version. Versions outside `1.0.x` warn and still execute.
 
-From another directory, select the project explicitly:
+| Concept  | Meaning                                             | Selector                  |
+| -------- | --------------------------------------------------- | ------------------------- |
+| instance | Registered local data authority                     | `--instance` / `--config` |
+| target   | Saved API origin, account, and token-file reference | `ocd cf --target`         |
+| mode     | Application mode in the official config callback    | `cf --mode`               |
+
+Target and mode are independent. The launcher does not derive mode from the target name or merge configuration and resource IDs.
 
 ```sh
-ocd wrangler --project /srv/workers/billing deploy --env production
+ocd cf --project /srv/workers/billing --target production deploy --prebuilt --mode production
 ```
 
-## Three independent selectors
+Migrate old projects explicitly with `cf migrate ./wrangler.jsonc --bundler vite`, complete the TODOs, and configure the builder. Without new configuration, the wrapper rejects project operations before reading credentials or contacting the target. Help, resource commands, and valid prebuilt paths remain usable.
 
-| Concept     | Meaning                                                                     | Selected with                    |
-| ----------- | --------------------------------------------------------------------------- | -------------------------------- |
-| instance    | A registered isolated account and data authority owned by the scoped daemon | `--instance` or exact `--config` |
-| target      | A saved remote API origin, account, and deployer credential-file reference  | `ocd wrangler --target <name>`   |
-| environment | A project configuration under `env` in `wrangler.jsonc`                     | Wrangler's `--env <name>`        |
+Use Dashboard Live Tail for logs; cf currently has no equivalent terminal streaming command. Manage resources and secrets with official commands; discover parameters through `cf cli search` and command help. Keep secret values out of argv, logs, and the repository.
 
-Do not use target names and environment names as if they were the same scope. A target such as `company-prod` can still deploy a project environment named `production`.
+CI installs the frozen lock, strictly typechecks and builds without deployment credentials, then injects `CLOUDFLARE_API_BASE_URL`, `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_API_TOKEN` only for `cf deploy --prebuilt`. Set `CF_SEND_TELEMETRY=false` and `DO_NOT_TRACK=1`. Deploy does not run your package build script, and prebuilt execution is not a sandbox for untrusted code.
 
-Register remote targets with `ocd target add`, verify them with `ocd target test`, and keep credential files outside the repository. Use `ocd target list` to inspect saved non-secret identity.
-
-## Resources, secrets, and releases
-
-Create resources and declare bindings with the certified project-local Wrangler. Application variables belong in Wrangler configuration; local-only values belong in `.dev.vars`; production secrets use Wrangler secret commands and are never written into the project.
-
-Deployments are immutable. Promotion or rollback changes the active Version pointer instead of rewriting an existing Version. After an interrupted mutation, query the deployment state; a client disconnect does not prove the server cancelled it.
-
-See [Workers configuration](/docs/workers/configuration/), [Products](/docs/products/), and the [CLI guide](/docs/cli/).
-
-## CI
-
-CI can call the locked project-local Wrangler directly with `CLOUDFLARE_API_BASE_URL`, `CLOUDFLARE_ACCOUNT_ID`, and a secret `CLOUDFLARE_API_TOKEN`. Disable telemetry, install the frozen lockfile, and use a least-privilege deployer token. CI must not depend on a developer machine's implicit instance or target registry.
+With npm use `npm install` and `npm run dev/build`; with pnpm use `pnpm install --frozen-lockfile` and `pnpm run dev/build`. Install development dependencies with `npm install --save-dev` / `pnpm add -D`.

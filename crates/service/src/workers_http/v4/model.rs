@@ -1,4 +1,4 @@
-//! Closed Cloudflare Worker request models used by the pinned Wrangler client.
+//! Closed Cloudflare Worker request models admitted at the v4 boundary.
 
 use open_compute_core::SecretString;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 const CLOUDFLARE_OLDEST_COMPATIBILITY_DATE: &str = "2021-11-02";
 
-/// Cloudflare Worker upload metadata emitted by Wrangler 4.143.0.
+/// Cloudflare Worker upload metadata admitted by the v4 API.
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct WorkerUploadMetadata {
@@ -20,15 +20,15 @@ pub(crate) struct WorkerUploadMetadata {
     /// Immutable runtime compatibility flags.
     #[serde(default)]
     pub compatibility_flags: Vec<String>,
-    /// Wrangler build provenance; accepted and intentionally not persisted.
+    /// Client build provenance; accepted and intentionally not persisted.
     #[serde(default)]
     pub package_dependencies: Vec<WorkerUploadPackageDependency>,
-    /// Durable Object code-rollout hint emitted by Wrangler; local deployments switch generations atomically.
+    /// Durable Object code-rollout hint emitted by the client; local deployments switch generations atomically.
     pub code_update_strategy: Option<WorkerUploadCodeUpdateStrategy>,
     /// Environment and product bindings.
     #[serde(default)]
     pub bindings: Vec<WorkerUploadBinding>,
-    /// Binding kinds explicitly inherited by Wrangler.
+    /// Binding kinds explicitly inherited by the client.
     #[serde(default)]
     pub keep_bindings: Vec<String>,
     /// Immutable version annotations.
@@ -36,7 +36,7 @@ pub(crate) struct WorkerUploadMetadata {
     pub annotations: BTreeMap<String, String>,
     /// Static Assets completion token and routing configuration.
     pub assets: Option<WorkerUploadAssets>,
-    /// Wrangler's upload-time observability projection.
+    /// Upload-time observability projection.
     pub observability: Option<WorkerUploadObservability>,
     /// Version-scoped automatic cache configuration.
     pub cache_options: Option<WorkerUploadCacheOptions>,
@@ -53,7 +53,7 @@ fn default_compatibility_date() -> String {
     CLOUDFLARE_OLDEST_COMPATIBILITY_DATE.to_owned()
 }
 
-/// One package dependency emitted by Wrangler's dependency instrumentation.
+/// One package dependency emitted by the client's dependency instrumentation.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct WorkerUploadPackageDependency {
@@ -65,7 +65,7 @@ pub(crate) struct WorkerUploadPackageDependency {
     pub _installed_version: String,
 }
 
-/// Closed Wrangler wire shape for Durable Object code rollout.
+/// Closed Cloudflare wire shape for Durable Object code rollout.
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct WorkerUploadCodeUpdateStrategy {
@@ -91,7 +91,7 @@ pub(crate) enum WorkerUploadCodeUpdateMode {
     Deferred,
 }
 
-/// The fixed Wrangler `limits` schema accepted at the v4 boundary. Unknown fields are
+/// The Cloudflare `limits` schema accepted at the v4 boundary. Unknown fields are
 /// rejected by `deny_unknown_fields`; range validation happens at materialization.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -135,6 +135,9 @@ pub(crate) struct WorkerUploadCacheOptions {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
 pub(crate) enum WorkerUploadExport {
+    Workflow {
+        name: String,
+    },
     Worker {
         cache: Option<WorkerUploadEntrypointCache>,
     },
@@ -373,7 +376,7 @@ pub(crate) enum WorkerUploadBinding {
     TextBlob { name: String, part: String },
     /// Legacy service-worker byte binding backed by a multipart part.
     DataBlob { name: String, part: String },
-    /// Explicit inheritance marker emitted by Wrangler.
+    /// Explicit inheritance marker emitted by the client.
     Inherit { name: String },
 }
 

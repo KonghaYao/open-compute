@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceDigest": "e9fd159736c848d3b9ff1244976e64f039eedefc38d0f27b55ea766fe4525604",
+  "sourceDigest": "0a7db2986438737ebb18bf80dc421efd3c358e48362e155d82ad59978d81a020",
   "sourceDigestScope": "git-visible production, test, toolchain, manifest, and maintained reference inputs; excludes generated Python caches, test/conformance/baseline.json, and non-reference docs",
   "workerdLockSha256": "39870adf11f278f8628024861af0e40c211019d5139792f0a432192bf7084f0b",
   "workerd": {
@@ -19,7 +19,7 @@
   "workersTypes": {
     "version": "5.20260830.1",
     "gitHead": "e9dda5963aba7ee4323960db795690ec78fec118",
-    "lockSha256": "685f6c5c5f8f5d0327a675e606c137d773bdbbfefd29a11c4533d33823ab332b",
+    "lockSha256": "6894bed75faaf797b2e228a6e46ae75c4be0aa65b1e882130c6a73c1cd6f2d05",
     "packageSha256": "d3d7a80d3b27e53116e34736ec1945eb359f53a1000df37b205c4cb59ce29a8e",
     "indexSha256": "a00b4783854c9028158f776d605790d9a3e17e6a97f4d255beb70035c59c40dd",
     "astSha256": "da29f5ec1d9a81cc0094bd083ed3b28013573fcb2d4febd9fd62aecbfb53c6b3"
@@ -29,15 +29,15 @@
     "lockSha256": "63d8ee26dceb27f0c452d62d56d1252d390c7b0bd4fc56deb2dd9eb8c7af4f14",
     "treeSha256": "cf8f3daec06f99b224e5607ff0e3ecf1a25f92ca9c38cd62c69ba0bda995cbce"
   },
-  "wrangler": {
-    "version": "4.143.0"
-  },
   "vitePlugin": {
-    "version": "1.54.2"
+    "version": "2.0.0-beta.sha-52b0dc0e9"
   },
   "toolchain": {
     "bun": "1.3.14",
     "typescript": "7.0.2",
     "rolldown": "1.2.6"
+  },
+  "cf": {
+    "version": "1.0.0-beta.12"
   }
 }

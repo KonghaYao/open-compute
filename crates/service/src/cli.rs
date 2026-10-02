@@ -148,7 +148,7 @@ fn operator_deps_required(cli: &Cli) -> bool {
             | Command::Uninstall { .. }
             | Command::Purge { .. }
             | Command::Target { .. }
-            | Command::Wrangler { .. }
+            | Command::Cf { .. }
     )
 }
 
@@ -546,14 +546,14 @@ async fn run_project_command(
         return Ok(true);
     }
 
-    if let Command::Wrangler {
+    if let Command::Cf {
         target,
         project,
         arguments,
     } = &cli.command
     {
         let deps = require_operator_deps(deps)?;
-        let launch = crate::wrangler_launcher::prepare_wrangler_launch(
+        let launch = crate::cf_launcher::prepare_cf_launch(
             target.as_ref(),
             cli.config.as_deref(),
             cli.instance.as_ref(),
@@ -573,7 +573,7 @@ async fn run_project_command(
         )
         .await?;
         launch.exec(stderr)?;
-        unreachable!("successful Wrangler launch replaces the ocd process");
+        unreachable!("successful Cf launch replaces the ocd process");
     }
 
     Ok(false)

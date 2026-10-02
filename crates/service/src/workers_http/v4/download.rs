@@ -137,7 +137,7 @@ fn multipart_response(
     )
 }
 
-fn module_content_type(module_type: ModuleType) -> &'static str {
+pub(super) fn module_content_type(module_type: ModuleType) -> &'static str {
     match module_type {
         ModuleType::EsModule => "application/javascript+module",
         ModuleType::CommonJsModule => "application/javascript",

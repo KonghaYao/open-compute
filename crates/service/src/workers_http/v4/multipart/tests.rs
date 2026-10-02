@@ -464,3 +464,86 @@ fn fixed_wrangler_deprecated_queue_delay_metadata_is_accepted() {
     };
     assert_eq!(delay.as_u64(), Some(60));
 }
+
+#[test]
+fn workflow_exports_validate_definition_names_and_binding_consistency() {
+    let metadata = |name: &str, bound: &str| {
+        serde_json::from_value::<WorkerUploadMetadata>(serde_json::json!({
+            "main_module":"index.js",
+            "exports":{"Flow":{"type":"workflow","name":name}},
+            "bindings":[{"type":"workflow","name":"FLOW","workflow_name":bound,"class_name":"Flow","script_name":"owner"}]
+        })).unwrap()
+    };
+    assert!(validate_metadata(&metadata("flow-name", "flow-name")).is_ok());
+    assert!(validate_metadata(&metadata("flow-name", "different-flow")).is_err());
+    assert!(validate_metadata(&metadata("invalid/name", "invalid/name")).is_err());
+    assert!(serde_json::from_value::<WorkerUploadMetadata>(serde_json::json!({
+        "main_module":"index.js","exports":{"Flow":{"type":"workflow","name":"flow-name","unknown":true}}
+    })).is_err());
+}
+
+#[test]
+fn cf_split_modules_are_canonicalized_and_ambiguous_paths_are_rejected() {
+    let metadata = br#"{"main_module":"./index.js","bindings":[{"type":"text_blob","name":"COPY","part":"./copy.txt"}]}"#;
+    let parsed = parse_parts(
+        vec![
+            part("metadata", "application/json", metadata),
+            part(
+                "./index.js",
+                "application/javascript+module",
+                b"export default {async fetch(){return import('./assets/lazy.js')}}",
+            ),
+            part(
+                "./assets/lazy.js",
+                "application/javascript+module",
+                b"export const value = 42;",
+            ),
+            part("./copy.txt", "text/plain", b"copy"),
+        ],
+        BundleLimits::DEFAULT,
+    )
+    .unwrap();
+    assert_eq!(parsed.metadata.main_module.as_deref(), Some("index.js"));
+    assert_eq!(parsed.metadata.bindings[0].part().unwrap().0, "copy.txt");
+    let bundle = CanonicalBundle::parse(parsed.bundle.unwrap(), BundleLimits::DEFAULT).unwrap();
+    assert_eq!(
+        bundle
+            .manifest()
+            .modules
+            .iter()
+            .map(|module| module.name.as_str())
+            .collect::<Vec<_>>(),
+        ["assets/lazy.js", "copy.txt", "index.js"]
+    );
+    for name in [
+        "./../secret.js",
+        "././index.js",
+        ".//index.js",
+        "./",
+        "/index.js",
+        "dir/../index.js",
+    ] {
+        assert!(validate_part_name(name).is_err(), "accepted {name}");
+    }
+    let duplicate = parse_parts(
+        vec![
+            part(
+                "metadata",
+                "application/json",
+                br#"{"main_module":"index.js"}"#,
+            ),
+            part(
+                "index.js",
+                "application/javascript+module",
+                b"export default {}",
+            ),
+            part(
+                "./index.js",
+                "application/javascript+module",
+                b"export default {}",
+            ),
+        ],
+        BundleLimits::DEFAULT,
+    );
+    assert!(duplicate.is_err());
+}

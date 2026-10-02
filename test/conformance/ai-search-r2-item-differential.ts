@@ -63,9 +63,9 @@ async function main(): Promise<void> {
     throw new Error("Cloudflare account ID is invalid");
   const token = required("CLOUDFLARE_API_TOKEN");
   const sourceTokenId = required("OPEN_COMPUTE_CF_AI_SEARCH_TOKEN_ID");
-  const wrangler = required("OPEN_COMPUTE_CF_WRANGLER");
-  if (!wrangler.startsWith("/") || !(await stat(wrangler)).isFile())
-    throw new Error("OPEN_COMPUTE_CF_WRANGLER must name an absolute file");
+  const cf = required("OPEN_COMPUTE_CF_CLI");
+  if (!cf.startsWith("/") || !(await stat(cf)).isFile())
+    throw new Error("OPEN_COMPUTE_CF_CLI must name an absolute file");
 
   const suffix = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   const namespace = `oc-i52-${suffix}`;
@@ -100,24 +100,25 @@ async function main(): Promise<void> {
       "namespace create",
     );
     namespaceOwned = true;
-    await command(wrangler, ["r2", "bucket", "create", bucket, "--remote"], {
+    await command(cf, ["r2", "buckets", "create", "--name", bucket], {
       cwd: ROOT,
       env: environment,
       timeout: 120_000,
     });
     bucketOwned = true;
     await command(
-      wrangler,
+      cf,
       [
         "r2",
-        "object",
+        "objects",
         "put",
-        `${bucket}/${seedKey}`,
+        seedKey,
+        "--bucket-name",
+        bucket,
         "--file",
         seedPath,
         "--content-type",
         "text/markdown",
-        "--remote",
       ],
       { cwd: ROOT, env: environment, timeout: 120_000 },
     );
@@ -174,17 +175,18 @@ async function main(): Promise<void> {
       "pause instance",
     );
     await command(
-      wrangler,
+      cf,
       [
         "r2",
-        "object",
+        "objects",
         "put",
-        `${bucket}/${itemKey}`,
+        itemKey,
+        "--bucket-name",
+        bucket,
         "--file",
         itemPath,
         "--content-type",
         "text/plain",
-        "--remote",
       ],
       { cwd: ROOT, env: environment, timeout: 120_000 },
     );
@@ -234,7 +236,7 @@ async function main(): Promise<void> {
   } finally {
     const run = async (args: readonly string[]): Promise<boolean> =>
       (
-        await commandStatus(wrangler, args, {
+        await commandStatus(cf, args, {
           cwd: ROOT,
           env: environment,
           timeout: 120_000,
@@ -261,26 +263,30 @@ async function main(): Promise<void> {
     if (itemOwned)
       cleanup.item = await run([
         "r2",
-        "object",
+        "objects",
         "delete",
-        `${bucket}/${itemKey}`,
-        "--remote",
+        "--force",
+        itemKey,
+        "--bucket-name",
+        bucket,
       ]);
     if (seedOwned)
       cleanup.seed = await run([
         "r2",
-        "object",
+        "objects",
         "delete",
-        `${bucket}/${seedKey}`,
-        "--remote",
+        "--force",
+        seedKey,
+        "--bucket-name",
+        bucket,
       ]);
     if (bucketOwned)
       cleanup.bucket = await run([
         "r2",
-        "bucket",
+        "buckets",
         "delete",
         bucket,
-        "--remote",
+        "--force",
       ]);
     await rm(directory, { recursive: true, force: true });
     if (

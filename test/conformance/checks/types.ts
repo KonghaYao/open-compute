@@ -1,16 +1,7 @@
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { loadProject } from "../../../packages/toolchain/src/project.ts";
 import { baseline, json, record, ROOT, sha256, string } from "./context.ts";
 
 export function typesAstEnv(): NodeJS.ProcessEnv {
@@ -140,7 +131,7 @@ export async function publicTypesSurface(): Promise<void> {
     "utf8",
   );
   if (
-    !example.includes("@open-compute/workers-types") ||
+    !example.includes(".cloudflare/types") ||
     example.includes("workers-types/experimental")
   ) {
     throw new Error("example does not consume the pinned stable type surface");
@@ -208,76 +199,5 @@ export function conformanceSelfTests(): void {
         .filter(Boolean)
         .join("\n"),
     );
-  }
-}
-
-export async function unsupportedConfigRejection(): Promise<void> {
-  const directory = mkdtempSync(join(tmpdir(), "open-compute-p3-contract-"));
-  try {
-    const unsupported = [
-      [
-        "analytics_engine_datasets",
-        {
-          analytics_engine_datasets: [
-            { binding: "BAD", dataset: "unsupported" },
-          ],
-        },
-      ],
-      ["browser", { browser: { binding: "BAD" } }],
-      [
-        "hyperdrive",
-        {
-          hyperdrive: [
-            { binding: "BAD", id: "0123456789abcdef0123456789abcdef" },
-          ],
-        },
-      ],
-      [
-        "mtls_certificates",
-        {
-          mtls_certificates: [
-            {
-              binding: "BAD",
-              certificate_id: "11111111-1111-4111-8111-111111111111",
-            },
-          ],
-        },
-      ],
-      [
-        "ratelimits",
-        {
-          ratelimits: [
-            {
-              name: "BAD",
-              namespace_id: "1001",
-              simple: { limit: 1, period: 60 },
-            },
-          ],
-        },
-      ],
-    ] as const;
-    for (const [field, declaration] of unsupported) {
-      const path = join(directory, `${field}.jsonc`);
-      writeFileSync(
-        path,
-        JSON.stringify({
-          main: "worker.ts",
-          name: "unsupported-probe",
-          ...declaration,
-        }),
-      );
-      let rejected = false;
-      try {
-        await loadProject(path);
-      } catch (error) {
-        rejected =
-          error instanceof Error &&
-          error.message === `Wrangler config declares unsupported ${field}`;
-      }
-      if (!rejected)
-        throw new Error(`unsupported Wrangler field was accepted: ${field}`);
-    }
-  } finally {
-    rmSync(directory, { recursive: true });
   }
 }

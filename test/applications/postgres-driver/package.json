@@ -4,14 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --project tsconfig.build.json --noEmit && tsc --project tsconfig.worker.json --noEmit && bun build.ts"
+    "build": "tsc --project tsconfig.worker.json --noEmit && cf build --mode production"
   },
   "dependencies": {
     "pg": "8.20.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "catalog:",
     "@open-compute/workers-types": "workspace:*",
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "cf": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
   }
 }

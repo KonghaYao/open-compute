@@ -37,6 +37,30 @@ export function prettierJson(text) {
   return formatted.stdout;
 }
 
+export function officialCfSchema(root) {
+  const result = spawnSync(
+    "node",
+    [
+      "--input-type=module",
+      "-e",
+      `
+    import { realpathSync } from 'node:fs';
+    import { dirname, join } from 'node:path';
+    import { pathToFileURL } from 'node:url';
+    const schemaPath = join(dirname(realpathSync(process.argv[1])), '../@cloudflare/config/dist/index.mjs');
+    const { InputWorkerSchema } = await import(pathToFileURL(schemaPath));
+    console.log(JSON.stringify(InputWorkerSchema.toJSONSchema({ unrepresentable: 'any' })));
+  `,
+      join(root, "package.json"),
+    ],
+    { cwd: ROOT, encoding: "utf8", maxBuffer: 1024 * 1024 },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw new Error(`official cf schema generation failed: ${result.stderr}`);
+  return JSON.parse(result.stdout);
+}
+
 function operationKey(value) {
   const separator = value.indexOf(" ");
   if (separator < 1) throw new Error(`invalid operation key: ${value}`);
@@ -181,7 +205,7 @@ export function buildCapability(
   subset,
   manifest,
   source,
-  wranglerVersion,
+  cfVersion,
   configSchemaSha256,
   configSchema,
 ) {
@@ -216,7 +240,7 @@ export function buildCapability(
       requestMediaType: "none",
     });
   }
-  for (const item of manifest.wranglerObservedOperations) {
+  for (const item of manifest.observedMultipartOperations) {
     const [method, path] = operationKey(item.operation);
     routes.push({
       id: item.operation,
@@ -280,104 +304,84 @@ export function buildCapability(
       throw new Error(`unreferenced management deviation: ${deviation}`);
     }
   }
-  const topFields = Object.keys(
-    configSchema.definitions?.RawConfig?.properties ?? {},
-  );
+  const topFields = Object.keys(configSchema.properties ?? {});
   if (topFields.length === 0)
-    throw new Error("Wrangler RawConfig field inventory is empty");
+    throw new Error("Cloudflare CLI Worker field inventory is empty");
   const statusByField = new Map();
-  for (const id of source.wrangler.supportedFields)
+  for (const id of source.cf.supportedFields)
     statusByField.set(id, {
       status: "supported",
-      source: "wrangler-config-schema",
+      source: "cf-config-schema",
     });
-  for (const [id, stage] of Object.entries(source.wrangler.deferredFields))
+  for (const [id, stage] of Object.entries(source.cf.deferredFields))
     statusByField.set(id, {
       status: "planned",
-      source: "wrangler-config-schema",
+      source: "cf-config-schema",
       stage,
     });
-  for (const [id, stage] of Object.entries(
-    source.wrangler.unsupportedDeferredFields,
-  ))
+  for (const [id, stage] of Object.entries(source.cf.unsupportedDeferredFields))
     statusByField.set(id, {
       status: "unsupported",
-      source: "wrangler-config-schema",
+      source: "cf-config-schema",
       stage,
     });
   for (const id of topFields)
     if (!statusByField.has(id))
       statusByField.set(id, {
         status: "unsupported",
-        source: "wrangler-config-schema",
+        source: "cf-config-schema",
       });
   for (const id of statusByField.keys())
     if (!topFields.includes(id))
-      throw new Error(`unknown Wrangler top-level field: ${id}`);
+      throw new Error(`unknown Cloudflare CLI top-level field: ${id}`);
   const fields = topFields.map((id) => ({ id, ...statusByField.get(id) }));
   fields.push(
     {
       id: "observability.logs",
       status: "supported",
-      source: "wrangler-config-schema",
+      source: "cf-config-schema",
     },
     {
       id: "observability.traces",
       status: "unsupported",
-      source: "wrangler-config-schema",
+      source: "cf-config-schema",
       stage: "P7",
     },
-    {
-      id: "limits.cpu_ms",
-      status: "supported",
-      source: "wrangler-config-schema",
-    },
+    { id: "limits.cpuMs", status: "supported", source: "cf-config-schema" },
     {
       id: "limits.subrequests",
       status: "supported",
-      source: "wrangler-config-schema",
-    },
-    {
-      id: "usage_model",
-      status: "unsupported",
-      source: "pinned-schema-absence",
-      stage: "P8",
-      constraint: `wrangler@${wranglerVersion} config-schema.json has no usage_model property`,
-    },
-    {
-      id: "worker_loaders[].binding",
-      status: "supported",
-      source: "wrangler-config-schema",
+      source: "cf-config-schema",
     },
   );
   const bindings = [
-    ...source.wrangler.supportedBindings.map((id) => ({
+    ...source.cf.supportedBindings.map((id) => ({
       id,
       status: "supported",
-      source: "wrangler-multipart",
+      source: "cf-multipart",
     })),
-    ...source.wrangler.unsupportedBindings.map((id) => ({
+    ...source.cf.unsupportedBindings.map((id) => ({
       id,
       status: "unsupported",
-      source: "wrangler-multipart",
+      source: "cf-multipart",
     })),
   ];
   const commands = [
-    ...source.wrangler.supportedCommands.map((id) => ({
+    ...source.cf.supportedCommands.map((id) => ({
       id,
       status: "supported",
-      source: "wrangler-cli",
+      source: "cf-cli",
     })),
-    ...Object.entries(source.wrangler.deferredCommands).map(([id, stage]) => ({
+    ...Object.entries(source.cf.deferredCommands).map(([id, stage]) => ({
       id,
       status: "planned",
-      source: "wrangler-cli",
+      source: "cf-cli",
       stage,
     })),
-    ...source.wrangler.unsupportedCommands.map((id) => ({
+    ...source.cf.unsupportedCommands.map((id) => ({
       id,
       status: "unsupported",
-      source: "wrangler-cli",
+      source: "cf-cli",
     })),
   ];
   return {
@@ -394,8 +398,8 @@ export function buildCapability(
     },
     workersObservability: source.workersObservability,
     workerLoader: source.workerLoader,
-    wrangler: {
-      version: wranglerVersion,
+    cf: {
+      version: cfVersion,
       configSchemaSha256,
       fields,
       bindings,
@@ -843,7 +847,7 @@ function extensionSchemas() {
     Capabilities: objectSchema(
       [
         "release",
-        "wrangler_version",
+        "cf_version",
         "compatibility",
         "system_workers",
         "endpoints",
@@ -852,7 +856,7 @@ function extensionSchemas() {
       ],
       {
         release: { type: "string", minLength: 1 },
-        wrangler_version: { type: "string", const: "4.143.0" },
+        cf_version: { type: "string", const: "1.0.0-beta.12" },
         compatibility: objectSchema(
           [
             "validation",
@@ -1526,7 +1530,7 @@ function sdkRoutes(sdkRoot) {
   return routes;
 }
 
-export function validateCommitted({ openapiPath, wranglerRoot, sdkRoot } = {}) {
+export function validateCommitted({ openapiPath, cfRoot, sdkRoot } = {}) {
   const lock = json(LOCK_PATH);
   const manifest = json(MANIFEST_PATH);
   if (
@@ -1640,7 +1644,7 @@ export function validateCommitted({ openapiPath, wranglerRoot, sdkRoot } = {}) {
     ...manifest.operations,
     ...manifest.deferredOperations.map((item) => item.operation),
     ...manifest.unsupportedOperations.map((item) => item.operation),
-    ...manifest.wranglerObservedOperations.map((item) => item.operation),
+    ...manifest.observedMultipartOperations.map((item) => item.operation),
   ]) {
     if (!routeIds.includes(id))
       throw new Error(`capability route inventory is missing ${id}`);
@@ -1650,9 +1654,9 @@ export function validateCommitted({ openapiPath, wranglerRoot, sdkRoot } = {}) {
       throw new Error(`invalid route status: ${item.id}`);
   }
   for (const collection of [
-    capability.wrangler.fields,
-    capability.wrangler.bindings,
-    capability.wrangler.commands,
+    capability.cf.fields,
+    capability.cf.bindings,
+    capability.cf.commands,
   ]) {
     if (new Set(collection.map((item) => item.id)).size !== collection.length)
       throw new Error("duplicate capability item");
@@ -1695,10 +1699,12 @@ export function validateCommitted({ openapiPath, wranglerRoot, sdkRoot } = {}) {
     );
   }
   if (
-    capability.wrangler.version !== lock.wrangler.version ||
-    capability.wrangler.configSchemaSha256 !== lock.wrangler.configSchemaSha256
+    capability.cf.version !== lock.cf.version ||
+    capability.cf.configSchemaSha256 !== lock.cf.configSchemaSha256
   ) {
-    throw new Error("Wrangler capability identity differs from the fixed lock");
+    throw new Error(
+      "Cloudflare CLI capability identity differs from the fixed lock",
+    );
   }
   if (openapiPath !== undefined) {
     const bytes = readFileSync(openapiPath);
@@ -1710,35 +1716,30 @@ export function validateCommitted({ openapiPath, wranglerRoot, sdkRoot } = {}) {
     if (!Buffer.from(rebuilt).equals(subsetBytes))
       throw new Error("committed OpenAPI subset is not reproducible");
   }
-  if (wranglerRoot !== undefined) {
+  if (cfRoot !== undefined) {
     if (
-      sha256(readFileSync(join(wranglerRoot, "config-schema.json"))) !==
-        lock.wrangler.configSchemaSha256 ||
-      sha256(readFileSync(join(wranglerRoot, "wrangler-dist/cli.js"))) !==
-        lock.wrangler.cliSha256
+      sha256(
+        Buffer.from(
+          prettierJson(
+            `${JSON.stringify(officialCfSchema(cfRoot), null, 2)}\n`,
+          ),
+        ),
+      ) !== lock.cf.configSchemaSha256 ||
+      sha256(readFileSync(join(cfRoot, "dist/index.mjs"))) !== lock.cf.cliSha256
     ) {
-      throw new Error("installed Wrangler does not match the fixed contract");
+      throw new Error(
+        "installed Cloudflare CLI does not match the fixed contract",
+      );
     }
-    const source = readFileSync(
-      join(wranglerRoot, "wrangler-dist/cli.js"),
-      "utf8",
-    );
-    for (const required of [
-      'bindings_inherit: "strict"',
-      "/script-settings`,",
-      "/workers/assets/upload/${manifestEntry[1].hash}",
-    ])
-      if (!source.includes(required))
-        throw new Error(`Wrangler trace authority is missing ${required}`);
     const expected = prettierJson(
       `${JSON.stringify(
         buildCapability(
           subset,
           manifest,
           json(CAPABILITY_SOURCE_PATH),
-          lock.wrangler.version,
-          lock.wrangler.configSchemaSha256,
-          json(join(wranglerRoot, "config-schema.json")),
+          lock.cf.version,
+          lock.cf.configSchemaSha256,
+          officialCfSchema(cfRoot),
         ),
         null,
         2,
@@ -1801,18 +1802,16 @@ function main() {
       `${JSON.stringify(buildSubset(JSON.parse(bytes), json(MANIFEST_PATH), lock.revision, lock.sha256), null, 2)}\n`,
     );
     writeFileSync(SUBSET_PATH, output);
-    const wranglerRoot = value("--wrangler-root");
-    if (wranglerRoot === undefined)
-      throw new Error(
-        "generate requires --wrangler-root <wrangler-package-root>",
-      );
+    const cfRoot = value("--cf-root");
+    if (cfRoot === undefined)
+      throw new Error("generate requires --cf-root <cf-package-root>");
     const capability = buildCapability(
       JSON.parse(output),
       json(MANIFEST_PATH),
       json(CAPABILITY_SOURCE_PATH),
-      lock.wrangler.version,
-      lock.wrangler.configSchemaSha256,
-      json(join(wranglerRoot, "config-schema.json")),
+      lock.cf.version,
+      lock.cf.configSchemaSha256,
+      officialCfSchema(cfRoot),
     );
     writeFileSync(
       CAPABILITY_PATH,
@@ -1829,11 +1828,11 @@ function main() {
   }
   if (command !== "check")
     throw new Error(
-      "usage: p6-contract.mjs generate|check [--openapi path] [--wrangler-root path] [--sdk-root path]",
+      "usage: p6-contract.mjs generate|check [--openapi path] [--cf-root path] [--sdk-root path]",
     );
   validateCommitted({
     openapiPath: value("--openapi"),
-    wranglerRoot: value("--wrangler-root"),
+    cfRoot: value("--cf-root"),
     sdkRoot: value("--sdk-root"),
   });
 }

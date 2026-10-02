@@ -1,6 +1,6 @@
 ---
 title: "Extension API"
-description: "Operator config, extension.toml, Wrangler services and props, and the facade-only HOST port."
+description: "Operator config, extension.toml, cf services and props, and the facade-only HOST port."
 ---
 
 This page is the operator and Worker contract for local native extensions. It is not a Cloudflare hosted Workers API.
@@ -40,9 +40,9 @@ Paths must be relative with only normal components (no `.`, `..`, absolute, or s
 
 There is no cwd fallback, network download, dynamic-library load, version field, or hot update. Errors fail startup.
 
-## Wrangler `services` + `props`
+## cf `bindings.worker` + `props`
 
-User Workers keep the standard Service Binding fields. Do not invent a Wrangler `extensions` array or a new `type`.
+User Workers keep the standard Service Binding fields. Do not invent a cf `extensions` array or a new `type`.
 
 ```json
 {

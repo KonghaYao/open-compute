@@ -93,7 +93,7 @@ pub(super) fn declares_live_class(metadata: &WorkerUploadMetadata, class_name: &
                 state.as_deref().unwrap_or("created") == "created"
                     && storage.as_deref() == Some("sqlite")
             }
-            WorkerUploadExport::Worker { .. } => false,
+            WorkerUploadExport::Worker { .. } | WorkerUploadExport::Workflow { .. } => false,
         })
 }
 

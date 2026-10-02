@@ -192,7 +192,11 @@
         "status": "unsupported",
         "source": "p7-scope"
       },
-      { "id": "workers.traces", "status": "unsupported", "source": "p7-scope" },
+      {
+        "id": "workers.traces",
+        "status": "unsupported",
+        "source": "p7-scope"
+      },
       {
         "id": "workers.observability.telemetry.calculations",
         "status": "unsupported",
@@ -219,10 +223,26 @@
         "constraint": "Local invocation groups omit unavailable hosted metadata",
         "deviations": ["OC-OBSERVABILITY-001"]
       },
-      { "id": "calculations", "status": "unsupported", "source": "p7-scope" },
-      { "id": "traces", "status": "unsupported", "source": "p7-scope" },
-      { "id": "agents", "status": "unsupported", "source": "p7-scope" },
-      { "id": "requests", "status": "unsupported", "source": "p7-scope" }
+      {
+        "id": "calculations",
+        "status": "unsupported",
+        "source": "p7-scope"
+      },
+      {
+        "id": "traces",
+        "status": "unsupported",
+        "source": "p7-scope"
+      },
+      {
+        "id": "agents",
+        "status": "unsupported",
+        "source": "p7-scope"
+      },
+      {
+        "id": "requests",
+        "status": "unsupported",
+        "source": "p7-scope"
+      }
     ],
     "queryOperators": [
       {
@@ -252,20 +272,56 @@
         "constraint": "Linear-time RE2-compatible subset with bounded patterns",
         "deviations": ["OC-OBSERVABILITY-001"]
       },
-      { "id": "exists", "status": "supported", "source": "cloudflare-openapi" },
+      {
+        "id": "exists",
+        "status": "supported",
+        "source": "cloudflare-openapi"
+      },
       {
         "id": "is_null",
         "status": "supported",
         "source": "cloudflare-openapi"
       },
-      { "id": "in", "status": "supported", "source": "cloudflare-openapi" },
-      { "id": "not_in", "status": "supported", "source": "cloudflare-openapi" },
-      { "id": "eq", "status": "supported", "source": "cloudflare-openapi" },
-      { "id": "neq", "status": "supported", "source": "cloudflare-openapi" },
-      { "id": "gt", "status": "supported", "source": "cloudflare-openapi" },
-      { "id": "gte", "status": "supported", "source": "cloudflare-openapi" },
-      { "id": "lt", "status": "supported", "source": "cloudflare-openapi" },
-      { "id": "lte", "status": "supported", "source": "cloudflare-openapi" }
+      {
+        "id": "in",
+        "status": "supported",
+        "source": "cloudflare-openapi"
+      },
+      {
+        "id": "not_in",
+        "status": "supported",
+        "source": "cloudflare-openapi"
+      },
+      {
+        "id": "eq",
+        "status": "supported",
+        "source": "cloudflare-openapi"
+      },
+      {
+        "id": "neq",
+        "status": "supported",
+        "source": "cloudflare-openapi"
+      },
+      {
+        "id": "gt",
+        "status": "supported",
+        "source": "cloudflare-openapi"
+      },
+      {
+        "id": "gte",
+        "status": "supported",
+        "source": "cloudflare-openapi"
+      },
+      {
+        "id": "lt",
+        "status": "supported",
+        "source": "cloudflare-openapi"
+      },
+      {
+        "id": "lte",
+        "status": "supported",
+        "source": "cloudflare-openapi"
+      }
     ],
     "scriptTailProtocol": "trace-v1",
     "limits": [
@@ -288,57 +344,23 @@
       "serviceBindingEvidence": "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
     }
   },
-  "wrangler": {
+  "cf": {
     "supportedFields": [
-      "$schema",
-      "env",
       "name",
-      "account_id",
-      "compatibility_date",
-      "compatibility_flags",
-      "main",
-      "find_additional_modules",
-      "preserve_file_names",
-      "base_dir",
-      "workers_dev",
-      "tsconfig",
-      "jsx_factory",
-      "jsx_fragment",
-      "migrations",
-      "exports",
-      "triggers",
-      "rules",
-      "build",
-      "no_bundle",
-      "minify",
-      "keep_names",
-      "upload_source_maps",
+      "compatibilityDate",
+      "compatibilityFlags",
       "assets",
+      "domains",
+      "triggers",
       "cache",
-      "define",
-      "vars",
-      "secrets",
-      "durable_objects",
-      "workflows",
-      "kv_namespaces",
-      "queues",
-      "r2_buckets",
-      "d1_databases",
-      "vectorize",
-      "artifacts",
-      "ai_search_namespaces",
-      "ai_search",
-      "services",
-      "ai",
-      "images",
-      "version_metadata",
-      "send_metrics",
-      "dependencies_instrumentation",
-      "dev",
-      "keep_vars",
-      "observability",
+      "placement",
       "limits",
-      "worker_loaders"
+      "observability",
+      "workersDev",
+      "previewUrls",
+      "env",
+      "exports",
+      "entrypoint"
     ],
     "deferredFields": {},
     "unsupportedDeferredFields": {},
@@ -377,78 +399,44 @@
       "unsafe"
     ],
     "supportedCommands": [
-      "whoami",
       "deploy",
-      "versions upload",
-      "versions list",
-      "versions view",
-      "versions deploy",
-      "deployments list",
-      "deployments status",
-      "rollback",
-      "secret put",
-      "secret list",
-      "secret delete",
-      "secret bulk",
-      "kv namespace create",
-      "kv namespace list",
-      "kv namespace delete",
-      "kv key put",
-      "kv key get",
-      "kv key list",
-      "kv key delete",
+      "workers delete",
+      "workers versions create",
+      "workers versions list",
+      "workers versions get",
+      "workers deployments create",
+      "workers deployments list",
+      "workers secrets update",
+      "workers secrets list",
+      "workers secrets delete",
+      "workers secrets bulk",
+      "kv namespaces create",
+      "kv namespaces list",
+      "kv namespaces delete",
+      "kv keys put",
+      "kv keys get",
+      "kv keys list",
+      "kv keys delete",
       "d1 create",
       "d1 list",
-      "d1 info",
-      "d1 execute",
+      "d1 get",
+      "d1 query",
       "d1 migrations apply",
       "d1 delete",
-      "r2 bucket create",
-      "r2 bucket list",
-      "r2 bucket delete",
-      "r2 object put",
-      "r2 object get",
-      "r2 object delete",
-      "vectorize create",
-      "vectorize list",
-      "vectorize get",
-      "vectorize delete",
-      "vectorize insert",
-      "vectorize upsert",
-      "vectorize query",
-      "vectorize get-vectors",
-      "vectorize delete-vectors",
-      "vectorize info",
-      "vectorize create-metadata-index",
-      "vectorize list-metadata-index",
-      "vectorize delete-metadata-index",
-      "ai-search namespace create",
-      "ai-search namespace list",
-      "ai-search namespace get",
-      "ai-search namespace update",
-      "ai-search namespace delete",
-      "ai-search create",
-      "ai-search list",
-      "ai-search get",
-      "ai-search update",
-      "ai-search delete",
-      "ai-search stats",
-      "ai-search search",
-      "ai-search jobs",
+      "r2 buckets create",
+      "r2 buckets list",
+      "r2 buckets delete",
+      "r2 objects put",
+      "r2 objects get",
+      "r2 objects delete",
       "queues create",
       "queues list",
       "queues delete",
-      "workflows",
-      "tail",
-      "artifacts namespaces list",
-      "artifacts namespaces get",
-      "artifacts repos create",
-      "artifacts repos list",
-      "artifacts repos get",
-      "artifacts repos delete",
-      "artifacts repos issue-token"
+      "workflows list",
+      "workflows get",
+      "workflows delete"
     ],
     "deferredCommands": {},
-    "unsupportedCommands": ["dev --remote"]
+    "unsupportedCommands": []
   }
 }

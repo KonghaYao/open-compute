@@ -3,8 +3,6 @@ title: "快速开始"
 description: "安装 open-compute、启动一个本机实例并部署 TypeScript Worker。"
 ---
 
-import { Code, TabItem, Tabs } from "@astrojs/starlight/components";
-
 这条路径安装当前正式版本，启动一个本机 instance，并部署最小 Worker。正式二进制支持 Apple silicon macOS、ARM64 Linux 和 x86-64 Linux。
 
 ## 让 AI coding agent 完成安装
@@ -55,36 +53,39 @@ sudo ocd setup --system --yes
 
 ## 3. 创建 Worker 项目
 
-创建普通 Wrangler 项目，并把 Wrangler 固定为项目依赖：
+需要 Node.js 22.18 或更新版本。Bun 管理依赖，Node 执行 cf。
 
 ```sh
-mkdir hello-worker
-cd hello-worker
+mkdir hello-worker && cd hello-worker
+bun init -y
+bun add -d cf@1.0.0-beta.12 @cloudflare/vite-plugin@2.0.0-beta.sha-52b0dc0e9 vite typescript
+mkdir src
 ```
 
-<Tabs syncKey="package-manager">
-  <TabItem label="npm">
-    <Code
-      code={`npm init -y\nnpm install --save-dev wrangler@4.143.0 @cloudflare/workers-types@5.20260830.1`}
-      lang="sh"
-    />
-  </TabItem>
-  <TabItem label="pnpm">
-    <Code
-      code={`pnpm init\npnpm add --save-dev wrangler@4.143.0 @cloudflare/workers-types@5.20260830.1`}
-      lang="sh"
-    />
-  </TabItem>
-  <TabItem label="bun">
-    <Code
-      code={`bun init -y\nbun add --dev wrangler@4.143.0 @cloudflare/workers-types@5.20260830.1`}
-      lang="sh"
-    />
-  </TabItem>
-</Tabs>
+上述版本与内部 CI 基线一致。用户无需固定 cf：`1.0.x` 不警告，其他版本警告后仍允许执行。
 
-```sh
-mkdir src
+创建 `cloudflare.config.ts`：
+
+```ts
+import { defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "hello-worker",
+    entrypoint: "src/index.ts",
+    compatibilityDate: "2026-09-08",
+    workersDev: false,
+  },
+});
+```
+
+创建 `vite.config.ts`：
+
+```ts
+import { cloudflare } from "@cloudflare/vite-plugin";
+import { defineConfig } from "vite";
+
+export default defineConfig({ plugins: [cloudflare()] });
 ```
 
 创建 `src/index.ts`：
@@ -100,44 +101,37 @@ export default {
 } satisfies ExportedHandler;
 ```
 
-创建 `wrangler.jsonc`：
+创建 `tsconfig.json`，严格检查官方生成的类型：
 
 ```json
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "hello-worker",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-09-08",
-  "workers_dev": false
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2024"],
+    "types": [],
+    "strict": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", ".cloudflare/types/**/*.d.ts"]
 }
 ```
 
 ## 4. 开发与部署
 
-快速本地循环直接使用 Wrangler：
-
-<Tabs syncKey="package-manager">
-  <TabItem label="npm">
-    <Code code="npm exec -- wrangler dev" lang="sh" />
-  </TabItem>
-  <TabItem label="pnpm">
-    <Code code="pnpm exec wrangler dev" lang="sh" />
-  </TabItem>
-  <TabItem label="bun">
-    <Code code="bun run wrangler dev" lang="sh" />
-  </TabItem>
-</Tabs>
-
-随后通过选中的 open-compute instance 部署：
+添加 package scripts：`dev: cf dev` 和 `build: cf workers types --mode production && tsc --noEmit && cf build --mode production`，然后运行：
 
 ```sh
-ocd wrangler deploy
+bun run dev
+bun run build
+ocd cf deploy --prebuilt --mode production
 ```
 
-使用 Wrangler 输出的 canonical `.localhost` origin 访问 Worker。查看实时日志：
+`cf dev` 使用官方本地模拟资源，部署连接所选 open-compute 实例。日志使用 Dashboard Live Tail；cf 目前没有等价的终端流式命令。
 
-```sh
-ocd wrangler tail
-```
+旧 Wrangler 项目需显式执行 `cf migrate ./wrangler.jsonc --bundler vite`，完成 TODO 并配置 Vite。`ocd` 只诊断旧配置文件，不自动迁移。
 
-下一步阅读[开发应用](/zh/docs/develop/)了解 environment 和远程 target，阅读[运行与运维](/zh/docs/operate/)配置生产环境，或查看[产品](/zh/docs/products/)添加 bindings。
+下一步：[开发](/zh/docs/develop/)、[运维](/zh/docs/operate/)和[产品](/zh/docs/products/)。
+
+npm 用户可用 `npm install` 和 `npm run dev/build`；pnpm 用户可用 `pnpm install --frozen-lockfile` 和 `pnpm run dev/build`。安装开发依赖分别用 `npm install --save-dev` / `pnpm add -D`。

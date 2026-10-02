@@ -236,6 +236,7 @@ async fn r2_binding_uses_recreated_bucket_instead_of_tombstone() {
             &authority,
             account,
             WorkerId::generate(),
+            "binding-owner",
             None,
             false,
             false,
@@ -254,6 +255,7 @@ async fn r2_binding_uses_recreated_bucket_instead_of_tombstone() {
                 &authority,
                 account,
                 WorkerId::generate(),
+                "binding-owner",
                 None,
                 false,
                 false,
@@ -289,6 +291,7 @@ async fn named_vectorize_binding_uses_recreated_index() {
             &V4InstanceContext::new(account, 1),
             account,
             WorkerId::generate(),
+            "binding-owner",
             None,
             false,
             false,
@@ -322,6 +325,7 @@ async fn ai_search_binding_resolves_public_instance_key_inside_the_requested_nam
             &V4InstanceContext::new(account, 1),
             account,
             WorkerId::generate(),
+            "binding-owner",
             None,
             false,
             false,
@@ -367,6 +371,7 @@ async fn deprecated_queue_binding_delay_does_not_change_queue_authority() {
             &V4InstanceContext::new(account, 1),
             account,
             WorkerId::generate(),
+            "binding-owner",
             None,
             false,
             false,
@@ -412,6 +417,7 @@ async fn service_binding_props_are_projected_into_the_immutable_version_input() 
             &V4InstanceContext::new(account, 1),
             account,
             WorkerId::generate(),
+            "binding-owner",
             None,
             false,
             false,
@@ -453,6 +459,7 @@ async fn failed_upload_content_releases_its_unconsumed_workflow_reservation() {
             &V4InstanceContext::new(account, 1),
             account,
             WorkerId::generate(),
+            "binding-owner",
             None,
             false,
             true,
@@ -555,6 +562,7 @@ async fn explicit_binding_projection_accepts_every_day1_binding_kind() {
             &authority,
             account,
             worker,
+            "binding-owner",
             None,
             false,
             true,
@@ -603,6 +611,7 @@ async fn ai_search_instance_binding_rejects_ambiguous_keys_across_namespaces() {
                 &authority,
                 account,
                 WorkerId::generate(),
+                "binding-owner",
                 None,
                 false,
                 true,
@@ -642,6 +651,7 @@ async fn explicit_binding_projection_rejects_cross_script_and_missing_resources(
                     &authority,
                     account,
                     WorkerId::generate(),
+                    "binding-owner",
                     None,
                     false,
                     false,
@@ -963,5 +973,51 @@ async fn strict_inheritance_restores_each_persisted_binding_family() {
                 .apply_inheritance(api, previous, strict)
                 .is_err()
         );
+    }
+}
+
+#[tokio::test]
+async fn explicit_workflow_owner_references_resolve_and_foreign_scripts_fail_closed() {
+    let (_temp, _mock, state, account, _storage) =
+        crate::tests::initialized_worker_http_fixture().await;
+    let api = state.worker_api().unwrap();
+    let authority = V4InstanceContext::new(account, 1);
+    for (kind, script, accepted) in [
+        ("workflow", "binding-owner", true),
+        ("workflow", "foreign-worker", false),
+        ("durable_object_namespace", "foreign-worker", false),
+    ] {
+        let binding = if kind == "workflow" {
+            serde_json::json!({"type":kind,"name":"FLOW","workflow_name":"owner-flow","class_name":"Flow","script_name":script})
+        } else {
+            serde_json::json!({"type":kind,"name":"OBJECT","class_name":"Object","script_name":script})
+        };
+        let metadata = serde_json::from_value(
+            serde_json::json!({"main_module":"index.js","bindings":[binding]}),
+        )
+        .unwrap();
+        let mut input = UploadInput::new(metadata);
+        let result = input.apply_explicit_bindings(
+            api,
+            &authority,
+            account,
+            WorkerId::generate(),
+            "binding-owner",
+            None,
+            false,
+            true,
+            Some("owner-reference"),
+            1,
+        );
+        assert_eq!(result.is_ok(), accepted);
+        if accepted {
+            assert!(input.bindings.contains_key("FLOW"));
+            input
+                .release_workflow_reservations(api, account, 2)
+                .unwrap();
+        } else {
+            assert!(input.bindings.is_empty());
+            assert!(input.workflow_reservations.is_empty());
+        }
     }
 }
