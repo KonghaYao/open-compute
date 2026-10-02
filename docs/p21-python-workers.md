@@ -1,4 +1,4 @@
-# P20：Cloudflare Python Workers 完整兼容方案
+# P21：Cloudflare Python Workers 完整兼容方案
 
 状态：**planned**。官方合同、目标架构、实施顺序与验收边界已确定；尚未实现，不得宣称 Python Worker 已受支持。
 
@@ -7,7 +7,7 @@
 与 JavaScript 获得相同的公开能力、权限边界、生命周期和失败语义。它不把 Cloudflare 全球控制面、边缘调度或 open-compute
 尚未声明支持的产品纳入范围。
 
-P20 不新增第二套 Python runtime，也不把现有 JavaScript facade 翻译成一套 Python SDK。正式实现必须复用 workerd 内置的
+P21 不新增第二套 Python runtime，也不把现有 JavaScript facade 翻译成一套 Python SDK。正式实现必须复用 workerd 内置的
 Pyodide、Cloudflare 官方 Python entrypoint 和 `workers-runtime-sdk`；open-compute 只负责把已经存在的资源 authority 和 backend
 以 workerd 的标准 binding 形态注入同一个 `env`。
 
@@ -40,7 +40,7 @@ pywrangler / Wrangler multipart upload
    Bun，不联网下载 package。
 6. 普通已部署 Python Worker 使用 deploy-time prepared artifact。request path 只验证并加载不可变产物，不执行安装、编译或
    snapshot 生成。
-7. 只保留当前正式 workerd/Pyodide/SDK 组合。P20 qualification 完成时协调更新正式 pin；不保留旧 Python runtime、旧 SDK
+7. 只保留当前正式 workerd/Pyodide/SDK 组合。P21 qualification 完成时协调更新正式 pin；不保留旧 Python runtime、旧 SDK
    或双 binding 路径。
 8. Dynamic Worker Python 是独立合同。未满足现有 fresh-isolate startup limit 前继续记录为限制，不为通过 Python 功能而放宽
    limit 或隐式复用不受 identity 约束的 warm isolate。
@@ -80,7 +80,7 @@ pywrangler / Wrangler multipart upload
 | Workers types                    | `5.20260830.1`                             |
 | Wrangler snapshot                | `4.143.0`                                  |
 
-这些值只说明二进制含有对应 Pyodide bundle，不证明 open-compute upload、binding 或 deploy lifecycle 已支持 Python。P20
+这些值只说明二进制含有对应 Pyodide bundle，不证明 open-compute upload、binding 或 deploy lifecycle 已支持 Python。P21
 开始实施时先用同一套正式 pin 完成 G0；若官方 upload/SDK 合同需要更新，再按 runtime pin policy 一次性协调升级并重新跑全部
 受影响 Gate。
 
@@ -125,7 +125,7 @@ pywrangler / Wrangler multipart upload
 | capability/docs  | `python_modules` 为 unsupported，网站仍写 beta/loader demo   | 对外状态与官方当前产品不一致                            |
 
 以上不是几个独立的小缺陷。根因是当前 runtime assembly 把“语言 entrypoint”和“open-compute binding facade”耦合在同一层 JS
-wrapper 中。P20 必须先拆开这两个职责，逐项放行 MIME 或 flag 不能形成可维护的 Python 支持。
+wrapper 中。P21 必须先拆开这两个职责，逐项放行 MIME 或 flag 不能形成可维护的 Python 支持。
 
 ## 5. 目标 runtime 架构
 
@@ -159,7 +159,7 @@ JavaScript Worker 可以继续使用 wrapper 来适配 entrypoint 行为，但 b
 3. 现有 open-compute TypeScript facade 作为一个 `wrappedBinding` module；
 4. 没有可验证实现则该 binding 对 Python 保持 unsupported，不能退回 raw internal Fetcher。
 
-| binding             | 目标对象                                              | backend 复用方式                                     | P20 动作                                        |
+| binding             | 目标对象                                              | backend 复用方式                                     | P21 动作                                        |
 | ------------------- | ----------------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------- |
 | KV                  | workerd native `KvNamespace`                          | adapter 把标准 KV subrequest 映射到现有 KV authority | 删除 public `KVNamespace` facade 路径           |
 | R2                  | workerd native `R2Bucket`                             | adapter 映射到现有 R2 object authority/S3 backend    | 删除 public `R2Bucket` facade 路径              |
@@ -175,7 +175,7 @@ JavaScript Worker 可以继续使用 wrapper 来适配 entrypoint 行为，但 b
 `workers-runtime-sdk` 的 env wrapper 只负责把已经存在的 JavaScript binding 变成更 Pythonic 的对象；它不是 KV、D1 或 R2
 backend。因此仅“复用 Python SDK”不能完成注入，必须先让 `env.KV`、`env.DB`、`env.BUCKET` 本身成为正确的 workerd binding。
 
-当前 fork 已有 Frankenvalue/capability transport 和 `kvNamespace`、`r2Bucket`、`wrappedBinding` 等 host primitive。P20 先做 G0
+当前 fork 已有 Frankenvalue/capability transport 和 `kvNamespace`、`r2Bucket`、`wrappedBinding` 等 host primitive。P21 先做 G0
 证明 private Worker Loader 能从 trusted descriptor materialize 这些对象；tenant JavaScript 不能序列化或伪造 native binding。
 若现有 API 不足，只在 `third_party/workerd/` 增加一个最窄的 host-only construction 接口，不增加第二套 loader、公共 token 或
 tenant-visible escape hatch。
@@ -199,7 +199,7 @@ authority 直接访问 SQLite 或对象目录。流式 body 保持 bounded backp
 
 ### 5.4 wrapper 职责迁移
 
-当前 `__open_compute__/entry.js` 还承担 cache、scheduled workflow、loopback、observability 和错误清理。P20 逐项归位：
+当前 `__open_compute__/entry.js` 还承担 cache、scheduled workflow、loopback、observability 和错误清理。P21 逐项归位：
 
 | 当前职责                       | 目标位置                                                       |
 | ------------------------------ | -------------------------------------------------------------- |
@@ -213,7 +213,7 @@ authority 直接访问 SQLite 或对象目录。流式 body 保持 bounded backp
 | automatic cache policy         | host/cache binding policy，不依赖 tenant main language         |
 | dynamic forwarding             | shared materializer；只转发明确允许的 typed capabilities       |
 
-只有 JavaScript export-shape adaptation 仍留在 JS wrapper。任何安全策略如果 Python 绕过 wrapper 就失效，说明它仍在错误层，P20
+只有 JavaScript export-shape adaptation 仍留在 JS wrapper。任何安全策略如果 Python 绕过 wrapper 就失效，说明它仍在错误层，P21
 不得以“Python 特例”复制一份。
 
 ## 6. Upload、bundle 与 toolchain
@@ -230,7 +230,7 @@ authority 直接访问 SQLite 或对象目录。流式 body 保持 bounded backp
 - path、UTF-8、duplicate name、reserved prefix、module count、单 module/总 bundle size 继续 fail closed；
 - obsolete `python-requirement` module 不作为兼容 fallback；官方当前 package 流程上传已解析的 package 内容。
 
-当前总 module bytes 上限为 16 MiB。P20.0 必须用固定 pywrangler fixture确认 Cloudflare 当前 Python upload limit；若声明与官方
+当前总 module bytes 上限为 16 MiB。P21.0 必须用固定 pywrangler fixture确认 Cloudflare 当前 Python upload limit；若声明与官方
 一致，需要在同一变更中协调 limit、streaming admission、disk budget 和 Gate。不能只为一个 fixture 放大内存缓冲。
 
 ### 6.2 pywrangler
@@ -318,7 +318,7 @@ baseline/no-dedicated-snapshot 路径，并保持其独立 limit。
 - release qualification 记录 SDK name、version、wheel/sdist digest、source revision 和 license；
 - types/autocomplete 是开发工具输出，不是 server runtime authority。
 
-P20 完成后，网站中“Python Workers 仍为 beta”和只展示 Dynamic Worker loader demo 的页面必须改成正式普通部署流程；如果 Dynamic
+P21 完成后，网站中“Python Workers 仍为 beta”和只展示 Dynamic Worker loader demo 的页面必须改成正式普通部署流程；如果 Dynamic
 Worker startup 仍受限，单独写明该限制，不把它泛化为全部 Python Worker 状态。
 
 ## 9. Dynamic Worker Python
@@ -334,7 +334,7 @@ Worker Loader 的 Python code shape 与官方一致：
 }
 ```
 
-P20 必须让 shared module parser、binding forwarding allowlist 和 language-neutral materializer接受 Python，不再生成只适用于 JS 的
+P21 必须让 shared module parser、binding forwarding allowlist 和 language-neutral materializer接受 Python，不再生成只适用于 JS 的
 loaded-isolate wrapper。仍需保持：
 
 - `load()` 每次 fresh isolate；`get()` 只按完整 immutable identity 缓存；
@@ -346,7 +346,7 @@ loaded-isolate wrapper。仍需保持：
 
 ## 10. 实施顺序
 
-### P20.0：固定合同与 G0
+### P21.0：固定合同与 G0
 
 - 固定 workerd、Pyodide、workers-py、workers-runtime-sdk、Wrangler、Workers types 和官方 docs revision；
 - 捕获 pywrangler multipart、module types、package layout、flags、普通部署 snapshot 和 Dynamic Worker fixtures；
@@ -355,14 +355,14 @@ loaded-isolate wrapper。仍需保持：
 
 退出条件：知道 stock/fork workerd 中哪些能力可直接复用、唯一需要的 host-only fork surface，以及正式 pin 是否必须更新。
 
-### P20.1：module admission
+### P21.1：module admission
 
 - 增加 Python module type、multipart/download round-trip、canonical bundle 和 RuntimeSource wire；
 - 加入 Python flags validation；
 - 用真实 pywrangler bundle 验证 upload/version/deployment/rollback；
-- Python capability 仍保持 disabled，直到 P20.2 和 P20.3 通过。
+- Python capability 仍保持 disabled，直到 P21.2 和 P21.3 通过。
 
-### P20.2：language-neutral bindings
+### P21.2：language-neutral bindings
 
 - 实现一个 host-owned materializer；
 - 先迁移 KV、R2、D1、Queue、DO、Service；
@@ -370,28 +370,28 @@ loaded-isolate wrapper。仍需保持：
 - JavaScript 和 Python differential 同时通过后，删除对应 wrapper-only construction 与重复 public facade；
 - 任一产品不得长期保留 JS-old/Python-new 双路径。
 
-### P20.3：official Python entrypoint
+### P21.3：official Python entrypoint
 
 - loader 传递 Python modules，让 workerd official entrypoint 成为 main；
 - 支持 fetch、named/RPC、scheduled、queue、DO 和 Workflow；
 - 把 observability、limits、errors、cache policy 等剩余 wrapper 职责迁到共同边界；
 - 删除 Python 外层 JS main 实验代码和任何 SDK patch。
 
-### P20.4：prepared artifact
+### P21.4：prepared artifact
 
 - 接通 workerd official validation/snapshot/restore；
 - 持久化加密 immutable prepared artifact 与完整 identity；
 - 完成 promotion、rollback、restart、secret rotation、corruption 和 crash recovery；
 - 确认 request path 无安装、编译、prepare 和网络访问。
 
-### P20.5：tooling 与 ecosystem
+### P21.5：tooling 与 ecosystem
 
 - qualification `pywrangler deploy`、types 和 dev handoff；
 - qualification package matrix、FastAPI、Flask、Django、requests/httpx；
 - 修正 capability manifest、兼容矩阵、偏差清单、英文/中文网站和 examples；
 - 只在所有必选 Gate 通过后把 Python 状态改为 supported。
 
-### P20.6：Dynamic Python
+### P21.6：Dynamic Python
 
 - 在普通部署完成后再接通 `{py}` Worker Loader 和 binding forwarding；
 - 跑 fresh-isolate limit、network policy、facets、tails、revocation 和 error fixtures；
@@ -404,13 +404,13 @@ stock upstream binary 只能用于差异定位，不能代替最终证据。
 
 ### 11.1 主 Python 链 blocking Gate
 
-P20 实施时必须新增产品目标 `p20-python-main`，并纳入 `all`、`p3` 和最终 `--workspace` 的单轮计划。它不是可选
+P21 实施时必须新增产品目标 `p21-python-main`，并纳入 `all`、`p3` 和最终 `--workspace` 的单轮计划。它不是可选
 qualification；该目标不存在、未注册、被忽略或未通过时，普通 Python Worker 必须继续标为 unsupported。
 
 `test/gate_cases.py` 只登记一个拥有整条真实进程链路的 `TIMING` case：
 
 ```text
-python_main::p20_python_main_upload_prepare_dispatch_restart_rollback
+python_main::p21_python_main_upload_prepare_dispatch_restart_rollback
 ```
 
 该 case 在同一个隔离 test scope 中依次证明：
@@ -434,7 +434,7 @@ case 内部的两次 Version、重启、rollback 与确定性 fault point 是一
 账号。实现第一个可执行 case 时，同一变更必须完成 `test/gate.py` target、`test/gate_cases.py` 注册、`--list` inventory、
 `docs/references/testing.md` 映射和 `p3-contract` capability/case 双射；不得先注册空 target 或只在文档中声称 Gate 存在。
 
-`p20-python-main` 只拥有普通 Python Worker 主链。框架/package 扩展矩阵和 Dynamic Python 使用独立 case/target；它们不能替代此
+`p21-python-main` 只拥有普通 Python Worker 主链。框架/package 扩展矩阵和 Dynamic Python 使用独立 case/target；它们不能替代此
 blocking Gate，也不能让同一个主链 case 在 workspace 中被第二次调度。
 
 ### 11.2 entrypoint 与 runtime
@@ -507,7 +507,7 @@ identity、加密和恢复不变量。
 
 ## 13. Day 1 删除清单
 
-P20 采用直接 current-model 迁移，不保留过渡兼容层。完成时删除：
+P21 采用直接 current-model 迁移，不保留过渡兼容层。完成时删除：
 
 - Python 外层 `__open_compute__/entry.js` 或任何语言特判 wrapper；
 - 已被 native/upstream binding替代的 open-compute public KV/D1/R2 facade；
@@ -533,9 +533,9 @@ P20 采用直接 current-model 迁移，不保留过渡兼容层。完成时删�
 
 ## 15. 完成条件
 
-P20 只有同时满足以下条件才可移入 `docs/implemented/`：
+P21 只有同时满足以下条件才可移入 `docs/implemented/`：
 
-1. `p20-python-main` 的注册 inventory 与唯一主链 case 存在；开发阶段选择 `./test/gate.py p20-python-main` 时必须通过，源码冻结后
+1. `p21-python-main` 的注册 inventory 与唯一主链 case 存在；开发阶段选择 `./test/gate.py p21-python-main` 时必须通过，源码冻结后
    只由最终 `--workspace` 单轮执行该 case，不在同一 final iteration 重复运行；固定 pywrangler 普通部署 fixture 能通过标准
    Cloudflare v4 endpoint 创建、部署、调用、重启和回滚 Python Worker；
 2. official Python entrypoint、Pyodide 和未 fork 的 workers-runtime-sdk 运行；

@@ -263,9 +263,11 @@ Honest boundaries beat surprises in production:
 | Download and release       | [GitHub Releases](https://github.com/elliothux/open-compute/releases) · [Project guide](https://open-compute.dev/docs/project/)                    |
 | Run in production          | [Get started](https://open-compute.dev/docs/get-started/) · [Operate](https://open-compute.dev/docs/operate/)                                      |
 | Operate and recover        | [Operate](https://open-compute.dev/docs/operate/) · [Incident guides](https://open-compute.dev/docs/ocd/incidents/current-release/)                |
-| Contribute                 | [Project guide](https://open-compute.dev/docs/project/) · [AGENTS.md](AGENTS.md)                                                                   |
+| Contribute                 | [Contributing guide](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md)                                                                      |
 
 ## Security
+
+Report vulnerabilities privately using [SECURITY.md](SECURITY.md).
 
 - One `ocd` per user or system scope, with exclusive locks for every instance data directory.
 - Internal tokens never appear in argv, environment, logs, status, or metrics.

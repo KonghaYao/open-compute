@@ -1,4 +1,4 @@
-# P25：Cloudflare CLI 单轨迁移与官方应用构建链
+# P20：Cloudflare CLI 单轨迁移与官方应用构建链
 
 状态：**planned / Day1 设计确定（2026-10-02）**。本文规定实现后的唯一工作流，不表示 `ocd cf` 已存在或已通过真实部署验收。本次为文档变更，不修改运行代码、依赖 pin 或已发布数据。
 
@@ -266,11 +266,11 @@ CI 可以直接注入三个标准 Cloudflare 环境变量并执行项目内 cf�
 
 **Secrets：**采用已发布的 secret update/bulk 或版本上传的 secrets-file 路径，覆盖设置、覆盖更新、删除和 redeploy 保留。终端输入/管道和非交互参数以所固定版本 help/schema 为准；不在文档硬编码未核对的参数形状。[S2]
 
-**Python/Rust/其他框架：**上游列出 delegate 不代表其整个部署路径已在 OCD 验收。P25 的正式 JS/TS 构建选择不等于要求其他语言使用 Vite，也不恢复 pywrangler/Wrangler 作为 OCD 正式入口。P20 的 Python runtime、包处理、snapshot 与语言无关 binding 工作仍属于 P20；其旧部署工具描述在联合实施时按 P25 的单轨 CLI 规则替换，官方语言构建链不可用时如实记录前置阻塞。[S6]
+**Python/Rust/其他框架：**上游列出 delegate 不代表其整个部署路径已在 OCD 验收。P20 的正式 JS/TS 构建选择不等于要求其他语言使用 Vite，也不恢复 pywrangler/Wrangler 作为 OCD 正式入口。P21 的 Python runtime、包处理、snapshot 与语言无关 binding 工作仍属于 P21；其旧部署工具描述在联合实施时按 P20 的单轨 CLI 规则替换，官方语言构建链不可用时如实记录前置阻塞。[S6]
 
 **Preview、Containers、Browser Run 等：**cf 暴露命令不自动扩大本平台支持范围；仍由各阶段和兼容矩阵决定。原生 extension、本地权限和实例数据模型均不是 CLI 迁移的重设计对象。
 
-P25 是后续 CLI/应用构建实现的权威方案，替代 P12 中继续使用 Wrangler 的入口决策及 P24 的 Wrangler 项目输入待办。既有 implemented 文档保留真实历史验收，不提前改成 cf 已通过。根级开发规则中“Rolldown 负责全部应用 bundling”等旧约束，在代码切换时同步改为上述应用/平台自身构建边界。
+P20 是后续 CLI/应用构建实现的权威方案，替代 P12 中继续使用 Wrangler 的入口决策及 P25 的 Wrangler 项目输入待办。既有 implemented 文档保留真实历史验收，不提前改成 cf 已通过。根级开发规则中“Rolldown 负责全部应用 bundling”等旧约束，在代码切换时同步改为上述应用/平台自身构建边界。
 
 ## 11. 实施顺序：最终只交付一种实现
 
@@ -284,7 +284,7 @@ P25 是后续 CLI/应用构建实现的权威方案，替代 P12 中继续使用
 
 ### C. 同步文档并完成验收
 
-更新 onboarding、示例、CI、agent 指引、兼容矩阵和相关活动方案；公开终端 tail 限制。实现与回归通过后才将 P25 移入 implemented 并记录实际证据。代码切换前本方案的 planned 状态不变，文档/配置转换成功不能替代真实部署测试。
+更新 onboarding、示例、CI、agent 指引、兼容矩阵和相关活动方案；公开终端 tail 限制。实现与回归通过后才将 P20 移入 implemented 并记录实际证据。代码切换前本方案的 planned 状态不变，文档/配置转换成功不能替代真实部署测试。
 
 ## 12. 验收与退出条件
 
@@ -332,4 +332,4 @@ P25 是后续 CLI/应用构建实现的权威方案，替代 P12 中继续使用
 [R3]: ../test/applications/postgres-driver/build.ts
 [R4]: ../packages/toolchain/src/generate-types.ts
 
-相关设计：[P12 历史工作流](implemented/p12-wrangler-project-workflow.md)、[P20 Python](p20-python-workers.md)、[P24 后续能力](p24-platform-follow-ups.md)。代码迁移时删除的实现入口可改指对应提交记录，不能为保留文档链接而保留死代码。
+相关设计：[P12 历史工作流](implemented/p12-wrangler-project-workflow.md)、[P21 Python](p21-python-workers.md)、[P25 后续能力](p25-platform-follow-ups.md)。代码迁移时删除的实现入口可改指对应提交记录，不能为保留文档链接而保留死代码。

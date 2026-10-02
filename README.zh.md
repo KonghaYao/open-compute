@@ -262,9 +262,11 @@ Dashboard 用于管理 `/client/v4` 已开放的计算、存储、AI 和平台�
 | 下载与发版        | [GitHub Releases](https://github.com/elliothux/open-compute/releases) · [项目指南](https://open-compute.dev/zh/docs/project/)                    |
 | 生产运行          | [快速开始](https://open-compute.dev/zh/docs/get-started/) · [运行与运维](https://open-compute.dev/zh/docs/operate/)                              |
 | 运维与恢复        | [运行与运维](https://open-compute.dev/zh/docs/operate/) · [事故处理](https://open-compute.dev/zh/docs/ocd/incidents/current-release/)            |
-| 参与贡献          | [项目指南](https://open-compute.dev/zh/docs/project/) · [AGENTS.md](AGENTS.md)                                                                   |
+| 参与贡献          | [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md)                                                                                     |
 
 ## 安全
+
+发现安全漏洞，请通过 [SECURITY.md](SECURITY.md) 中的私密渠道报告。
 
 - 每个 user 或 system 作用域只允许一个 `ocd`，每个 instance 数据目录都有独占锁。
 - 内部 token 永不出现在 argv、环境变量、日志、status 或 metrics 中。
