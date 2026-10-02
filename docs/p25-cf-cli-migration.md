@@ -34,18 +34,18 @@ cloudflare.config.ts + 官方构建工具配置
 
 ## 2. 官方依据与待认证基线
 
-设计核对日期为 2026-10-02。当前查询到的已发布 cf 为 `1.0.0-beta.11`，作为首个待认证候选；**不是已认证版本**。cf、配置和 Build Output 仍处于 beta，实施时必须固定实际安装的发布版本与 lockfile，不能把 `main` 上的代码当成发布证据。[S1][S2]
+设计核对日期为 2026-10-02。当前查询到的已发布 cf 为 `1.0.0-beta.11`，作为首个待认证候选；**不是已认证版本**。cf、配置和 Build Output 仍处于 beta，实施时必须固定实际安装的发布版本与 lockfile，不能把 `main` 上的代码当成发布证据。[S1] [S2]
 
 官方事实与本阶段采用方式：
 
 | 事实 | 本阶段决定 |
 | --- | --- |
-| 官方 `cf migrate` 使用 `@cloudflare/codemods`；支持 JSON/JSONC/TOML，可能需要人工完成转换 | 直接提示官方命令，不复制 codemod [S3][S4] |
-| cf 委托框架或官方构建工具；Vite 插件 v2 不依赖 Wrangler | 正式 JS/TS 路径选择官方 Vite 插件，不自己接 Rolldown/esbuild [S5][S6] |
+| 官方 `cf migrate` 使用 `@cloudflare/codemods`；支持 JSON/JSONC/TOML，可能需要人工完成转换 | 直接提示官方命令，不复制 codemod [S3] [S4] |
+| cf 委托框架或官方构建工具；Vite 插件 v2 不依赖 Wrangler | 正式 JS/TS 路径选择官方 Vite 插件，不自己接 Rolldown/esbuild [S5] [S6] |
 | cf 使用 Node.js 22.18+；Bun 运行 cf 配置加载不受支持 | Bun 继续管理本仓库依赖；cf 由 Node 执行 [S7] |
 | cf 支持标准 API base URL、account、token 环境变量 | 复用现有 target/instance 机制并注入这些值 [S8] |
 | `beta.4` 已发布 Worker secret update/bulk，`beta.7` 修复 redeploy 保留 secrets | 不把单 secret 写入当成保留 Wrangler 的理由 [S2] |
-| 官方映射页仍列出实时 Worker tail 缺口，且其 secret 描述落后于 changelog | 以固定版本 help/schema、发布源码和实际测试为准；日志处理见第 10 节 [S2][S9] |
+| 官方映射页仍列出实时 Worker tail 缺口，且其 secret 描述落后于 changelog | 以固定版本 help/schema、发布源码和实际测试为准；日志处理见第 10 节 [S2] [S9] |
 
 复用现有上游刷新与认证流程，记录 cf、Vite、插件、类型工具和相关 runtime 的准确版本。认证基线与用户项目 pin 是两个概念：capabilities 公布测试基线，不要求每个客户端精确相等；解析标准 SemVer（含 prerelease），版本差异只做诊断，安全/协议能力由真实约束决定。不得维护多个版本专用 adapter。
 
@@ -96,9 +96,9 @@ CF_SEND_TELEMETRY=false
 DO_NOT_TRACK=1
 ```
 
-其中 API base 使用 registry/descriptor 已规范化、包含 `/client/v4` 的完整值，**不得重复追加** 该后缀。凭据复用已有来源，不新造短命 token 服务。清理会改变默认 authority 的遗留 account/region 上下文；显式业务参数仍交给上游和服务端校验。保持当前依赖实际读取的日志脱敏开关，例如 `WRANGLER_LOG_SANITIZE=true`；这是上游接口名称，不是保留 Wrangler 实现。[S8][S13]
+其中 API base 使用 registry/descriptor 已规范化、包含 `/client/v4` 的完整值，**不得重复追加** 该后缀。凭据复用已有来源，不新造短命 token 服务。清理会改变默认 authority 的遗留 account/region 上下文；显式业务参数仍交给上游和服务端校验。保持当前依赖实际读取的日志脱敏开关，例如 `WRANGLER_LOG_SANITIZE=true`；这是上游接口名称，不是保留 Wrangler 实现。[S8] [S13]
 
-不读取或写入 cf OAuth profile，不要求 `cf auth login`，不把 OCD token 保存到 cf 的配置/项目文件或 argv。不重新实现 cf 的 `.env` 加载规则，也不读取用户 `.env` 来代替 target 凭据。测试必须证明进程环境的目标凭据不被 `.env`、profile 或旧环境变量覆盖。[S2][S8]
+不读取或写入 cf OAuth profile，不要求 `cf auth login`，不把 OCD token 保存到 cf 的配置/项目文件或 argv。不重新实现 cf 的 `.env` 加载规则，也不读取用户 `.env` 来代替 target 凭据。测试必须证明进程环境的目标凭据不被 `.env`、profile 或旧环境变量覆盖。[S2] [S8]
 
 项目 TS 配置、插件和构建脚本属于用户显式执行的代码，不是沙箱。`ocd cf deploy` 若构建，会把进程环境交给官方子进程；不能声称可阻止恶意项目读取 token。CI 推荐无部署凭据构建，然后只给 `deploy --prebuilt` 提供凭据。预构建也不应被宣传为执行不可信第三方工具的安全沙箱。
 
@@ -120,7 +120,7 @@ DO_NOT_TRACK=1
 | 没有新配置，存在 `wrangler.json/jsonc/toml` | 非零退出，打印实际发现的文件和官方迁移提示；不修改文件 |
 | 没有新配置，也没有旧配置 | 项目型操作非零退出，提示显式使用 `cf init` 或配置官方 builder；不触发 cf autoconfig |
 
-这张预检表是用户体验边界，不是安全沙箱或“所有非 cf 项目”的检测器。OCD 不审计用户整个依赖树，也不通过文件名推断上传产物是否合法。对于直接运行官方 cf 的用户，官方自己的行为仍然适用。[S3][S5]
+这张预检表是用户体验边界，不是安全沙箱或“所有非 cf 项目”的检测器。OCD 不审计用户整个依赖树，也不通过文件名推断上传产物是否合法。对于直接运行官方 cf 的用户，官方自己的行为仍然适用。[S3] [S5]
 
 错误示例：
 
@@ -151,7 +151,7 @@ cf migrate ./wrangler.json --bundler vite
 npx --yes cf@1.0.0-beta.11 migrate ./wrangler.json --bundler vite
 ```
 
-提示必须包含 `--bundler vite`：官方自动选择逻辑在未声明 Vite 插件时会选 Wrangler。`--dry-run` 不写文件；正式转换可以写出文件后因必需人工步骤返回非零。不要自动加 `--force`，也不要因退出码 1 就再次覆盖已生成配置。[S2][S4]
+提示必须包含 `--bundler vite`：官方自动选择逻辑在未声明 Vite 插件时会选 Wrangler。`--dry-run` 不写文件；正式转换可以写出文件后因必需人工步骤返回非零。不要自动加 `--force`，也不要因退出码 1 就再次覆盖已生成配置。[S2] [S4]
 
 迁移不会替用户配置完整的 Vite 构建。安装插件并添加下面的标准文件，按官方输出完成 TODO；不要承诺任意项目“一键无损迁移”。本仓库保持 Bun workspace 与单一 `bun.lock`；工作区 package/catalog 的变更需审查，不引入其他包管理器锁文件。`--no-install` 可用于显式管理 workspace 安装，但不是已完成迁移的证明。[S3]
 
@@ -176,19 +176,19 @@ export default defineConfig({
 
 应用入口为官方 `cloudflare.config.ts`，应用构建设置放在 Vite/框架自己的配置中；`compute.toml` 仍只描述 OCD 平台。Rust 不加载 `cf/config`、不另造 binding grammar、不复刻官方配置 resolver。普通 JS/TS 示例、框架示例和 CI 都只维护一份应用部署配置。
 
-mode 和 target 完全独立。沿用官方 mode 默认值；正式部署示例显式传 `--mode`，不由 launcher 添加默认 mode、合并 env、给 Worker 自动加后缀或替换资源 ID。迁移审查重点是保持所需的 Worker/class/resource 身份及隔离，不能只机械替换命令名。[S9][S10]
+mode 和 target 完全独立。沿用官方 mode 默认值；正式部署示例显式传 `--mode`，不由 launcher 添加默认 mode、合并 env、给 Worker 自动加后缀或替换资源 ID。迁移审查重点是保持所需的 Worker/class/resource 身份及隔离，不能只机械替换命令名。[S9] [S10]
 
-Durable Object 生命周期使用官方 `worker.exports`。只声明仍存活的 class 和尚未执行的生命周期变化，不复制历史 rename/delete；OCD 仅承诺已支持的 SQLite 等合同。Workflow exports/bindings、assets 目录、D1 migration 路径等由官方迁移提示及项目配置显式完成，不在 launcher 中推导或补写。[S3][S9]
+Durable Object 生命周期使用官方 `worker.exports`。只声明仍存活的 class 和尚未执行的生命周期变化，不复制历史 rename/delete；OCD 仅承诺已支持的 SQLite 等合同。Workflow exports/bindings、assets 目录、D1 migration 路径等由官方迁移提示及项目配置显式完成，不在 launcher 中推导或补写。[S3] [S9]
 
-特别约束：预构建输出可能已经记录 `accountId`，当前发布实现优先使用记录值，而不重新求值源码。不要仅凭环境变量文档就宣称任何 prebuilt 账号都会被覆盖。跨 target 的公共产物应不硬编码 account；显式记录的账号必须匹配目标。用真实测试验证错账号不能写入其他 instance，依赖现有服务端授权边界；若固定上游版本与目标隔离冲突，则阻止资格通过并优先修复上游/授权边界，不通过改写 Build Output 或二次执行配置兜底。[S2][S12]
+特别约束：预构建输出可能已经记录 `accountId`，当前发布实现优先使用记录值，而不重新求值源码。不要仅凭环境变量文档就宣称任何 prebuilt 账号都会被覆盖。跨 target 的公共产物应不硬编码 account；显式记录的账号必须匹配目标。用真实测试验证错账号不能写入其他 instance，依赖现有服务端授权边界；若固定上游版本与目标隔离冲突，则阻止资格通过并优先修复上游/授权边界，不通过改写 Build Output 或二次执行配置兜底。[S2] [S12]
 
 ## 7. 官方构建链与 `oc` 工具链删除
 
 ### 7.1 不强制所有编译器都是 Vite
 
-JS/TS 默认使用 cf + 官方 Vite 插件；纯后端 Worker 不需要 HTML 或前端框架。其他工具只有在官方 cf 能消费其合规产物时才可通过同一部署入口使用；这不是 OCD 承诺维护任意 esbuild/Rolldown adapter。cf 的官方 delegate 发现与选择规则仍由上游维护。[S5][S6]
+JS/TS 默认使用 cf + 官方 Vite 插件；纯后端 Worker 不需要 HTML 或前端框架。其他工具只有在官方 cf 能消费其合规产物时才可通过同一部署入口使用；这不是 OCD 承诺维护任意 esbuild/Rolldown adapter。cf 的官方 delegate 发现与选择规则仍由上游维护。[S5] [S6]
 
-部署预构建内容必须是 cf 接受的完整 Cloudflare Build Output，不是任意 `dist/index.js` 或 OCD 私有 `.bundle`。OCD 不直接依赖尚不稳定的 `@cloudflare/build-output-utils` JS API，不定义第二套产物格式，也不把 Build Output 布局复制到 Rust。[S5][S11]
+部署预构建内容必须是 cf 接受的完整 Cloudflare Build Output，不是任意 `dist/index.js` 或 OCD 私有 `.bundle`。OCD 不直接依赖尚不稳定的 `@cloudflare/build-output-utils` JS API，不定义第二套产物格式，也不把 Build Output 布局复制到 Rust。[S5] [S11]
 
 “薄实现”不等于把 Wrangler 藏在下面继续使用：本仓库的正式应用路径移除 Wrangler build backend、`wrangler.config.ts` 和基于 Wrangler config reader 的代码。不维护对用户依赖树的封禁扫描；第三方客户端偶然可以调用 API，不构成 Wrangler 工作流认证承诺。
 
@@ -242,9 +242,9 @@ cf deploy --prebuilt --dry-run --mode production
 ocd cf --target production deploy --prebuilt --mode production
 ```
 
-cf 不会替用户执行 `package.json` 中的 build script；直接 `cf deploy` 不能保证先运行上述 tsc。不要在 wrapper 中偷偷补一次 typecheck/build。仓库维护的应用必须在 CI 中先完成严格类型检查；通用服务端只校验上传模块及运行时合同，不能声称能证明客户端执行过 tsc。[S5][S14]
+cf 不会替用户执行 `package.json` 中的 build script；直接 `cf deploy` 不能保证先运行上述 tsc。不要在 wrapper 中偷偷补一次 typecheck/build。仓库维护的应用必须在 CI 中先完成严格类型检查；通用服务端只校验上传模块及运行时合同，不能声称能证明客户端执行过 tsc。[S5] [S14]
 
-CI 可以直接注入三个标准 Cloudflare 环境变量并执行项目内 cf，无需创建开发机 target registry；这是同一个官方客户端路径，不是第二套部署实现。区分 Node 执行与 Bun 包管理，保留单一 workspace lock，使用 frozen 安装，不在 job 中跟随 latest。[S7][S8][S14]
+CI 可以直接注入三个标准 Cloudflare 环境变量并执行项目内 cf，无需创建开发机 target registry；这是同一个官方客户端路径，不是第二套部署实现。区分 Node 执行与 Bun 包管理，保留单一 workspace lock，使用 frozen 安装，不在 job 中跟随 latest。[S7] [S8] [S14]
 
 官方 `.cloudflare/` 产物、生成类型和构建器标准输出留在项目规定位置，不搬进实例 data 目录，也不伪装成 OCD 管理缓存。仓库对这类官方生成目录做统一忽略；Gate 日志、录制流量及失败证据仍进入既有 `.temp/`。生产 daemon 启动与请求路径不运行 Node/Bun/Vite/tsc，也不联网下载工具或用户依赖。
 
