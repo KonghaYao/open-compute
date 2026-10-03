@@ -577,7 +577,7 @@ class GateTests(unittest.TestCase):
     def test_coverage_rejects_extra_rounds_before_tool_checks_or_cleanup(self):
         source = (gate.ROOT/'test/coverage.sh').read_text()
         self.assertIn(
-            '/src/bin/(s3_fixture|s3_provider_qualification|supervisor_fixture)\\.rs$', source)
+            '/src/bin/(s3_fixture|s3_provider_qualification|supervisor_fixture|install_upgrade_fixture)\\.rs$', source)
         result = subprocess.run([str(gate.ROOT/'test/coverage.sh')], capture_output=True,
                                 env={'OPEN_COMPUTE_GATE_ROUNDS': '3', 'PATH': '/usr/bin:/bin'},
                                 timeout=10)
