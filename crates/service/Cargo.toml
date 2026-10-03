@@ -169,3 +169,10 @@ required-features = ["test-support"]
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "install-upgrade-fixture"
+path = "src/bin/install_upgrade_fixture.rs"
+required-features = ["test-support"]
+test = false
+bench = false

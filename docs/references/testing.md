@@ -260,3 +260,71 @@ Linux 受控 egress 仍需显式 `OPEN_COMPUTE_EGRESS_FIXTURE_ALLOW_SUDO=1`，�
 传给 `single-binary`，本地未包装的二进制测试不能声称正式发布已通过。
 
 Native 与 typed Gate 进程统一关闭 Bun runtime transpiler cache 和 Node compile cache，避免 cf/SDK 子进程在隔离 TMPDIR 留下缓存。临时文件残留仍判失败并保留证据，不设置缓存 allowlist。
+
+## Installation and upgrade release qualification
+
+PR CI executes `service_manager::tests`, including isolated umasks 000, 002,
+022 and 077, unsafe existing directories, and symlink refusal. These fast
+permission checks supplement the workspace Gate; they cannot prove an operating
+system service was actually installed.
+
+Publication and release recovery additionally require all five `install-lifecycle` jobs. It reuses
+verified candidate binaries on Ubuntu 24.04 and Debian 13 (native x64 and ARM64),
+and macOS ARM64 (`macos-15`). Linux runs a new ordinary login in a disposable
+privileged container with real systemd and private writable cgroups. macOS uses
+the clean hosted runner's existing GUI login for real launchd. Each OS tests both
+user and system scopes: the actual installer, first setup under umask 002,
+service ownership and permissions, health, restart, stop/start, no surviving
+workerd children, and persisted KV values read by a deployed Worker.
+
+The upgrade phase selects the latest official stable release strictly older than
+the candidate, downloads its real binary and checksum metadata, initializes real
+data, and calls the same production `run_upgrade` implementation as `ocd upgrade`.
+The test-support-only driver changes the release transport to a loopback mirror
+because an unpublished candidate cannot be downloaded from GitHub. It does not
+provide a product download override or an alternative upgrade implementation.
+Successful upgrade must replace the binary and receipt, restart the actual service,
+retain keys/configuration, and preserve KV/Worker behavior across another restart.
+Every SQL migration present in the previous official tag must remain byte-identical.
+
+Success is mandatory by default. A deliberately incompatible pre-1.0 release must
+explicitly set both `UPGRADE_REJECT_CODE` and `UPGRADE_REJECT_REASON` in the workflow,
+explain the break in its release notes, and prove rejection preserves the old
+binary, receipt, keys, configuration, running service, and readable data. Arbitrary
+upgrade failures never count as a passing qualification.
+
+Run input checks without installing anything:
+
+```sh
+python3 -B -m unittest discover -s test/install-lifecycle
+```
+
+`test/install-lifecycle/prepare.py --help` prepares verified inputs;
+`test/install-lifecycle/run.py --help` describes the real OS scenario. Running the
+scenario requires `OPEN_COMPUTE_INSTALL_TEST_DISPOSABLE=1`, an ordinary login,
+passwordless scoped sudo, and completely empty product binary/data/service paths.
+It stops the service and removes only the fixture paths it created. Never acknowledge a developer
+host as disposable. Evidence under `.temp/install-lifecycle/evidence/` records
+steps and exit codes without command output, database contents, or credentials;
+failed runs remain under `failed/`. No additional workspace Gate is scheduled
+per distribution. These Linux container checks do not qualify host reboot behavior
+or alternative init systems, and do not qualify the product uninstall/purge commands. Alpine/musl, Windows, and macOS x64 are outside the
+formal release target set.
+
+The first real Debian qualification also found an independent cleanup limitation:
+`ocd uninstall --purge --yes` can fail with `PATH_INVALID: purge tree contains an
+ambiguous filesystem entry` after `doctor --full` materializes hardlinked OCR/tessdata aliases.
+This remains fail-closed and retains data; it needs a separately scoped product
+fix and real OS uninstall regression. Installation/upgrade fixture teardown uses
+its own proven ownership rather than treating product purge as qualification.
+
+Local qualification at workspace version 0.2.3 selected official v0.2.2. Its
+unchanged setup-generated AI configuration contains `max_embedding_request_bytes`
+and `max_embedding_response_bytes`, whereas the current model uses
+`max_provider_request_bytes` and `max_provider_response_bytes`. The candidate
+preflight rejects that default configuration (`CONFIG_PARSE_FAILED`, surfaced by
+upgrade as `INSTANCE_REGISTRY_INVALID`). The local refusal check is explicitly labelled;
+it does not certify a successful default v0.2.2 upgrade. The release workflow
+retains mandatory success by default and chooses the newest official version
+below the candidate; a subsequent version must qualify against official v0.2.3.
+No historical config shim or automatic data conversion is introduced.

@@ -7,7 +7,7 @@ report_dir="$root/target/llvm-cov"
 # Dedicated tests, explicit test-support fixtures, vendored dependencies, and
 # the release-only search benchmark are not workspace production Rust.
 # Production modules must never be placed behind one of these filename rules.
-ignore_filename_regex='/rustlib/src/rust/|^/rustc/|/\.cargo/(registry|git)/|/\.rustup/toolchains/|/third_party/|/tests?/|/src/tests\.rs$|/src/.*_tests\.rs$|/src/mock_s3\.rs$|/src/bin/(s3_fixture|s3_provider_qualification|supervisor_fixture)\.rs$|/src/bin/host_extension_test_provider/|/crates/search/examples/exact_search_benchmark\.rs$'
+ignore_filename_regex='/rustlib/src/rust/|^/rustc/|/\.cargo/(registry|git)/|/\.rustup/toolchains/|/third_party/|/tests?/|/src/tests\.rs$|/src/.*_tests\.rs$|/src/mock_s3\.rs$|/src/bin/(s3_fixture|s3_provider_qualification|supervisor_fixture|install_upgrade_fixture)\.rs$|/src/bin/host_extension_test_provider/|/crates/search/examples/exact_search_benchmark\.rs$'
 minimum_lines=90.00
 workerd=${OPEN_COMPUTE_TEST_WORKERD:-}
 cargo_bin=${CARGO:-cargo}

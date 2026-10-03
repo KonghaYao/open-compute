@@ -34,14 +34,12 @@ fn service_definitions_escape_paths_and_refuse_unsafe_replacement() {
     assert!(launchd.contains("&amp; &lt;test&gt;"));
     let temp = tempfile::tempdir().unwrap();
     let definition = temp.path().join("unit");
-    install_definition(&definition, b"first", "systemd unit").unwrap();
-    install_definition(&definition, b"first", "systemd unit").unwrap();
-    assert!(install_definition(&definition, b"changed", "systemd unit").is_err());
+    install_definition(&definition, b"first").unwrap();
+    install_definition(&definition, b"first").unwrap();
+    assert!(install_definition(&definition, b"changed").is_err());
     assert_eq!(fs::read(&definition).unwrap(), b"first");
-    assert!(install_definition(temp.path(), b"unit", "systemd unit").is_err());
-    assert!(
-        install_definition(&temp.path().join("missing/unit"), b"unit", "systemd unit").is_err()
-    );
+    assert!(install_definition(temp.path(), b"unit").is_err());
+    install_definition(&temp.path().join("missing/unit"), b"unit").unwrap();
     let blocked = temp.path().join("blocked");
     fs::write(&blocked, b"not a directory").unwrap();
     let manager = SystemdManager {
@@ -55,6 +53,121 @@ fn service_definitions_escape_paths_and_refuse_unsafe_replacement() {
         ErrorCode::InstanceRegistryInvalid
     );
     assert_eq!(fs::read(&blocked).unwrap(), b"not a directory");
+}
+
+#[test]
+fn service_directories_are_secure_under_inherited_umasks() {
+    use std::os::unix::fs::PermissionsExt;
+    const ROOT_ENV: &str = "OPEN_COMPUTE_SERVICE_DIRECTORY_TEST_ROOT";
+    if let Some(root) = std::env::var_os(ROOT_ENV) {
+        let root = PathBuf::from(root);
+        let systemd = SystemdManager {
+            unit_root: Some(root.join(".config/systemd/user")),
+        };
+        let launchd = LaunchdManager {
+            plist_root: Some(root.join("Library/LaunchAgents")),
+        };
+        for manager in [&systemd as &dyn ServiceManager, &launchd] {
+            manager
+                .install(ServiceScope::User, None, Path::new("/opt/ocd"))
+                .unwrap();
+            manager
+                .install(ServiceScope::User, None, Path::new("/opt/ocd"))
+                .unwrap();
+        }
+        for directory in [
+            ".config",
+            ".config/systemd",
+            ".config/systemd/user",
+            "Library",
+            "Library/LaunchAgents",
+        ] {
+            assert_eq!(
+                fs::metadata(root.join(directory))
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o700,
+                "{directory}"
+            );
+        }
+        for definition in [
+            systemd.unit_path(ServiceScope::User).unwrap(),
+            launchd.plist_path(ServiceScope::User).unwrap(),
+        ] {
+            assert_eq!(
+                fs::metadata(definition).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        assert_eq!(
+            fs::metadata(root).unwrap().permissions().mode() & 0o777,
+            0o755
+        );
+        return;
+    }
+    for mask in ["000", "002", "022", "077"] {
+        let temp = tempfile::tempdir().unwrap();
+        fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o755)).unwrap();
+        let output = Command::new("sh")
+            .args([
+                "-c",
+                "umask \"$1\"; shift; exec \"$@\"",
+                "service-directory-test",
+                mask,
+            ])
+            .arg(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "service_manager::tests::service_directories_are_secure_under_inherited_umasks",
+            ])
+            .env(ROOT_ENV, temp.path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "umask {mask}: {} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+fn service_install_rejects_insecure_and_symlink_directories_without_repair() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let temp = tempfile::tempdir().unwrap();
+    let unsafe_dir = temp.path().join("unsafe");
+    fs::create_dir(&unsafe_dir).unwrap();
+    fs::set_permissions(&unsafe_dir, fs::Permissions::from_mode(0o775)).unwrap();
+    let existing = unsafe_dir.join("unit");
+    fs::write(&existing, b"unchanged").unwrap();
+    let error = install_definition(&existing, b"unchanged").unwrap_err();
+    assert_eq!(error.code(), ErrorCode::InstanceRegistryInvalid);
+    assert!(
+        error
+            .message()
+            .contains("must not be group or world writable")
+    );
+    assert!(
+        !error
+            .message()
+            .contains(&unsafe_dir.to_string_lossy().to_string())
+    );
+    assert_eq!(fs::read(existing).unwrap(), b"unchanged");
+    assert_eq!(
+        fs::metadata(&unsafe_dir).unwrap().permissions().mode() & 0o777,
+        0o775
+    );
+    let target = temp.path().join("target");
+    fs::create_dir(&target).unwrap();
+    let linked = temp.path().join("linked");
+    symlink(&target, &linked).unwrap();
+    let error = install_definition(&linked.join("unit"), b"unit").unwrap_err();
+    assert!(error.message().contains("must not be a symlink"));
+    assert_eq!(fs::read_dir(&target).unwrap().count(), 0);
+    assert!(install_definition(Path::new("relative/unit"), b"unit").is_err());
 }
 
 #[test]

@@ -353,6 +353,11 @@ jobs:
                 throw new Error("packaged release identity does not match the matrix");
               }
             '
+          # Test-only transport driver; never included in the release artifact.
+          host_target="$(rustc -vV | sed -n 's/^host: //p')"
+          cargo build --locked --offline --release --target "$host_target" -p open-compute-service \
+            --features test-support --bin install-upgrade-fixture
+          cp "$CARGO_TARGET_DIR/$host_target/release/install-upgrade-fixture" "$RUNNER_TEMP/install-upgrade-fixture"
           unset CARGO_TARGET_DIR RUSTC_WRAPPER SCCACHE_DIR SCCACHE_CACHE_SIZE
           OPEN_COMPUTE_TEST_OCD="$destination" \
           OPEN_COMPUTE_PACKAGE_GATE_USER_ROOT=1 \
@@ -405,6 +410,13 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+      - uses: actions/upload-artifact@v7
+        with:
+          name: upgrade-driver-${{ matrix.target }}
+          path: ${{ runner.temp }}/install-upgrade-fixture
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
       - name: Compiler cache statistics
         if: always()
         run: sccache --show-stats
@@ -440,6 +452,128 @@ jobs:
             .temp/dashboard-server/
             .temp/**/failed/**/ocd.log
             apps/dashboard/test-results/
+
+  install-lifecycle:
+    needs: [failfast, package]
+    name: install-lifecycle (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-24-x64
+            os: ubuntu-24.04
+            target: linux-x64
+            image: ubuntu:24.04
+          - name: ubuntu-24-arm64
+            os: ubuntu-24.04-arm
+            target: linux-arm64
+            image: ubuntu:24.04
+          - name: debian-13-x64
+            os: ubuntu-24.04
+            target: linux-x64
+            image: debian:13-slim
+          - name: debian-13-arm64
+            os: ubuntu-24.04-arm
+            target: linux-arm64
+            image: debian:13-slim
+          - name: macos-arm64
+            os: macos-15
+            target: darwin-arm64
+            image: native
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      # Authorizes product-scope writes only on these disposable hosted OS fixtures.
+      OPEN_COMPUTE_INSTALL_TEST_DISPOSABLE: "1"
+      # Breaking pre-1.0 changes must declare both a code and release-note reason.
+      # Success is mandatory until a release explicitly changes this expectation.
+      UPGRADE_REJECT_CODE: ""
+      UPGRADE_REJECT_REASON: ""
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-${{ matrix.target }}
+          path: .temp/install-lifecycle/candidate
+      - uses: actions/download-artifact@v8
+        with:
+          name: upgrade-driver-${{ matrix.target }}
+          path: .temp/install-lifecycle/driver
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Verify candidate and previous official release, including published migrations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.failfast.outputs.tag }}
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: |
+          python3 test/install-lifecycle/prepare.py \
+            --candidate ".temp/install-lifecycle/candidate/ocd-$RELEASE_TAG-$RELEASE_TARGET" \
+            --report ".temp/install-lifecycle/candidate/release-report-$RELEASE_TARGET.json" \
+            --target "$RELEASE_TARGET" --output .temp/install-lifecycle/inputs
+          chmod 755 .temp/install-lifecycle/driver/install-upgrade-fixture
+      - name: Fresh login and real systemd lifecycle (isolated privileged container)
+        if: runner.os == 'Linux'
+        env:
+          BASE_IMAGE: ${{ matrix.image }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --build-arg "BASE_IMAGE=$BASE_IMAGE" \
+            -t open-compute-install-test -f test/install-lifecycle/Dockerfile test/install-lifecycle
+          evidence="$GITHUB_WORKSPACE/.temp/install-lifecycle/evidence"
+          mkdir -p "$evidence"
+          chmod 777 "$evidence"
+          docker run -d -t --name open-compute-install-test --privileged --cgroupns=private \
+            --tmpfs /run --tmpfs /run/lock --stop-signal SIGRTMIN+3 \
+            -v "$GITHUB_WORKSPACE/test/install-lifecycle:/fixture:ro" \
+            -v "$GITHUB_WORKSPACE/.temp/install-lifecycle/inputs:/inputs:ro" \
+            -v "$GITHUB_WORKSPACE/.temp/install-lifecycle/driver:/driver:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/install.sh:/install.sh:ro" -v "$evidence:/evidence" \
+            -e OPEN_COMPUTE_INSTALL_TEST_DISPOSABLE=1 \
+            -e UPGRADE_REJECT_CODE -e UPGRADE_REJECT_REASON open-compute-install-test
+          trap 'docker rm -f open-compute-install-test >/dev/null' EXIT
+          for attempt in $(seq 1 60); do
+            if docker exec open-compute-install-test systemctl is-active multi-user.target >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec open-compute-install-test systemctl is-active multi-user.target
+          for scope in user system; do
+            docker exec -e "QUALIFICATION_SCOPE=$scope" open-compute-install-test \
+              su --whitelist-environment=QUALIFICATION_SCOPE,OPEN_COMPUTE_INSTALL_TEST_DISPOSABLE,UPGRADE_REJECT_CODE,UPGRADE_REJECT_REASON \
+              - installtest -c 'python3 /fixture/run.py \
+                --inputs /inputs \
+                --driver /driver/install-upgrade-fixture \
+                --installer /install.sh --evidence "/evidence/$QUALIFICATION_SCOPE" \
+                --scope "$QUALIFICATION_SCOPE" --reject-code "$UPGRADE_REJECT_CODE" --reject-reason "$UPGRADE_REJECT_REASON"'
+          done
+      - name: Real launchd lifecycle in the clean hosted macOS login
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for scope in user system; do
+            python3 test/install-lifecycle/run.py \
+              --inputs .temp/install-lifecycle/inputs \
+              --driver .temp/install-lifecycle/driver/install-upgrade-fixture \
+              --installer scripts/install.sh --scope "$scope" \
+              --evidence ".temp/install-lifecycle/evidence/$scope" \
+              --reject-code "$UPGRADE_REJECT_CODE" --reject-reason "$UPGRADE_REJECT_REASON"
+          done
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: install-lifecycle-${{ matrix.name }}
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            .temp/install-lifecycle/inputs/inputs.json
+            .temp/install-lifecycle/evidence/
 
   sdk-package:
     # Build the SDK tarball once from a clean checkout while qualification
@@ -524,7 +658,7 @@ jobs:
           compression-level: 0
 
   publish:
-    needs: [failfast, assemble, coverage, integration, sdk-package]
+    needs: [failfast, assemble, coverage, integration, sdk-package, install-lifecycle]
     runs-on: ubuntu-24.04
     environment: release
     permissions:

@@ -83,6 +83,9 @@ jobs:
         run: |
           bun run test:js:ci
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s test -p 'test_gate.py'
+      - name: Service installation permissions and umask regression
+        if: matrix.suite == 'core'
+        run: cargo test --locked -p open-compute-service --lib service_manager::tests -- --test-threads=1
       - name: SDK package pack inspection and isolated consumer smoke
         if: matrix.suite == 'core'
         run: bun packages/sdk/scripts/inspect-package.ts

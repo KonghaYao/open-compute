@@ -40,6 +40,7 @@ CLIPPY_CONF_DIR="$root/test/clippy" \
     cargo clippy \
         -p open-compute-artifacts \
         -p open-compute-runtime \
+        -p open-compute-service \
         -p open-compute-p1-fuzz \
         --bins --no-deps \
         --all-features --keep-going -- -D warnings

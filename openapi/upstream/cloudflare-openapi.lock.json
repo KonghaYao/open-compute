@@ -20,7 +20,7 @@
   },
   "subsetPath": "openapi/cloudflare-v4-subset.json",
   "subsetSha256": "8cbfc6f014bd81953ddd67d38505d2d7147efeb88c2fa75bab1613041cb897a9",
-  "subsetManifestSha256": "a86ad51ccf167ad605464c02f469d0973f897c70924427f9ae374b00b9c52a07",
+  "subsetManifestSha256": "0c6cd7fcc043542f389d832ee151c30d23e1ac75cf56a54e7bbab22cf94ef94d",
   "extensionSha256": "d40b3f4b3e47a4a8d9f49b0bb969bd0f63519b7bc8339666e0c9803970286c95",
   "observedStandardSha256": "f7f365a0c3033166fd6263da179943040e00a58363bd74e0f8d1ccdd7090adde",
   "capabilitySha256": "f5f8bd1fb23afb4e6000dfdc9006503fcd1d37d3ad6abc357048742d1108d9d9",
