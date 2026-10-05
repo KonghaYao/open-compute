@@ -901,8 +901,19 @@ fn untagged_version_metadata_migration_preserves_rows_and_guards() {
     drop(connection);
 
     let db = ControlDb::open(&path, 100).unwrap();
-    apply(&db, &DeterministicClock::new(UNIX_EPOCH)).unwrap();
-    assert_eq!(inspect_schema(&db).unwrap(), current_schema_version());
+    db.with_connection_mut(|connection| {
+        schema_migrations::migrate_to_for_test(connection, DatabaseKind::Control, 13);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(inspect_schema(&db).unwrap(), 13);
+    assert_eq!(
+        apply(&db, &DeterministicClock::new(UNIX_EPOCH))
+            .unwrap_err()
+            .code(),
+        ErrorCode::MigrationFailed
+    );
+    assert_eq!(inspect_schema(&db).unwrap(), 13);
     db.with_immediate(|tx| {
         let preserved: String = tx
             .query_row(
