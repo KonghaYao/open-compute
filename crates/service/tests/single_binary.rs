@@ -737,6 +737,7 @@ async fn interactive_instance_setup(
     let slave = fs::OpenOptions::new()
         .read(true)
         .write(true)
+        .custom_flags(rustix::fs::OFlags::NOCTTY.bits() as i32)
         .open(slave_path.to_str().unwrap())
         .unwrap();
     let mut process = tokio::process::Command::new(binary);
