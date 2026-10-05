@@ -877,12 +877,11 @@ async fn p5_real_vectorize_ai_search_and_markdown_matrix() {
             )
             .await;
             if response.0 != 200 {
+                let diagnostics = supervisor.last_diagnostics();
                 supervisor.shutdown().await;
                 panic!(
                     "tenant phase={phase} response status={}: {}; diagnostics={:?}",
-                    response.0,
-                    response.1,
-                    supervisor.last_diagnostics()
+                    response.0, response.1, diagnostics
                 );
             }
             match serde_json::from_str::<serde_json::Value>(&response.1).unwrap() {
