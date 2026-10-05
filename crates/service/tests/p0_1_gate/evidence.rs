@@ -117,7 +117,7 @@ pub(super) fn retain_failure(round: &Round) {
                 .iter()
                 .all(|token| !redacted.contains(token))
         );
-        let _ = fs::write(dest.join("stderr.log"), redacted);
+        let _ = fs::write(dest.join("ocd.log"), redacted);
     }
     let control = round.data.join("control.sqlite");
     let diagnostic_control = control
