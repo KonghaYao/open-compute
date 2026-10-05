@@ -85,6 +85,11 @@ Linux 上仅 `p0-2` 受控 egress fixture，以及三个正式平台打包。Lin
 smoke：未认证 shell、admin session、account discovery、顶层 reload 和真实 Worker 创建/删除。完整 Dashboard
 E2E 依赖专用多实例与可选产品 fixture，不在干净的 production package scope 中冒充发行资格。
 
+安装资格使用候选版本的原始 installer 验证 user/system 首装；停止后以实际非 root 服务用户运行只读 doctor。
+上一个正式版本的 system 基线使用手动 setup 路径：只移除本次 fixture installer 创建的空 `tmp` 目录，
+不改变 binary、receipt、配置或持久数据。0.2.3 的 sudo setup 会拒绝 installer 交给服务用户的临时目录；
+该已复现的历史问题不能通过修改旧二进制掩盖，候选版本的原始 installer 首装仍必须无 workaround 通过。
+
 `publish` 明确依赖 main 静态资格、coverage、macOS 最终 Gate、Linux egress 和三个正式平台 assemble；
 任何一项未通过均不得公开发布。构建保存编译耗时和标明未验收的二进制；普通 Rust target cache
 不保存失败半成品，package 的 bounded sccache 只作为编译加速，不作为测试通过证据或可信发行物。
