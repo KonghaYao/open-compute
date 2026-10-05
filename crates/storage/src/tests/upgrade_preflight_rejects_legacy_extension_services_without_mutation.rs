@@ -54,7 +54,45 @@ fn upgrade_preflight_rejects_legacy_extension_services_without_mutation() {
     drop(storage);
 
     let path = root.join("control.sqlite");
-    let connection = Connection::open(&path).unwrap();
+    let mut connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "DROP TRIGGER version_python_ready_guard;
+             DROP TABLE version_python_prepared;
+             DELETE FROM refinery_schema_history WHERE version = 14;",
+        )
+        .unwrap();
+    assert_eq!(
+        crate::schema_migrations::inspect(
+            &mut connection,
+            crate::schema_migrations::DatabaseKind::Control,
+        )
+        .unwrap(),
+        13
+    );
+    assert_eq!(
+        crate::control_db::ControlDb::preflight_migrations(&path, 5_000, &SystemClock)
+            .unwrap_err()
+            .code(),
+        ErrorCode::MigrationFailed
+    );
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT MAX(version) FROM refinery_schema_history",
+                [],
+                |row| { row.get::<_, i64>(0) }
+            )
+            .unwrap(),
+        13
+    );
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM worker_versions", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
     connection
         .execute_batch(
             "ALTER TABLE version_services DROP COLUMN target_policy_revision;

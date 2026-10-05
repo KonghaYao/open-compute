@@ -486,9 +486,8 @@ jobs:
       # Authorizes product-scope writes only on these disposable hosted OS fixtures.
       OPEN_COMPUTE_INSTALL_TEST_DISPOSABLE: "1"
       # Breaking pre-1.0 changes must declare both a code and release-note reason.
-      # Success is mandatory until a release explicitly changes this expectation.
-      UPGRADE_REJECT_CODE: ""
-      UPGRADE_REJECT_REASON: ""
+      UPGRADE_REJECT_CODE: "MIGRATION_FAILED"
+      UPGRADE_REJECT_REASON: "0.2.4 changes immutable system Worker identity; instances with pre-0.2.4 versions require a separate fresh installation and redeployment."
     steps:
       - uses: actions/checkout@v7
         with:
@@ -657,6 +656,7 @@ jobs:
           retention-days: 14
           compression-level: 0
 
+  # prettier-ignore
   publish:
     needs: [failfast, assemble, coverage, integration, sdk-package, install-lifecycle]
     runs-on: ubuntu-24.04

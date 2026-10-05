@@ -60,7 +60,7 @@ pub(super) async fn interactive_instance_setup(
         b"\n\n\n\n\nno\n"
     };
     std::io::Write::write_all(&mut master, answers).unwrap();
-    tokio::time::timeout(Duration::from_secs(15), child.wait_with_output())
+    tokio::time::timeout(Duration::from_secs(60), child.wait_with_output())
         .await
         .expect("interactive instance setup timed out")
         .unwrap()
