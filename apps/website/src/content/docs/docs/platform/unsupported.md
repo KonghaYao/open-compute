@@ -3,7 +3,7 @@ title: "Not available"
 description: "Cloudflare platform capabilities that open-compute does not currently provide."
 ---
 
-An upstream type or Wrangler field does not mean open-compute injects the corresponding capability. Unsupported configuration fails at admission instead of creating a placeholder binding.
+An upstream type or cf field does not mean open-compute injects the corresponding capability. Unsupported configuration fails at admission instead of creating a placeholder binding.
 
 ## Current exclusions
 

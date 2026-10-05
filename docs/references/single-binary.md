@@ -1,7 +1,7 @@
 # 单二进制分发与部署
 
-2026-09-30 正式 lock 已固定用户 fork `e3bdb07f52affc6a618f02ed2b731a581b0b2f69`，
-release 为 `v1.20260930.0-open-compute-r3.e3bdb07f5`，见[workerd 方案](../workerd/README.md)。
+当前正式 lock 固定用户 fork `e98a3e8433979356047a202d3e0d1b0e2e2c4b8c`，
+release 为 `v1.20260930.0-open-compute-r4.e98a3e843`，见[workerd 方案](../workerd/README.md)。
 三个正式产品平台加 macOS Intel 手动输入的 archive/binary 摘要、upstream base 与构建输入统一记录于 lock。
 四个平台的 gzip 由 workerd fork 的 GitHub Release 托管，lock 固定 URL、archive/binary digest 与构建身份；macOS Intel
 仍不进入官方 `ocd` release。Caddy 使用独立的 `elliothux/open-compute-caddy` 源码 submodule、Release 与
@@ -48,6 +48,7 @@ macOS Intel 可使用 lock 中的 `darwin-x64` archive。Windows 需要使用适
 和本机编译的 workerd；仓库不提供 Windows 的预构建 archive、交叉编译配置或兼容性保证。
 
 ```sh
+git submodule update --init --depth 1 third_party/gitserver third_party/workerd
 git lfs pull --include="share/pyodide/**,share/tessdata/**,share/xberg-tesseract-cache/**"
 bun install --frozen-lockfile --ignore-scripts
 runtime_inputs=$(mktemp -d "$PWD/.temp/runtime-inputs.XXXXXX")
@@ -61,6 +62,10 @@ cargo build --locked --release -p open-compute-service --bin ocd
 准备工具只在显式 `--download` 时获取 lock 指定的 GitHub Release asset，并校验 URL、大小、archive/binary digest、版本与
 Caddy module；已存在目标拒绝覆盖。根 build 校验 host 输入、四目标 lock、平台无关 Pyodide gzip和静态 OCR source inputs。
 Cargo 要求 `OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE` 与 `OPEN_COMPUTE_BUILD_CADDY` 指向同一正式 pin 的绝对路径；它们不是运行时覆盖选项。
+runtime 的 INTERNAL host policy 在构建时复用 `third_party/workerd` 中 canonical Workers、Workflows 与 AsyncLocalStorage
+wrapper source；这些源码也进入 manifest 与 Cargo 的输入摘要检查。CI 和干净 checkout 的构建须显式初始化固定 gitlink，
+不在 runtime build 或 Cargo 中自动获取源码。它们是构建输入，不是生产启动时的依赖。
+
 Cargo build script 检查目标、workerd/Pyodide/Caddy 压缩包与解压字节的 SHA-256、大小上限、生成 manifest
 、文件集合及源码/锁文件摘要，再把同一批已验证字节编入程序。
 检出目录使用 `packages/runtime/`，daemon 离线物化到 `<OCD_DIR>/cache/packages/`；`dist/` 必须显式构建。没有已校验构建输入时直接报错，不搜索 PATH 或其他缓存。

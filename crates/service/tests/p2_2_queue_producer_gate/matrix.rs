@@ -7,8 +7,10 @@ pub(super) fn matrix_source() -> &'static str {
     r#"import { WorkerEntrypoint } from "cloudflare:workers";
 
 const codeOf = (error) => String(error && (error.stableCode || error.message) || error);
-const rejects = async (fn, code) => {
-  try { await fn(); return false; } catch (error) { return codeOf(error).includes(code); }
+const rejects = async (fn, code, type = Error) => {
+  try { await fn(); return false; } catch (error) {
+    return error instanceof type && codeOf(error).includes(code);
+  }
 };
 
 export class Named extends WorkerEntrypoint {
@@ -44,15 +46,15 @@ export default {
       yield { body: new Uint8Array([4, 5]), contentType: "bytes", delaySeconds: 9 };
     }
     const response = await env.EVENTS.sendBatch(messages(), { delaySeconds: 7 });
-    const failures = [
-      await rejects(() => env.EVENTS.send("x", { contentType: "xml" }), "QUEUE_CONTENT_TYPE_UNSUPPORTED"),
-      await rejects(() => env.EVENTS.send(new Uint8Array(128001), { contentType: "bytes" }), "QUEUE_MESSAGE_TOO_LARGE"),
-      await rejects(() => env.EVENTS.send("x", { contentType: "text", delaySeconds: 86401 }), "QUEUE_DELAY_INVALID"),
-      await rejects(() => env.EVENTS.sendBatch([]), "QUEUE_INVALID_MESSAGE"),
-      await rejects(() => env.EVENTS.sendBatch(Array.from({ length: 101 }, () => ({ body: 1 }))), "QUEUE_BATCH_LIMIT_EXCEEDED"),
-      await rejects(() => env.EVENTS.send(undefined), "QUEUE_INVALID_MESSAGE"),
-      await rejects(() => env.EVENTS.send("x", { unexpected: true }), "QUEUE_INVALID_MESSAGE"),
-    ];
+    const rejections = {
+      unsupportedType: await rejects(() => env.EVENTS.send("x", { contentType: "xml" }), "Unsupported queue message content type: xml", TypeError),
+      oversizedMessage: await rejects(() => env.EVENTS.send(new Uint8Array(128001), { contentType: "bytes" }), "QUEUE_MESSAGE_TOO_LARGE", TypeError),
+      invalidDelay: await rejects(() => env.EVENTS.send("x", { contentType: "text", delaySeconds: 86401 }), "QUEUE_DELAY_INVALID"),
+      emptyBatch: await rejects(() => env.EVENTS.sendBatch([]), "sendBatch() requires at least one message", TypeError),
+      oversizedBatch: await rejects(() => env.EVENTS.sendBatch(Array.from({ length: 101 }, () => ({ body: 1 }))), "QUEUE_BATCH_LIMIT_EXCEEDED"),
+      undefinedBody: await rejects(() => env.EVENTS.send(undefined), "Message body cannot be undefined", TypeError),
+    };
+    const extraOptions = await env.EVENTS.send("extra-options", { unexpected: true });
     return Response.json({
       initialCount: initial.backlogCount,
       initialOldestUndefined: initial.oldestMessageTimestamp === undefined,
@@ -60,7 +62,8 @@ export default {
       oldestIsDate: response.metadata.metrics.oldestMessageTimestamp instanceof Date,
       bytesDetached,
       v8RoundTrip: v8.metadata.metrics.backlogCount === 4,
-      errors: failures.filter(Boolean).length,
+      rejections,
+      extraOptionsCount: extraOptions.metadata.metrics.backlogCount,
     });
   },
   async queue(batch, env, ctx) {
@@ -116,7 +119,7 @@ pub(super) fn assert_persisted_frames(path: &Path) {
         .unwrap()
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
-    assert_eq!(rows.len(), 8);
+    assert_eq!(rows.len(), 9);
     assert_eq!(
         rows[0],
         (
@@ -128,12 +131,16 @@ pub(super) fn assert_persisted_frames(path: &Path) {
     assert_eq!(rows[1], ("text".to_owned(), "héllo".as_bytes().to_vec(), 0));
     assert_eq!(rows[2], ("bytes".to_owned(), vec![1, 2, 3], 1_000));
     assert_eq!(rows[3].0, "v8");
-    assert!(rows[3].1.starts_with(&[0x4f, 0x43, 0x44, 0x56]));
+    assert!(rows[3].1.starts_with(&[0xff, 15]));
     assert_eq!(rows[3].2, 0);
     assert_eq!(rows[4].2, 7_000);
     assert_eq!(rows[5].2, 0);
     assert_eq!(rows[6].2, 9_000);
-    assert_eq!(rows[7], ("text".to_owned(), b"named".to_vec(), 0));
+    assert_eq!(
+        rows[7],
+        ("json".to_owned(), br#""extra-options""#.to_vec(), 5_000)
+    );
+    assert_eq!(rows[8], ("text".to_owned(), b"named".to_vec(), 0));
 }
 
 pub(super) fn persisted_v8_body(path: &Path) -> Vec<u8> {

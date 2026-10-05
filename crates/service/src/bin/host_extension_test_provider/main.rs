@@ -42,9 +42,10 @@ pub mod host_extension_capnp {
 use std::cell::RefCell;
 use std::ffi::CString;
 use std::fs::File;
-use std::io::{IoSliceMut, Read};
+use std::io::{IoSliceMut, Read, Write as _};
 use std::os::fd::AsFd as _;
 use std::os::fd::{BorrowedFd, OwnedFd};
+use std::os::unix::fs::OpenOptionsExt as _;
 use std::os::unix::net::UnixStream as StdUnixStream;
 use std::process::ExitCode;
 use std::rc::Rc as CapnpRc;
@@ -72,7 +73,19 @@ struct FileStream {
 }
 
 fn failed(message: &'static str) -> capnp::Error {
+    record_failure(message);
     capnp::Error::failed(message.to_string())
+}
+
+fn record_failure(message: &str) {
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open("fixture-first-failure.log")
+    {
+        let _ = file.write_all(message.as_bytes());
+    }
 }
 
 fn is_regular_file(stat: &Stat) -> bool {
@@ -229,6 +242,7 @@ async fn run_session(fd: OwnedFd) {
     if let Err(error) = rpc.await
         && error.kind != capnp::ErrorKind::Disconnected
     {
+        record_failure(&format!("fixture RPC session failed: {:?}", error.kind));
         eprintln!("host-extension-test-provider session failed: {error}");
     }
 }
@@ -338,10 +352,12 @@ fn main() -> ExitCode {
     match result {
         Ok(Ok(())) => ExitCode::SUCCESS,
         Ok(Err(error)) => {
+            record_failure(&format!("fixture control failed: {:?}", error.kind()));
             eprintln!("host-extension-test-provider: {error}");
             ExitCode::FAILURE
         }
         Err(error) => {
+            record_failure("fixture control task failed");
             eprintln!("host-extension-test-provider: control task failed: {error}");
             ExitCode::FAILURE
         }

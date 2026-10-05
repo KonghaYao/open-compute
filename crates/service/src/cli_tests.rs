@@ -330,40 +330,40 @@ fn parse_from_covers_operator_subcommands() {
         (
             &[
                 "ocd",
-                "wrangler",
+                "cf",
                 "--target",
                 "remote",
                 "--project",
                 "/srv/worker",
                 "deploy",
                 "--config",
-                "./wrangler.jsonc",
+                "./cf.jsonc",
                 "--unknown",
                 "值",
             ],
             |c| {
                 matches!(
                     c,
-                    Command::Wrangler { target: Some(target), project: Some(project), arguments }
+                    Command::Cf { target: Some(target), project: Some(project), arguments }
                         if target.as_str() == "remote"
                             && project == Path::new("/srv/worker")
-                            && arguments == &["deploy", "--config", "./wrangler.jsonc", "--unknown", "值"]
+                            && arguments == &["deploy", "--config", "./cf.jsonc", "--unknown", "值"]
                 )
             },
         ),
-        (&["ocd", "wrangler", "--", "--version"], |c| {
+        (&["ocd", "cf", "--", "--version"], |c| {
             matches!(
                 c,
-                Command::Wrangler { arguments, .. }
+                Command::Cf { arguments, .. }
                     if arguments == &["--version"]
             )
         }),
         (
-            &["ocd", "wrangler", "--instance", TEST_INSTANCE_ID, "deploy"],
+            &["ocd", "cf", "--instance", TEST_INSTANCE_ID, "deploy"],
             |c| {
                 matches!(
                     c,
-                    Command::Wrangler { arguments, .. }
+                    Command::Cf { arguments, .. }
                         if arguments == &["deploy"]
                 )
             },
@@ -376,7 +376,7 @@ fn parse_from_covers_operator_subcommands() {
     assert!(
         parse_from([
             "ocd",
-            "wrangler",
+            "cf",
             "--target",
             "remote",
             "--instance",

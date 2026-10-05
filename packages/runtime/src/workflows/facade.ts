@@ -164,8 +164,8 @@ type WorkflowIntent =
 class WorkflowInstance {
   declare readonly id: string;
   #handle: WorkflowHandle;
-  #binding: WorkflowBinding;
-  constructor(result: WorkflowResolvedInstance, binding: WorkflowBinding) {
+  #binding: WorkflowImpl;
+  constructor(result: WorkflowResolvedInstance, binding: WorkflowImpl) {
     this.#handle = result.handle;
     this.#binding = binding;
     Object.defineProperty(this, "id", {
@@ -239,7 +239,8 @@ class WorkflowInstance {
   }
 }
 
-export class WorkflowBinding {
+/** The upstream class name selects the Python SDK Workflow wrapper. */
+export class WorkflowImpl {
   #transport: WorkflowTransport;
   #durableObject;
   #name;

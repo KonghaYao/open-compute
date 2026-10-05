@@ -34,7 +34,7 @@ const outputGate = moduleUrl(
     "node:async_hooks": asyncHooks,
   }),
 );
-const { WorkflowBinding, triggerWorkflowSchedule } = await import(
+const { WorkflowImpl, triggerWorkflowSchedule } = await import(
   moduleUrl(
     await compileRuntime("workflows/facade.ts", {
       "./codec.js": codec,
@@ -67,7 +67,8 @@ test("durable facade resolves once and keeps only a private instance-scoped hand
     createBatch: (batch) => batch.map((body) => ({ id: body.id, handle })),
     deleteBatch: (ids) => ({ deleted: ids.map((id) => ({ id })), errors: [] }),
   };
-  const binding = new WorkflowBinding(transport);
+  const binding = new WorkflowImpl(transport);
+  assert.equal(binding.constructor.name, "WorkflowImpl");
   const instance = await binding.get("order");
   assert.deepEqual(Object.keys(instance), ["id"]);
   assert.equal(JSON.stringify(instance), '{"id":"order"}');
@@ -126,7 +127,7 @@ test("DO mutations require an installed output gate and keep readonly get/status
   const fail = () => {
     throw new Error("transport mutation reached");
   };
-  const binding = new WorkflowBinding(
+  const binding = new WorkflowImpl(
     {
       resolve: (id) => ({
         id,
@@ -170,7 +171,7 @@ test("DO mutations require an installed output gate and keep readonly get/status
 
 test("direct Workflow schedules use one deterministic instance and operation per logical slot", async () => {
   const creates = [];
-  const binding = new WorkflowBinding(
+  const binding = new WorkflowImpl(
     {
       resolve: (id) => ({ id, handle: {} }),
       get: (id) => ({ id, handle: {} }),

@@ -161,6 +161,7 @@ export default {
         ttlLow: await code(() => env.CACHE.put("x", "y", { expirationTtl: 59 })),
         objectValue: await code(() => env.CACHE.put("x", { obj: true })),
         detached: await code(() => env.CACHE.put("x", detached)),
+        detachedBytes: Array.from(new Uint8Array(await env.CACHE.get("x", "arrayBuffer"))),
         extraList: await code(() => env.CACHE.list({ extra: true })),
         zeroList: await code(() => env.CACHE.list({ limit: 0 })),
         highList: await code(() => env.CACHE.list({ limit: 1001 })),

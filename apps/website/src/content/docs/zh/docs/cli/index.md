@@ -25,13 +25,12 @@ description: "按任务查询 open-compute daemon、开发 launcher、诊断和�
 ## 开发与部署
 
 - `target add|list|show|test|remove`
-- `wrangler [--target <name>] [--project <dir>] <wrangler-command> ...`
-- `worker bundle`
+- `cf [--target <name>] [--project <dir>] <cf-command> ...`
 
-`ocd wrangler` 解析项目内 Wrangler，并原样传递 Wrangler command 之后的参数。它不会下载、修复或静默替换依赖。Wrangler major 不同会警告，但不阻止执行。
+`ocd cf` 解析项目内 cf，并原样传递 cf command 之后的参数。它不会下载、修复或静默替换依赖。cf major 不同会警告，但不阻止执行。
 
 target 清单位于所选 user／显式 system 作用域的 `<OCD_DIR>/targets.toml`；升级检查元数据是 `<OCD_DIR>/cache/update-check.json` 中的可丢弃缓存。
-`ocd target add <名称> --api-base-url <URL> --instance-id <ID> --token-file <路径>` 登记远端 open-compute 的 InstanceId；同一个值只在线协议及 Wrangler 表面称为 `account_id`。
+`ocd target add <名称> --api-base-url <URL> --instance-id <ID> --token-file <路径>` 登记远端 open-compute 的 InstanceId；同一个值只在线协议及 cf 表面称为 `account_id`。
 
 ## 检查与诊断
 
@@ -58,4 +57,4 @@ Backup 和 scheduler recovery 必须满足 help 与[运维指南](/zh/docs/opera
 
 `ocd instance setup --name dev --yes` 通过运行中的 daemon 创建全新实例。`--config` 和 `--data-dir` 独立指定配置路径与显式 `[data].path`；`--autostart=false`、`--start=false` 可关闭两项默认启动选择。不带 `--yes` 时需要交互确认；已有配置或未知非空数据不会被覆盖。
 
-`ocd wrangler` 成功后会替换 launcher process，因此最终 stdout、stderr、信号和退出码由 Wrangler 拥有。
+`ocd cf` 成功后会替换 launcher process，因此最终 stdout、stderr、信号和退出码由 cf 拥有。

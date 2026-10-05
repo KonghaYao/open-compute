@@ -244,7 +244,9 @@ async fn version_pipeline_uploads_validates_promotes_and_replays() {
         storage.clone(),
         artifact_store(&mock),
         BundleLimits::default(),
-    );
+        python_runtime_pin(),
+    )
+    .unwrap();
     let snapshot = source
         .resolve(
             &loader_key(account, worker.id, version_id),
@@ -355,7 +357,9 @@ async fn version_pipeline_uploads_validates_promotes_and_replays() {
         storage.clone(),
         artifact_store(&mock),
         BundleLimits::default(),
+        python_runtime_pin(),
     )
+    .unwrap()
     .with_cache(cache);
     let probe = cached_source
         .resolve(

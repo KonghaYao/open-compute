@@ -1,10 +1,6 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { privateWeakMap } from "../../private-weak-map.js";
-import type {
-  Environment,
-  EnvironmentWrapper,
-  TenantConstructor,
-} from "./runtime.js";
+import type { Environment, TenantConstructor } from "./runtime.js";
 
 type Callable = (this: unknown, ...args: unknown[]) => unknown;
 const PRIVATE_EXPORT_PREFIX = "__OpenCompute";
@@ -24,12 +20,7 @@ const weakAdd = WeakSet.prototype.add;
 /** Reuse the normal environment/context wrapper for every native loopback service. */
 export function createLoopbackEntrypoint(
   tenant: Environment,
-  wrapEnv: EnvironmentWrapper,
-  wrap: (
-    target: unknown,
-    environment: EnvironmentWrapper,
-    name?: string,
-  ) => TenantConstructor,
+  wrap: (target: unknown, name?: string) => TenantConstructor,
   alreadyWrapped: readonly string[] = [],
 ) {
   const constructors = new Map<string, TenantConstructor>();
@@ -39,7 +30,7 @@ export function createLoopbackEntrypoint(
       typeof target === "function" &&
       target.prototype instanceof WorkerEntrypoint
     ) {
-      constructors.set(name, wrap(target, wrapEnv, name));
+      constructors.set(name, wrap(target, name));
       apply(setAdd, loopbackNames, [name]);
     }
   }
@@ -155,7 +146,7 @@ function privateExport(property: PropertyKey): boolean {
   );
 }
 
-/** Expose public loopback entrypoints without leaking generated host bridges. */
+/** Expose public loopback entrypoints without leaking private host bridges. */
 export function tenantExports(source: object): object {
   const values = new Map<string, unknown>();
   const enumerable = new Map<string, boolean>();

@@ -9,14 +9,26 @@ import { compileRuntime, moduleUrl } from "../compiled-runtime.mjs";
 const workerBase = moduleUrl(
   "export class WorkerEntrypoint { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }",
 );
+const privateHelpers = moduleUrl(
+  await compileRuntime("bindings/private-transport.ts", {
+    "../loader/shared.js": moduleUrl(
+      "export function bindingError(code) { return Object.assign(new Error(code), {stableCode: code}); }",
+    ),
+  }),
+);
+const nativeAdapter = moduleUrl(
+  await compileRuntime("r2/native-adapter.ts", {
+    "../bindings/private-transport.js": privateHelpers,
+    "./validation.js": moduleUrl(await compileRuntime("r2/validation.ts")),
+  }),
+);
 const compiled = await mkdtemp(join(tmpdir(), "oc-r2-runtime-"));
 await writeFile(
   join(compiled, "transport.mjs"),
-  await compileRuntime("r2/transport.ts", { "cloudflare:workers": workerBase }),
-);
-await writeFile(
-  join(compiled, "facade.mjs"),
-  await compileRuntime("r2/facade.ts"),
+  await compileRuntime("r2/transport.ts", {
+    "cloudflare:workers": workerBase,
+    "./native-adapter.js": nativeAdapter,
+  }),
 );
 await writeFile(
   join(compiled, "validation.js"),
@@ -24,9 +36,6 @@ await writeFile(
 );
 const { makeR2TransportBase } = await import(
   pathToFileURL(join(compiled, "transport.mjs")).href
-);
-const { R2Bucket } = await import(
-  pathToFileURL(join(compiled, "facade.mjs")).href
 );
 const props = {
   bindingId: "binding",
@@ -48,7 +57,7 @@ const meta = {
   storageClass: "Standard",
 };
 const Transport = makeR2TransportBase(
-  (code) => new Error(code),
+  (code) => Object.assign(new Error(code), { stableCode: code }),
   () => "generation",
   "private-token",
 );
@@ -57,6 +66,395 @@ const transport = (fetch) =>
     { props },
     { BINDING_BACKEND: { fetch }, BINDING_BACKEND_TOKEN: "token" },
   );
+
+test("native R2 list shrinks oversized metadata pages without losing authority cursors", async () => {
+  const calls = [];
+  const all = Array.from({ length: 1000 }, (_, index) => ({
+    ...meta,
+    key: `key-${String(index).padStart(4, "0")}`,
+    customMetadata: { value: "x".repeat(2000) },
+  }));
+  const source = transport(async (_url, init) => {
+    const options = JSON.parse(init.body);
+    calls.push(options);
+    const after = Number(options.cursor ?? 0);
+    const objects = all.slice(after, after + options.limit);
+    const end = after + objects.length;
+    return Response.json({
+      objects,
+      truncated: end < all.length,
+      ...(end < all.length ? { cursor: String(end) } : {}),
+      delimitedPrefixes: [],
+    });
+  });
+  let cursor;
+  const keys = [];
+  do {
+    const response = await source.fetch(
+      new Request("https://fake-host/", {
+        headers: {
+          "cf-r2-request": JSON.stringify({
+            version: 1,
+            method: "list",
+            limit: 1000,
+            include: [1],
+            ...(cursor === undefined ? {} : { cursor }),
+          }),
+        },
+      }),
+    );
+    assert.equal(response.status, 200);
+    assert.ok(
+      Number(response.headers.get("cf-r2-metadata-size")) <= 1024 * 1024,
+    );
+    const page = await response.json();
+    keys.push(...page.objects.map((object) => object.name));
+    cursor = page.cursor;
+    assert.equal(page.truncated, cursor !== undefined);
+  } while (cursor !== undefined);
+  assert.deepEqual(
+    keys,
+    all.map((object) => object.key),
+  );
+  assert.deepEqual(
+    calls.map(({ limit, cursor }) => [limit, cursor]),
+    [
+      [1000, undefined],
+      [500, undefined],
+      [250, undefined],
+      [1000, "250"],
+      [500, "250"],
+      [250, "250"],
+      [1000, "500"],
+      [500, "500"],
+      [250, "500"],
+      [1000, "750"],
+    ],
+  );
+  // A malformed single metadata object fails closed; it cannot trigger unbounded retries.
+  const oversized = transport(async () =>
+    Response.json({
+      objects: [
+        { ...meta, customMetadata: { value: "x".repeat(1024 * 1024) } },
+      ],
+      truncated: false,
+      delimitedPrefixes: [],
+    }),
+  );
+  const invalid = await oversized.fetch(
+    new Request("https://fake-host/", {
+      headers: { "cf-r2-request": '{"version":1,"method":"list","limit":1}' },
+    }),
+  );
+  assert.equal(invalid.status, 500);
+  assert.equal(
+    JSON.parse(invalid.headers.get("cf-r2-error")).message,
+    "R2_INTERNAL_PROTOCOL_ERROR",
+  );
+});
+
+test("native R2 cancellation reaches GET authority and malformed PUT input", async () => {
+  let outputCancelled = false;
+  const source = transport(async () => {
+    const json = new TextEncoder().encode(
+      JSON.stringify({ meta, hasBody: true }),
+    );
+    const prefix = new Uint8Array(4 + json.length);
+    new DataView(prefix.buffer).setUint32(0, json.length);
+    prefix.set(json, 4);
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(prefix);
+        },
+        cancel() {
+          outputCancelled = true;
+        },
+      }),
+      {
+        headers: { "content-type": "application/vnd.open-compute.r2.v1+frame" },
+      },
+    );
+  });
+  const response = await source.fetch(
+    new Request("https://fake-host/", {
+      headers: {
+        "cf-r2-request": '{"version":1,"method":"get","object":"asset"}',
+      },
+    }),
+  );
+  const reader = response.body.getReader();
+  assert.ok((await reader.read()).value.length > 0);
+  await reader.cancel("finished");
+  assert.equal(outputCancelled, true);
+  let inputCancelled = false;
+  const invalid = await source.fetch(
+    new Request("https://fake-host/", {
+      method: "PUT",
+      duplex: "half",
+      headers: { "cf-r2-metadata-size": "1" },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array([255]));
+        },
+        cancel() {
+          inputCancelled = true;
+        },
+      }),
+    }),
+  );
+  assert.equal(invalid.status, 400);
+  assert.equal(inputCancelled, true);
+});
+
+test("native R2 wire reuses the authority for streams, metadata, conditions and multipart", async () => {
+  const calls = [];
+  const source = transport(async (url, init) => {
+    const operation = String(url).split("/").at(-1);
+    let input;
+    let body;
+    if (operation === "put" || operation === "uploadPart") {
+      const bytes = new Uint8Array(await new Response(init.body).arrayBuffer());
+      const length = new DataView(bytes.buffer).getUint32(0);
+      input = JSON.parse(
+        new TextDecoder().decode(bytes.subarray(4, 4 + length)),
+      );
+      body = new TextDecoder().decode(bytes.subarray(4 + length));
+    } else input = JSON.parse(init.body);
+    calls.push({ operation, input, body });
+    if (operation === "get")
+      return frame(meta, input.options.onlyIf ? undefined : "abc");
+    if (operation === "list")
+      return Response.json({
+        objects: [meta],
+        truncated: true,
+        cursor: "cursor",
+        delimitedPrefixes: ["prefix/"],
+      });
+    if (operation === "head" && input.key === "missing")
+      return new Response(null, { status: 204 });
+    if (operation === "put" && input.options.onlyIf)
+      return new Response(null, { status: 204 });
+    if (operation === "createMultipartUpload")
+      return Response.json({ key: input.key, uploadId: "upload" });
+    if (operation === "uploadPart")
+      return Response.json({ partNumber: input.partNumber, etag: "part" });
+    if (operation === "delete" || operation === "abortMultipartUpload")
+      return new Response(null, { status: 204 });
+    return Response.json(meta);
+  });
+  function request(method, input = {}, body = "") {
+    const value = { version: 1, method, object: "路径/%", ...input };
+    const metadata = new TextEncoder().encode(JSON.stringify(value));
+    const get = ["head", "get", "list"].includes(method);
+    return new Request(
+      "https://fake-host/",
+      get
+        ? {
+            headers: {
+              "cf-r2-request": JSON.stringify(value).replace(
+                /[\u007f-\uffff]/g,
+                (char) =>
+                  `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
+              ),
+            },
+          }
+        : {
+            method: "PUT",
+            duplex: "half",
+            headers: { "cf-r2-metadata-size": String(metadata.length) },
+            body: new ReadableStream({
+              start(controller) {
+                controller.enqueue(metadata.subarray(0, 2));
+                controller.enqueue(metadata.subarray(2));
+                if (body) controller.enqueue(new TextEncoder().encode(body));
+                controller.close();
+              },
+            }),
+          },
+    );
+  }
+  async function decoded(response) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const size = Number(
+      response.headers.get("cf-r2-metadata-size") ?? bytes.length,
+    );
+    return {
+      metadata: JSON.parse(new TextDecoder().decode(bytes.subarray(0, size))),
+      body: new TextDecoder().decode(bytes.subarray(size)),
+    };
+  }
+  const get = await source.fetch(
+    request("get", {
+      range: { offset: "1", length: "2" },
+      ssec: { key: "a".repeat(64) },
+    }),
+  );
+  const result = await decoded(get);
+  assert.equal(result.body, "abc");
+  assert.equal(result.metadata.name, "asset");
+  assert.equal(result.metadata.size, "3");
+  assert.deepEqual(result.metadata.checksums, { 0: meta.checksums.md5 });
+  assert.equal(result.metadata.httpFields.contentType, "text/plain");
+  assert.deepEqual(calls.at(-1).input.options, {
+    range: { offset: 1, length: 2 },
+    ssecKey: "a".repeat(64),
+  });
+  const conditional = await source.fetch(
+    request("get", {
+      onlyIf: {
+        etagMatches: [{ type: "weak", value: "etag" }],
+        uploadedBefore: "1",
+        secondsGranularity: true,
+      },
+    }),
+  );
+  assert.equal(conditional.status, 412);
+  assert.equal(
+    JSON.parse(conditional.headers.get("cf-r2-error")).v4code,
+    10031,
+  );
+  assert.equal((await decoded(conditional)).body, "");
+  assert.deepEqual(calls.at(-1).input.options.onlyIf, {
+    etagMatches: [{ kind: "weak", value: "etag" }],
+    etagDoesNotMatch: [],
+    uploadedBefore: 1,
+    secondsGranularity: true,
+  });
+  await source.fetch(request("get", { rangeHeader: "bytes=1-2" }));
+  assert.deepEqual(calls.at(-1).input.options.range, { offset: 1, length: 2 });
+  const put = await source.fetch(
+    request(
+      "put",
+      {
+        customFields: [{ k: "__proto__", v: "value" }],
+        httpFields: { cacheExpiry: "123", contentType: "text/plain" },
+        md5: "AAAAAAAAAAAAAAAAAAAAAA==",
+      },
+      "abc",
+    ),
+  );
+  assert.equal((await put.json()).etag, "etag");
+  assert.equal(calls.at(-1).body, "abc");
+  assert.deepEqual(calls.at(-1).input.options, {
+    httpMetadata: { cacheExpiry: 123, contentType: "text/plain" },
+    customMetadata: JSON.parse('{"__proto__":"value"}'),
+    checksum: { algorithm: "md5", hex: "0".repeat(32) },
+  });
+  assert.equal(
+    (
+      await source.fetch(
+        request(
+          "put",
+          { onlyIf: { etagDoesNotMatch: [{ type: "wildcard" }] } },
+          "abc",
+        ),
+      )
+    ).status,
+    412,
+  );
+  const missing = await source.fetch(request("head", { object: "missing" }));
+  assert.equal(missing.status, 404);
+  assert.equal(JSON.parse(missing.headers.get("cf-r2-error")).v4code, 10007);
+  const listed = await decoded(
+    await source.fetch(
+      request("list", {
+        prefix: "p/",
+        limit: 10,
+        include: [0, 1],
+        cursor: "previous",
+        delimiter: "/",
+        startAfter: "p/a",
+      }),
+    ),
+  );
+  assert.equal(listed.metadata.cursor, "cursor");
+  assert.equal(listed.metadata.objects[0].size, "3");
+  assert.deepEqual(calls.at(-1).input.include, [
+    "httpMetadata",
+    "customMetadata",
+  ]);
+  assert.deepEqual(
+    await (await source.fetch(request("createMultipartUpload"))).json(),
+    { uploadId: "upload" },
+  );
+  assert.deepEqual(
+    await (
+      await source.fetch(
+        request(
+          "uploadPart",
+          { uploadId: "upload", partNumber: 1 },
+          "part-body",
+        ),
+      )
+    ).json(),
+    { etag: "part" },
+  );
+  assert.equal(calls.at(-1).body, "part-body");
+  assert.equal(
+    (
+      await (
+        await source.fetch(
+          request("completeMultipartUpload", {
+            uploadId: "upload",
+            parts: [{ part: 1, etag: "part" }],
+          }),
+        )
+      ).json()
+    ).name,
+    "asset",
+  );
+  assert.deepEqual(calls.at(-1).input.parts, [{ partNumber: 1, etag: "part" }]);
+  await source.fetch(request("abortMultipartUpload", { uploadId: "upload" }));
+  await source.fetch(request("delete", { objects: ["a", "b"] }));
+  assert.deepEqual(calls.at(-1).input.keys, ["a", "b"]);
+  const before = calls.length;
+  for (const invalid of [
+    request("head", { version: 2 }),
+    request("get", { range: { offset: "-1" } }),
+    request("get", { range: { unknown: 1 } }),
+    request("list", { include: [2] }),
+    request("put", { httpFields: { unknown: "x" } }),
+    request("put", {
+      customFields: [
+        { k: "x", v: "a" },
+        { k: "x", v: "b" },
+      ],
+    }),
+    request("get", { ssec: { key: "secret" } }),
+    request("get", { onlyIf: { etagMatches: [{ type: "bad" }] } }),
+    request("put", { md5: "AA==", sha256: "a".repeat(64) }),
+    request("delete", {}, "unexpected body"),
+    new Request("https://fake-host/", { headers: { "cf-r2-request": "{" } }),
+    new Request("https://fake-host/", {
+      method: "PUT",
+      body: "{}",
+      headers: { "cf-r2-metadata-size": "16385" },
+    }),
+    new Request("https://fake-host/", {
+      method: "PUT",
+      body: "{}",
+      headers: { "cf-r2-metadata-size": "3" },
+    }),
+  ])
+    assert.equal((await source.fetch(invalid)).status, 400);
+  assert.equal(calls.length, before);
+  const denied = new Transport(
+    { props: { ...props, permissions: { read: false, write: false } } },
+    {},
+  );
+  assert.equal((await denied.fetch(request("head"))).status, 403);
+  assert.equal((await denied.fetch(request("delete"))).status, 403);
+  const broken = transport(async () => {
+    throw new Error("SECRET_PATH_TOKEN");
+  });
+  const error = await broken.fetch(request("head"));
+  assert.equal(error.status, 500);
+  assert.equal(
+    JSON.parse(error.headers.get("cf-r2-error")).message,
+    "R2_INTERNAL_PROTOCOL_ERROR",
+  );
+});
 
 function frame(metadata, body) {
   const header = new TextEncoder().encode(
@@ -78,48 +476,6 @@ function frame(metadata, body) {
     }),
   );
 }
-
-test("compiled R2 transport and facade preserve metadata and one-shot streamed bodies", async () => {
-  const bucket = new R2Bucket(transport(async () => frame(meta, "abc")));
-  const object = await bucket.get("asset");
-  assert.equal(object.uploaded.getTime(), 1);
-  assert.equal(object.httpMetadata.contentType, "text/plain");
-  assert.equal(await object.text(), "abc");
-  assert.equal(object.bodyUsed, true);
-  await assert.rejects(
-    object.bytes(),
-    /Body has already been used\. It can only be used once\. Use tee\(\) first if you need to read it twice\./,
-  );
-  const head = await new R2Bucket(
-    transport(async () => Response.json(meta)),
-  ).head("asset");
-  assert.equal(head.httpEtag, '"etag"');
-  const ranged = await new R2Bucket(
-    transport(async () =>
-      Response.json({
-        ...meta,
-        range: { offset: 1, length: 2, suffix: null },
-      }),
-    ),
-  ).head("asset");
-  assert.deepEqual(ranged.range, { offset: 1, length: 2 });
-  const metadataUnknown = await new R2Bucket(
-    transport(async () =>
-      Response.json({
-        ...meta,
-        httpMetadata: null,
-      }),
-    ),
-  ).head("asset");
-  assert.throws(
-    () => metadataUnknown.writeHttpMetadata(new Headers()),
-    /HTTP metadata unknown for key `asset`\. Did you forget to add 'httpMetadata' to `include` when listing\?/,
-  );
-  const list = await transport(async () =>
-    Response.json({ objects: [meta], truncated: false, delimitedPrefixes: [] }),
-  ).list({ prefix: "", limit: 10, include: [] });
-  assert.equal(list.objects[0].key, "asset");
-});
 
 test("compiled R2 transport rejects malformed metadata and incomplete frames", async () => {
   for (const invalid of [
@@ -145,385 +501,4 @@ test("compiled R2 transport rejects malformed metadata and incomplete frames", a
     ),
     /BINDING_PROTOCOL_ERROR/,
   );
-});
-
-test("R2 requires a complete transport and forwards cancellation to its stream", async () => {
-  assert.throws(
-    () => new R2Bucket({ async get() {} }),
-    /R2_INTERNAL_PROTOCOL_ERROR/,
-  );
-  let cancelled = false;
-  const unexpected = () => {
-    throw new Error("unexpected transport call");
-  };
-  const bucket = new R2Bucket({
-    head: unexpected,
-    put: unexpected,
-    delete: unexpected,
-    list: unexpected,
-    createMultipartUpload: unexpected,
-    uploadPart: unexpected,
-    completeMultipartUpload: unexpected,
-    abortMultipartUpload: unexpected,
-    async get() {
-      return {
-        meta,
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(new Uint8Array([1, 2, 3]));
-          },
-          cancel() {
-            cancelled = true;
-          },
-        }),
-      };
-    },
-  });
-  const reader = (await bucket.get("asset")).body.getReader();
-  assert.equal((await reader.read()).value.byteLength, 3);
-  await reader.cancel("consumer stopped");
-  assert.equal(cancelled, true);
-});
-
-test("compiled R2 facade exposes checksums.toJSON, list cursor union, and local multipart resume", async () => {
-  const bucket = new R2Bucket(transport(async () => frame(meta, "abc")));
-  const object = await bucket.get("asset");
-  assert.deepEqual(object.checksums.toJSON(), {
-    md5: "5d41402abc4b2a76b9719d911017c592",
-  });
-  assert.equal(object.version, meta.version);
-  assert.equal(object.storageClass, "Standard");
-  const truncated = await new R2Bucket(
-    transport(async () =>
-      Response.json({
-        objects: [meta],
-        truncated: true,
-        cursor: "next",
-        delimitedPrefixes: ["p/"],
-      }),
-    ),
-  ).list({ limit: 1 });
-  assert.equal(truncated.truncated, true);
-  assert.equal(truncated.cursor, "next");
-  const complete = await new R2Bucket(
-    transport(async () =>
-      Response.json({
-        objects: [meta],
-        truncated: false,
-        delimitedPrefixes: [],
-      }),
-    ),
-  ).list({ prefix: "", limit: 10, include: [], startAfter: "a" });
-  assert.equal(complete.truncated, false);
-  assert.equal("cursor" in complete, true);
-  assert.equal(complete.cursor, undefined);
-  const created = await new R2Bucket({
-    async head() {
-      return null;
-    },
-    async get() {
-      return null;
-    },
-    async put() {
-      return meta;
-    },
-    async delete() {},
-    async list() {
-      return { objects: [], truncated: false, delimitedPrefixes: [] };
-    },
-    async createMultipartUpload(key) {
-      return { key, uploadId: "upload" };
-    },
-    async uploadPart(_key, _uploadId, partNumber) {
-      return { partNumber, etag: "part" };
-    },
-    async completeMultipartUpload() {
-      return meta;
-    },
-    async abortMultipartUpload() {},
-  }).createMultipartUpload("mpu");
-  const resumed = new R2Bucket({
-    async head() {
-      return null;
-    },
-    async get() {
-      return null;
-    },
-    async put() {
-      return meta;
-    },
-    async delete() {},
-    async list() {
-      return { objects: [], truncated: false, delimitedPrefixes: [] };
-    },
-    async createMultipartUpload() {
-      throw new Error("unexpected");
-    },
-    async uploadPart(key, uploadId, partNumber) {
-      assert.equal(key, "mpu");
-      assert.equal(uploadId, "upload");
-      return { partNumber, etag: "part" };
-    },
-    async completeMultipartUpload() {
-      return meta;
-    },
-    async abortMultipartUpload() {},
-  }).resumeMultipartUpload(created.key, created.uploadId);
-  assert.equal(resumed.uploadId, "upload");
-  const uploaded = await resumed.uploadPart(1, "body");
-  assert.equal(uploaded.etag, "part");
-  const completed = await resumed.complete([uploaded]);
-  assert.equal(completed.httpMetadata, undefined);
-  assert.equal(completed.customMetadata, undefined);
-  assert.equal(completed.storageClass, "Standard");
-  await assert.rejects(
-    new R2Bucket(transport(async () => frame(meta))).put("k", "v", {
-      md5: "00".repeat(16),
-      sha1: "00".repeat(20),
-    }),
-    /You cannot specify multiple hashing algorithms\./,
-  );
-  await assert.rejects(
-    new R2Bucket(transport(async () => frame(meta))).put("k", "v", {
-      onlyIf: { etagMatches: '"quoted"' },
-    }),
-    /Conditional ETag should not be wrapped in quotes \("quoted"\)\./,
-  );
-});
-
-test("Headers conditions retain HTTP precedence and object conditions remain conjunctive", async () => {
-  const calls = [];
-  const unexpected = () => {
-    throw new Error("unexpected transport call");
-  };
-  const raw = {
-    head: unexpected,
-    async get(_key, options) {
-      calls.push(options.onlyIf);
-      return null;
-    },
-    async put(_key, _body, options) {
-      calls.push(options.onlyIf);
-      return meta;
-    },
-    delete: unexpected,
-    list: unexpected,
-    createMultipartUpload: unexpected,
-    uploadPart: unexpected,
-    completeMultipartUpload: unexpected,
-    abortMultipartUpload: unexpected,
-  };
-  const bucket = new R2Bucket(raw);
-  await bucket.get("asset", {
-    onlyIf: new Headers({
-      "if-match": 'W/"weak", "strong"',
-      "if-unmodified-since": new Date(0).toUTCString(),
-    }),
-  });
-  await bucket.put("asset", "body", {
-    onlyIf: {
-      etagDoesNotMatch: "other",
-      uploadedAfter: new Date(0),
-      secondsGranularity: true,
-    },
-  });
-  assert.deepEqual(calls[0], {
-    etagMatches: [
-      { kind: "weak", value: "weak" },
-      { kind: "strong", value: "strong" },
-    ],
-    etagDoesNotMatch: [],
-    secondsGranularity: true,
-    httpHeaders: true,
-    uploadedBefore: 0,
-  });
-  assert.deepEqual(calls[1], {
-    etagMatches: [],
-    etagDoesNotMatch: [{ kind: "strong", value: "other" }],
-    secondsGranularity: true,
-    httpHeaders: false,
-    uploadedAfter: 0,
-  });
-});
-
-test("R2 facade matches pinned workerd coercion and validation behavior", async () => {
-  const calls = [];
-  const raw = {
-    async head(key) {
-      calls.push(["head", key]);
-      return null;
-    },
-    async get(key, options) {
-      calls.push(["get", key, options]);
-      return null;
-    },
-    async put(key, _body, options) {
-      calls.push(["put", key, options]);
-      return meta;
-    },
-    async delete(keys) {
-      calls.push(["delete", keys]);
-    },
-    async list(options) {
-      calls.push(["list", options]);
-      return options.limit === 0
-        ? {
-            objects: [],
-            truncated: true,
-            cursor: "zero",
-            delimitedPrefixes: [],
-          }
-        : { objects: [], truncated: false, delimitedPrefixes: [] };
-    },
-    async createMultipartUpload(key, options) {
-      calls.push(["createMultipartUpload", key, options]);
-      return { key, uploadId: "upload" };
-    },
-    async uploadPart(key, uploadId, partNumber, _body, ssecKey) {
-      calls.push(["uploadPart", key, uploadId, partNumber, ssecKey]);
-      return { partNumber, etag: "part" };
-    },
-    async completeMultipartUpload(key, uploadId, parts) {
-      calls.push(["complete", key, uploadId, parts]);
-      return { ...meta, key };
-    },
-    async abortMultipartUpload(key, uploadId) {
-      calls.push(["abort", key, uploadId]);
-    },
-  };
-  const bucket = new R2Bucket(raw);
-
-  await bucket.get("seed", { unknown: true });
-  await bucket.put("unknown", "value", { unknown: true });
-  await bucket.list({ unknown: true });
-  await bucket.get(1);
-  await bucket.put("\ud800", "value");
-  assert.deepEqual(
-    calls.slice(0, 5).map((call) => call.slice(0, 2)),
-    [
-      ["get", "seed"],
-      ["put", "unknown"],
-      ["list", { prefix: "", limit: 1000, include: [] }],
-      ["get", "1"],
-      ["put", "���"],
-    ],
-  );
-  await assert.rejects(bucket.get(Symbol("key")), {
-    name: "TypeError",
-    message: "Cannot convert a Symbol value to a string",
-  });
-
-  for (const [range, name, message] of [
-    [
-      { offset: -1 },
-      "RangeError",
-      "Invalid range. Starting offset (-1) must be greater than or equal to 0.",
-    ],
-    [
-      { offset: 0.5 },
-      "RangeError",
-      "Invalid range. Starting offset (0.5) must be an integer, not floating point.",
-    ],
-    [
-      { length: -1 },
-      "RangeError",
-      "Invalid range. Length (-1) must be greater than or equal to 0.",
-    ],
-    [
-      { suffix: -1 },
-      "RangeError",
-      "Invalid suffix. Suffix (-1) must be greater than or equal to 0.",
-    ],
-    [
-      { suffix: 1, offset: 0 },
-      "TypeError",
-      "Suffix is incompatible with offset.",
-    ],
-    [
-      { suffix: 1, length: 1 },
-      "TypeError",
-      "Suffix is incompatible with length.",
-    ],
-  ]) {
-    await assert.rejects(bucket.get("seed", { range }), { name, message });
-  }
-  await bucket.get("seed", { range: new Headers({ range: "bytes=0-1,3-4" }) });
-  assert.deepEqual(calls.at(-1), ["get", "seed", {}]);
-
-  await assert.rejects(
-    bucket.get("seed", { onlyIf: { etagMatches: '"quoted"' } }),
-    {
-      name: "TypeError",
-      message: 'Conditional ETag should not be wrapped in quotes ("quoted").',
-    },
-  );
-  await assert.rejects(
-    bucket.get("seed", { onlyIf: new Headers({ "if-match": "bad" }) }),
-    {
-      name: "Error",
-      message: "Invalid ETag in if-match header",
-    },
-  );
-  for (const [options, message] of [
-    [{ md5: new Uint8Array(15) }, "MD5 is 16 bytes, not 15"],
-    [{ md5: "00" }, "MD5 is 32 hex characters, not 2"],
-    [{ md5: "z".repeat(32) }, "Provided MD5 wasn't a valid hex string"],
-    [
-      { md5: "00".repeat(16), sha1: "00".repeat(20) },
-      "You cannot specify multiple hashing algorithms.",
-    ],
-  ]) {
-    await assert.rejects(bucket.put("seed", "value", options), {
-      name: "TypeError",
-      message,
-    });
-  }
-  await assert.rejects(bucket.get("seed", { ssecKey: "Z".repeat(64) }), {
-    name: "Error",
-    message: "SSE-C Key has invalid format",
-  });
-  await assert.rejects(bucket.get("seed", { ssecKey: "00" }), {
-    name: "Error",
-    message: "SSE-C Key must be 32 bytes in length",
-  });
-  await assert.rejects(
-    bucket.put("seed", "value", { storageClass: "Banana" }),
-    {
-      name: "Error",
-      message:
-        "put: We encountered an internal error. Please try again. (10001)",
-    },
-  );
-  await assert.rejects(
-    bucket.delete(Array.from({ length: 1001 }, (_, index) => `key-${index}`)),
-    {
-      name: "TypeError",
-      message: "R2_INVALID_OPTIONS",
-    },
-  );
-
-  for (const limit of [0, -1, 1.5, 1001]) await bucket.list({ limit });
-  assert.deepEqual(
-    calls.slice(-4).map((call) => call[1].limit),
-    [0, 1000, 1, 1000],
-  );
-  await assert.rejects(bucket.list({ include: ["etag"] }), {
-    name: "RangeError",
-    message: "Unsupported include value etag",
-  });
-
-  const upload = await bucket.createMultipartUpload("multi", { unknown: true });
-  await upload.uploadPart(1.5, "value", { unknown: true });
-  assert.equal(calls.at(-1)[3], 1);
-  await assert.rejects(upload.uploadPart(0, "value"), {
-    name: "TypeError",
-    message:
-      "Part number must be between 1 and 10000 (inclusive). Actual value was: 0",
-  });
-  await assert.rejects(Reflect.apply(upload.complete, upload, [{}]), {
-    name: "TypeError",
-    message:
-      "Failed to execute 'complete' on 'R2MultipartUpload': parameter 1 is not of type 'Array'.",
-  });
-  assert.equal(bucket.resumeMultipartUpload("multi", "").uploadId, "");
 });

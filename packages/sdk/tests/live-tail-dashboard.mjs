@@ -14,7 +14,7 @@ assert.ok(
 const client = createOpenComputeClient({ apiToken, baseURL, maxRetries: 0 });
 const prepared = await client.workers.observability.telemetry.liveTail({
   account_id: accountID,
-  scriptId: "p6-wrangler-resource-gate",
+  scriptId: "p6-cf-resource-gate",
   filterCombination: "and",
   filters: [
     {
@@ -50,7 +50,7 @@ await new Promise((resolve, reject) => {
 assert.deepEqual(
   await client.workers.observability.telemetry.liveTailHeartbeat({
     account_id: accountID,
-    scriptId: "p6-wrangler-resource-gate",
+    scriptId: "p6-cf-resource-gate",
   }),
   {},
 );
@@ -86,15 +86,48 @@ assert.deepEqual(Object.keys(event).sort(), [
   "timestamp",
 ]);
 assert.equal(event.dataset, "");
-assert.equal(event.$workers.scriptName, "p6-wrangler-resource-gate");
+assert.equal(event.$workers.scriptName, "p6-cf-resource-gate");
 assert.equal(event.$workers.eventType, "fetch");
 assert.equal(event.$metadata.type, "cf-worker-log");
-assert.equal(event.$metadata.service, "p6-wrangler-resource-gate");
+assert.equal(event.$metadata.service, "p6-cf-resource-gate");
 assert.ok(!JSON.stringify(event).includes(secret));
 socket.close(1000);
 
 const now = Date.now();
 const timeframe = { from: now - 120_000, to: now + 60_000 };
+const repeated = await fetch(publicURL, { headers: { host: publicHost } });
+assert.equal(repeated.status, 200);
+await repeated.arrayBuffer();
+const parameters = {
+  datasets: ["cloudflare-workers"],
+  filterCombination: "and",
+  filters: [
+    {
+      key: "$metadata.message",
+      type: "string",
+      operation: "MATCH_REGEX",
+      value: "p7-tail-event.*invoice",
+    },
+  ],
+};
+// Live Tail is delivered before the asynchronous SQLite persistence commit.
+const persistedDeadline = Date.now() + 5_000;
+while (true) {
+  const persisted = await client.workers.observability.telemetry.query({
+    account_id: accountID,
+    queryId: "p7-persistence-barrier",
+    timeframe,
+    parameters,
+    view: "events",
+    limit: 2,
+  });
+  if (persisted.events.count === 2) break;
+  assert.ok(
+    Date.now() < persistedDeadline,
+    "two live invocations did not persist",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 25));
+}
 const keys = await client.workers.observability.telemetry.keys({
   account_id: accountID,
   datasets: ["cloudflare-workers"],
@@ -113,22 +146,8 @@ const values = await client.workers.observability.telemetry.values({
   timeframe,
   type: "string",
 });
-assert.ok(
-  values.result.some(({ value }) => value === "p6-wrangler-resource-gate"),
-);
+assert.ok(values.result.some(({ value }) => value === "p6-cf-resource-gate"));
 
-const parameters = {
-  datasets: ["cloudflare-workers"],
-  filterCombination: "and",
-  filters: [
-    {
-      key: "$metadata.message",
-      type: "string",
-      operation: "MATCH_REGEX",
-      value: "p7-tail-event.*invoice",
-    },
-  ],
-};
 const first = await client.workers.observability.telemetry.query({
   account_id: accountID,
   queryId: "p7-dashboard-events",

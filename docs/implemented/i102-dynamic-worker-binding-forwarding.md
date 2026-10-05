@@ -1,5 +1,8 @@
 # I102：Dynamic Worker 显式资源 Binding 转发
 
+当前 CLI/应用配置与构建入口由 [P20](p20-cf-cli-migration.md) 拥有：`ocd cf`、`cloudflare.config.ts`、官方 Vite 插件 v2 与 Build Output。
+本文旧客户端命令、版本、fixture 与 PASS 保留为当时证据，不要求恢复旧入口，也不证明当前 cf 的资格。
+
 状态：**implemented for the declared first matrix**（2026-09-22）。当前声明支持 KV、D1、R2、Queue producer 和 ordinary values。对应 [#102](https://github.com/elliothux/open-compute/issues/102)。
 
 ## 用户结果

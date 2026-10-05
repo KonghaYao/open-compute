@@ -17,16 +17,15 @@ const codecUrl = moduleUrl(
 
 export const codec = await import(codecUrl);
 export const format = await import(formatUrl);
-export const profiles = ["queue-v8", "workflow"];
 
-export function encode(value, profile = "workflow") {
-  return codec.encodeDurableValue(value, profile);
+export function encode(value) {
+  return codec.encodeDurableValue(value);
 }
-export function decode(bytes, profile = "workflow") {
-  return codec.decodeDurableValue(bytes, profile);
+export function decode(bytes) {
+  return codec.decodeDurableValue(bytes);
 }
-export function roundTrip(value, profile = "workflow") {
-  return decode(encode(value, profile), profile);
+export function roundTrip(value) {
+  return decode(encode(value));
 }
 
 export function graphEqual(left, right, mapped = new Map()) {
@@ -126,10 +125,10 @@ export function graphEqual(left, right, mapped = new Map()) {
   return true;
 }
 
-export function assertRoundTrip(assert, value, profile = "workflow") {
-  const bytes = encode(value, profile);
-  const decoded = decode(bytes, profile);
-  assert.ok(graphEqual(value, decoded), profile);
-  assert.deepEqual(encode(decoded, profile), bytes);
+export function assertRoundTrip(assert, value) {
+  const bytes = encode(value);
+  const decoded = decode(bytes);
+  assert.ok(graphEqual(value, decoded));
+  assert.deepEqual(encode(decoded), bytes);
   return decoded;
 }

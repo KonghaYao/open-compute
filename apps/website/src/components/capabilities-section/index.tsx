@@ -41,7 +41,7 @@ const featurePresentation: readonly FeaturePresentation[] = [
           file: "DEPLOY / PRODUCTION",
           language: "READY",
           code: `$ ocd status
-$ ocd wrangler deploy --env production
+$ ocd cf deploy --prebuilt --mode production
 
 ✓ uploaded 12 modules
 ✓ deployment v42 active

@@ -55,6 +55,7 @@ function build(directory, ...args) {
     process.execPath,
     [buildScript, "--output-dir", directory, ...args],
     {
+      cwd: fileURLToPath(new URL("../../../", import.meta.url)),
       encoding: "utf8",
       timeout: 30_000,
     },
@@ -99,6 +100,28 @@ test("runtime assets are reproducible and stale or unexpected output fails close
   for (const match of moduleSources.matchAll(/from "([^"]+-source)"/g)) {
     assert.match(config, new RegExp(`name = "loader/${match[1]}"`));
   }
+  const extensions = [
+    ...config.matchAll(
+      /name = "(cloudflare-internal:open-compute-[^"]+)", internal = true,\s+esModule = embed "dist\/([^"]+)"/g,
+    ),
+  ];
+  const internalModules = new Set([
+    "cloudflare-internal:wrapped-binding",
+    "cloudflare-internal:workers",
+    "cloudflare-internal:env",
+    "cloudflare-internal:workflows-api",
+    "node-internal:async_hooks",
+    ...extensions.map((match) => match[1]),
+  ]);
+  for (const [, module, file] of extensions) {
+    assert.ok(names.includes(file), `missing private extension ${module}`);
+    const source = await readFile(join(directory, file), "utf8");
+    for (const [, dependency] of source.matchAll(/from "([^"]+)"/g))
+      assert.ok(
+        internalModules.has(dependency),
+        `${module} omits private dependency ${dependency}`,
+      );
+  }
   const contents = await Promise.all(
     names.map((name) => readFile(join(directory, name))),
   );
@@ -133,6 +156,16 @@ test("runtime assets are reproducible and stale or unexpected output fails close
     manifestBytes,
   );
   assert.equal(build(directory, "--check").status, 0);
+  const packageCheck = spawnSync(
+    process.execPath,
+    [buildScript, "--output-dir", directory, "--check"],
+    {
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
+      encoding: "utf8",
+      timeout: 30_000,
+    },
+  );
+  assert.equal(packageCheck.status, 0, packageCheck.stderr);
 
   const mtime = (await stat(join(directory, "manifest.json"))).mtimeMs;
   assert.equal(build(directory).status, 0);

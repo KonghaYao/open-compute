@@ -33,7 +33,7 @@
 
 | 前缀 | 范围                   | 示例                                                        |
 | ---- | ---------------------- | ----------------------------------------------------------- |
-| `P`  | open-compute 产品阶段  | `p12-wrangler-project-workflow.md`                          |
+| `P`  | open-compute 产品阶段  | `p20-cf-cli-migration.md`                          |
 | `W`  | workerd 子项目阶段     | `w2-standard-limits.md`                                     |
 | `I`  | GitHub issue 实施批次  | `i1-github-issues-1-3.md`、`i2-github-issue-4-r2-upload.md` |
 | `G`  | 一次性调查或 Gate 研究 | `g1-test-repetition.md`                                     |
@@ -54,6 +54,9 @@
 - 原始命令输出和失败 artifact 留在 `.temp/` 或 CI，不复制进长期文档；文档只记录日期、输入、结论和定位证据所需的标识。
 - 只有成功退出的检查才能写成通过。历史 PASS 只证明当时输入，不代表当前工作树自动通过。
 - 当前接口和支持面由源码、机器可读合同及本目录的维护文档拥有；历史实现文档不覆盖它们。
+- 当前应用入口遵循 [P20](../implemented/p20-cf-cli-migration.md)：cf/config、官方 Vite 插件 v2、Build Output 与 `ocd cf`。
+  活动方案的命令、配置和验收 producer 必须同步迁移；历史客户端 trace、报告和已发布 release notes 保留原始身份，
+  不把旧 PASS 改写为 cf PASS。Python 开发构建例外及移除条件由 [P25](../p25-platform-follow-ups.md) 管理。
 - 文档改动至少运行 `git diff --check` 并核对链接、状态和 verified 声明；过期内容直接删除，Git 保存历史。
 - 新增或移动文档时核对上述目录中除 `README.md` 外不存在无编号文件。
 
@@ -63,7 +66,7 @@
 | ----------------------------------------------------- | ------------------------------------------------------------------------ |
 | [Host authority](host-authority.md)                   | 本机与公网 ingress 共用的 hostname ownership、解析和 endpoint projection |
 | [Cloudflare 兼容矩阵](cloudflare-compatibility.md)    | 当前支持面和 deviation                                                   |
-| [Cloudflare 上游刷新](cloudflare-upstream-refresh.md) | OpenAPI、官方 SDK 与 Wrangler 的定期发现和协调升级                       |
+| [Cloudflare 上游刷新](cloudflare-upstream-refresh.md) | OpenAPI、官方 SDK 与 cf 的定期发现和协调升级                             |
 | [能力偏差](p1-deviations.md)                          | 当前 deviation ID 与边界                                                 |
 | [测试节奏](testing.md)                                | Gate、case discovery、覆盖率和验收                                       |
 | [单二进制分发](single-binary.md)                      | 构建输入、离线启动和发行合同                                             |

@@ -53,12 +53,12 @@ async fn probe_requires_matching_account_and_valid_capabilities() {
     );
     http.insert(
         record.api_base_url.endpoint("/open-compute/capabilities"),
-        &serde_json::json!({"success": true, "result": {"wrangler_version": "4.143.0"}}),
+        &serde_json::json!({"success": true, "result": {"cf_version": "1.0.0-beta.12"}}),
     );
     let result = probe_target(&http, &record, &SecretString::new("secret"))
         .await
         .unwrap();
-    assert_eq!(result.wrangler_version, "4.143.0");
+    assert_eq!(result.cf_version, "1.0.0-beta.12");
 }
 
 #[tokio::test]
@@ -83,7 +83,7 @@ async fn probe_rejects_mismatched_account_and_invalid_version() {
     );
     http.insert(
         record.api_base_url.endpoint("/open-compute/capabilities"),
-        &serde_json::json!({"success": true, "result": {"wrangler_version": "latest"}}),
+        &serde_json::json!({"success": true, "result": {"cf_version": "latest"}}),
     );
     assert!(
         probe_target(&http, &record, &SecretString::new("secret"))

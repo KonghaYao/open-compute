@@ -1,15 +1,6 @@
 import { relative } from "node:path";
 import { COMPATIBILITY_DATE, COMPATIBILITY_FLAGS } from "./runtime-contract.ts";
-import type { JsonRecord, PortableBinding, PortableFixture } from "./types.ts";
-
-function isClassBinding(
-  binding: PortableBinding,
-): binding is Extract<
-  PortableBinding,
-  { readonly type: "do_namespace" | "workflow" }
-> {
-  return binding.type === "do_namespace" || binding.type === "workflow";
-}
+import type { JsonRecord, PortableFixture } from "./types.ts";
 
 function exactBindingIds(
   fixture: PortableFixture,
@@ -48,7 +39,7 @@ export function openComputeProject(
   );
 }
 
-/** Minimal open-compute Wrangler project used before owned bindings are provisioned. */
+/** Minimal open-compute Cf project used before owned bindings are provisioned. */
 export function openComputeBaseProject(
   fixture: PortableFixture,
   name: string,
@@ -73,13 +64,14 @@ function baseProject(
   workersDev: boolean,
 ): JsonRecord {
   return {
-    name,
-    main: relative(fixture.root, fixture.source),
-    account_id: accountId,
-    compatibility_date: COMPATIBILITY_DATE,
-    compatibility_flags: [...COMPATIBILITY_FLAGS],
-    workers_dev: workersDev,
-    send_metrics: false,
+    accountId,
+    worker: {
+      name,
+      entrypoint: relative(fixture.root, fixture.source),
+      compatibilityDate: COMPATIBILITY_DATE,
+      compatibilityFlags: [...COMPATIBILITY_FLAGS],
+      workersDev,
+    },
   };
 }
 
@@ -127,85 +119,58 @@ function workerProject(
       "portable fixture named Cloudflare bindings are incomplete",
     );
   }
-  const durableBindings = Object.entries(fixture.bindings)
-    .filter(
-      (
-        entry,
-      ): entry is [
-        string,
-        Extract<
-          PortableBinding,
-          { readonly type: "do_namespace" | "workflow" }
-        >,
-      ] => isClassBinding(entry[1]) && entry[1].type === "do_namespace",
-    )
-    .map(([binding, value]) => ({
-      name: binding,
-      class_name: value.className,
-    }));
-  const queueBindings = Object.entries(fixture.bindings)
-    .filter(([, value]) => value.type === "queue_producer")
-    .map(([binding]) => ({ binding, queue: bindingNames[binding] }));
-  const workflowBindings = Object.entries(fixture.bindings)
-    .filter(
-      (
-        entry,
-      ): entry is [
-        string,
-        Extract<
-          PortableBinding,
-          { readonly type: "do_namespace" | "workflow" }
-        >,
-      ] => isClassBinding(entry[1]) && entry[1].type === "workflow",
-    )
-    .map(([binding, value]) => ({
-      binding,
-      name: bindingNames[binding],
-      class_name: value.className,
-      ...(value.schedules === undefined ? {} : { schedules: value.schedules }),
-    }));
-  return {
-    ...baseProject(fixture, name, accountId, workersDev),
-    ...(Object.values(fixture.bindings).some(
-      (binding) => binding.type === "worker_loader",
-    )
-      ? {
-          worker_loaders: Object.entries(fixture.bindings)
-            .filter(([, value]) => value.type === "worker_loader")
-            .map(([binding]) => ({ binding })),
-        }
-      : {}),
-    kv_namespaces: Object.entries(fixture.bindings)
-      .filter(([, value]) => value.type === "kv_namespace")
-      .map(([binding]) => ({ binding, id: ids[binding] })),
-    d1_databases: Object.entries(fixture.bindings)
-      .filter(([, value]) => value.type === "d1_database")
-      .map(([binding]) => ({
-        binding,
-        database_id: ids[binding],
-        database_name: bindingNames[binding],
-      })),
-    r2_buckets: Object.entries(fixture.bindings)
-      .filter(([, value]) => value.type === "r2_bucket")
-      .map(([binding]) => ({ binding, bucket_name: bindingNames[binding] })),
-    ...(durableBindings.length === 0
-      ? {}
-      : {
-          durable_objects: { bindings: durableBindings },
-          migrations: [
-            {
-              tag: "v1",
-              new_sqlite_classes: [
-                ...new Set(durableBindings.map((value) => value.class_name)),
-              ],
-            },
-          ],
-        }),
-    ...(queueBindings.length === 0
-      ? {}
-      : { queues: { producers: queueBindings } }),
-    ...(workflowBindings.length === 0 ? {} : { workflows: workflowBindings }),
-  };
+  const env: JsonRecord = {};
+  const exports: JsonRecord = {};
+  for (const [binding, value] of Object.entries(fixture.bindings)) {
+    switch (value.type) {
+      case "kv_namespace":
+        env[binding] = { type: "kv", id: ids[binding] };
+        break;
+      case "d1_database":
+        env[binding] = {
+          type: "d1",
+          id: ids[binding],
+          name: bindingNames[binding],
+        };
+        break;
+      case "r2_bucket":
+        env[binding] = { type: "r2", name: bindingNames[binding] };
+        break;
+      case "queue_producer":
+        env[binding] = { type: "queue", name: bindingNames[binding] };
+        break;
+      case "worker_loader":
+        env[binding] = { type: "worker-loader" };
+        break;
+      case "do_namespace":
+        env[binding] = {
+          type: "durable-object",
+          worker: name,
+          exportName: value.className,
+        };
+        exports[value.className] = {
+          type: "durable-object",
+          storage: "sqlite",
+        };
+        break;
+      case "workflow":
+        env[binding] = {
+          type: "workflow",
+          worker: name,
+          exportName: value.className,
+          name: bindingNames[binding],
+        };
+        exports[value.className] = {
+          type: "workflow",
+          name: bindingNames[binding],
+          ...(value.schedules === undefined
+            ? {}
+            : { schedules: value.schedules }),
+        };
+        break;
+    }
+  }
+  const config = baseProject(fixture, name, accountId, workersDev);
+  const worker = config.worker as JsonRecord;
+  return { ...config, worker: { ...worker, env, exports } };
 }
-
-/** Return JSON with recursively sorted object keys for stable cross-provider comparison. */

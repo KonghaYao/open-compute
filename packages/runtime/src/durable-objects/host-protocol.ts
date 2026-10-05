@@ -1,5 +1,6 @@
 import { bindingError } from "../loader/shared.js";
 import type { SocketAuthorityWire } from "../sockets/tunnel.js";
+import { identityFromHeaders, OBJECT_IDENTITY_HEADER } from "./identity.js";
 import type {
   DoOrder,
   FacetClassDescriptor,
@@ -7,6 +8,7 @@ import type {
 } from "./protocol.js";
 
 export const INTERNAL = [
+  OBJECT_IDENTITY_HEADER,
   "x-open-compute-binding-token",
   "x-open-compute-instance-id",
   "x-open-compute-worker-id",
@@ -303,7 +305,10 @@ export function authorityFromHeaders(headers: Headers) {
   ) {
     throw bindingError("DO_INTERNAL_PROTOCOL_ERROR");
   }
+  const identity = identityFromHeaders(headers, objectId);
   return {
+    objectName: identity.name,
+    jurisdiction: identity.jurisdiction,
     instanceId,
     workerId,
     versionId,

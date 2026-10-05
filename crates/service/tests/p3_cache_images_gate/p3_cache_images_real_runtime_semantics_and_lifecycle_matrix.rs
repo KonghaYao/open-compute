@@ -34,10 +34,15 @@ pub(super) async fn run() {
     let (shutdown, mut source_shutdown) = tokio::sync::watch::channel(false);
     let mut binding_shutdown = shutdown.subscribe();
     let source_task = tokio::spawn({
-        let source =
-            RuntimeSource::new(storage.clone(), artifacts.clone(), BundleLimits::default())
-                .with_cache(artifact_cache.clone())
-                .with_cache_fail_open(true);
+        let source = RuntimeSource::new(
+            storage.clone(),
+            artifacts.clone(),
+            BundleLimits::default(),
+            open_compute_service::runtime_bridge::python_runtime_pin(&runtime),
+        )
+        .unwrap()
+        .with_cache(artifact_cache.clone())
+        .with_cache_fail_open(true);
         let auth = source_auth.clone();
         async move {
             serve_runtime_source(source_listener, source, auth, async move {
@@ -46,6 +51,14 @@ pub(super) async fn run() {
             .await
         }
     });
+    let cache_metrics = Arc::new(
+        open_compute_service::metrics::MetricsRegistry::new(
+            &open_compute_core::MetricsConfig::default(),
+            "cache-gate",
+            "workerd",
+        )
+        .unwrap(),
+    );
     let cache_service = Arc::new(
         CacheBindingService::new(
             storage.clone(),
@@ -53,7 +66,8 @@ pub(super) async fn run() {
             artifact_cache.clone(),
             ResponseCacheConfig::default(),
         )
-        .unwrap(),
+        .unwrap()
+        .with_metrics(cache_metrics.clone()),
     );
     let cache_manager = cache_service.manager();
     let image_service = Arc::new(ImageBindingService::new(
@@ -131,7 +145,6 @@ pub(super) async fn run() {
             config: runtime_config(),
             clock: Arc::new(SystemClock),
             jitter: Arc::new(OsJitter),
-            redactor: Redactor::new(),
             lease_path: Some(
                 storage
                     .data_dir()
@@ -201,6 +214,7 @@ pub(super) async fn run() {
         target.id,
         1,
         Duration::from_secs(5),
+        &cache_metrics,
     )
     .await;
     let hit = dispatch(&transport, &repo, account, target.id, &a, "/auto").await;
@@ -233,6 +247,49 @@ pub(super) async fn run() {
     );
     let range = dispatch(&transport, &repo, account, target.id, &a, "/api-range").await;
     assert_eq!((range.0, range.1.as_str()), (206, "tor"));
+    assert_eq!(
+        dispatch(
+            &transport,
+            &repo,
+            account,
+            target.id,
+            &a,
+            "/api-encoding-put"
+        )
+        .await
+        .1,
+        "encoded"
+    );
+    for (path, expected_status) in [
+        ("/api-encoding-match", None),
+        ("/automatic-encoding", Some("MISS")),
+        ("/automatic-encoding", Some("HIT")),
+    ] {
+        let before = cache_entries(&cache_manager, account, target.id);
+        let response = dispatch(&transport, &repo, account, target.id, &a, path).await;
+        assert_eq!(response.0, 200);
+        let value: serde_json::Value = serde_json::from_str(&response.1).unwrap();
+        if path == "/api-encoding-match" {
+            assert_eq!(
+                value,
+                serde_json::json!({ "default": "gzip-A", "named": "stream-A" })
+            );
+        } else {
+            assert_eq!(value["body"], "automatic-gzip-A");
+            assert_eq!(value["status"].as_str(), expected_status);
+            if expected_status == Some("MISS") {
+                wait_cache_entries(
+                    &cache_manager,
+                    account,
+                    target.id,
+                    before + 1,
+                    Duration::from_secs(5),
+                    &cache_metrics,
+                )
+                .await;
+            }
+        }
+    }
     assert_eq!(
         dispatch(
             &transport,
@@ -281,6 +338,7 @@ pub(super) async fn run() {
         target.id,
         entries_before_ctx + 1,
         Duration::from_secs(5),
+        &cache_metrics,
     )
     .await;
     let ctx_hit = dispatch(&transport, &repo, account, target.id, &a, "/ctx").await;
@@ -355,6 +413,7 @@ pub(super) async fn run() {
         target.id,
         entries_before_shared + 1,
         Duration::from_secs(5),
+        &cache_metrics,
     )
     .await;
     let shared_d = deploy(
@@ -422,6 +481,7 @@ pub(super) async fn run() {
         target.id,
         entries_before_service + 1,
         Duration::from_secs(5),
+        &cache_metrics,
     )
     .await;
     let service_hit = dispatch(
@@ -478,6 +538,7 @@ pub(super) async fn run() {
         target.id,
         entries_before_refill + 1,
         Duration::from_secs(5),
+        &cache_metrics,
     )
     .await;
     let before_restart = dispatch(&transport, &repo, account, target.id, &a, "/auto").await;
@@ -530,6 +591,34 @@ pub(super) async fn run() {
     assert_eq!(
         (after_restart.1.as_str(), after_restart.2.as_deref()),
         (before_restart.1.as_str(), Some("HIT"))
+    );
+    let encoded = dispatch(
+        &transport,
+        &repo,
+        account,
+        target.id,
+        &a,
+        "/api-encoding-match",
+    )
+    .await;
+    assert_eq!(encoded.0, 200);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&encoded.1).unwrap(),
+        serde_json::json!({ "default": "gzip-A", "named": "stream-A" })
+    );
+    let automatic = dispatch(
+        &transport,
+        &repo,
+        account,
+        target.id,
+        &a,
+        "/automatic-encoding",
+    )
+    .await;
+    assert_eq!(automatic.0, 200);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&automatic.1).unwrap(),
+        serde_json::json!({ "body": "automatic-gzip-A", "status": "HIT" })
     );
     let restarted_version: serde_json::Value = serde_json::from_str(
         &dispatch(&transport, &repo, account, target.id, &a, "/version")

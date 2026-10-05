@@ -129,6 +129,7 @@ pub(super) async fn check(
     assert_eq!(abort.status, 200, "{}", abort.body);
     let aborted: serde_json::Value = serde_json::from_str(&abort.body).unwrap();
     assert_eq!(aborted["aborted"], true, "{aborted}");
+    assert_eq!(aborted["oldStubRejected"], true, "{aborted}");
     assert_eq!(aborted["recovered"], true, "{aborted}");
 
     let old_pid = supervisor.snapshot().pid.unwrap();

@@ -29,7 +29,7 @@ pub(super) struct ComposedPlatform {
     pub(super) r2_objects: R2ObjectStore,
     pub(super) store: ArtifactStore,
     pub(super) snapshot_pins: Arc<SnapshotPins>,
-    pub(super) redactor: Redactor,
+    pub(super) package: open_compute_runtime::RuntimePackage,
     pub(super) runtime: open_compute_runtime::VerifiedRuntime,
     pub(super) runtime_lease_path: std::path::PathBuf,
     pub(super) durable_object_storage: std::path::PathBuf,
@@ -92,6 +92,26 @@ fn worker_bundle_limits(max_artifact_bytes: u64) -> Result<BundleLimits, Platfor
     })
 }
 
+fn compose_extensions(
+    storage: &Arc<PlatformStorage>,
+    pins: &VersionPins,
+    extensions: Arc<LocalExtensionRegistry>,
+    redactor: Redactor,
+) -> Result<(Arc<ServiceInvocationRegistry>, Arc<HostExtensionBroker>), PlatformError> {
+    let service_invocations = Arc::new(
+        ServiceInvocationRegistry::new(storage.clone(), pins.clone())
+            .with_local_extensions(extensions.clone()),
+    );
+    let host_extension_broker = Arc::new(HostExtensionBroker::new(
+        HostExtensionBrokerRegistry::new(),
+        extensions,
+        service_invocations.clone(),
+        storage,
+        redactor,
+    )?);
+    Ok((service_invocations, host_extension_broker))
+}
+
 pub(super) async fn compose(prepared: PreparedPlatform) -> Result<ComposedPlatform, PlatformError> {
     open_compute_core::OperatorProxyPolicy::from_process_env()?;
     let PreparedPlatform {
@@ -124,7 +144,7 @@ pub(super) async fn compose(prepared: PreparedPlatform) -> Result<ComposedPlatfo
     let RuntimePlatform {
         base,
         redactor,
-        package: _,
+        package,
         runtime,
         runtime_lease_path,
         durable_object_storage,
@@ -148,17 +168,8 @@ pub(super) async fn compose(prepared: PreparedPlatform) -> Result<ComposedPlatfo
     let admin_addr = opts.shared_admin_addr;
 
     let version_pins = VersionPins::new();
-    let service_invocations = Arc::new(
-        ServiceInvocationRegistry::new(storage.clone(), version_pins.clone())
-            .with_local_extensions(local_extensions.clone()),
-    );
-    let host_extension_broker = Arc::new(HostExtensionBroker::new(
-        HostExtensionBrokerRegistry::new(),
-        local_extensions.clone(),
-        service_invocations.clone(),
-        &storage,
-        redactor.clone(),
-    )?);
+    let (service_invocations, host_extension_broker) =
+        compose_extensions(&storage, &version_pins, local_extensions.clone(), redactor)?;
     let supervisor_handle: Arc<Mutex<Option<Arc<WorkerdSupervisor>>>> = Arc::new(Mutex::new(None));
     let transport = WorkerdTransport::new(generation_auth.clone(), supervisor_handle.clone())
         .with_version_pins(version_pins.clone())
@@ -369,7 +380,7 @@ pub(super) async fn compose(prepared: PreparedPlatform) -> Result<ComposedPlatfo
         r2_objects,
         store,
         snapshot_pins,
-        redactor,
+        package,
         runtime,
         runtime_lease_path,
         durable_object_storage,

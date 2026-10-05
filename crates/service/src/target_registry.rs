@@ -1,4 +1,4 @@
-//! Secure per-user registry of explicit remote Wrangler targets.
+//! Secure per-user registry of explicit remote Cloudflare CLI targets.
 
 use crate::instance_registry::{InstanceRegistry, ServiceScope};
 use open_compute_core::{

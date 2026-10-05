@@ -1,3 +1,5 @@
+import wrappedBinding from "cloudflare-internal:wrapped-binding";
+
 interface ArtifactsRawTransport {
   call(operation: string, input: unknown): Promise<unknown>;
 }
@@ -35,14 +37,12 @@ function protocolError(): never {
   throw new ArtifactError("INTERNAL_ERROR", 10400);
 }
 
-function transport(value: unknown): ArtifactsRawTransport {
-  if (!record(value) || typeof value.call !== "function") protocolError();
-  const invoke = value.call;
-  return {
-    call(operation, input) {
-      return Promise.resolve(Reflect.apply(invoke, value, [operation, input]));
-    },
-  };
+function isTransport(value: unknown): value is ArtifactsRawTransport {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    typeof (value as Partial<ArtifactsRawTransport>).call === "function"
+  );
 }
 
 function error(value: unknown): ArtifactError {
@@ -152,6 +152,7 @@ function listedTokens(value: unknown): ArtifactsTokenListResult {
 }
 
 class ArtifactRepoHandle implements ArtifactsRepo {
+  readonly #raw: ArtifactsRawTransport;
   readonly id: string;
   readonly name: string;
   readonly description: string | null;
@@ -163,10 +164,8 @@ class ArtifactRepoHandle implements ArtifactsRepo {
   readonly readOnly: boolean;
   readonly remote: string;
 
-  constructor(
-    private readonly raw: ArtifactsRawTransport,
-    info: ArtifactsRepoInfo,
-  ) {
+  constructor(raw: ArtifactsRawTransport, info: ArtifactsRepoInfo) {
+    this.#raw = raw;
     this.id = info.id;
     this.name = info.name;
     this.description = info.description;
@@ -181,7 +180,7 @@ class ArtifactRepoHandle implements ArtifactsRepo {
 
   async createToken(scope?: "write" | "read", ttl?: number) {
     return createdToken(
-      await call(this.raw, "create-token", {
+      await call(this.#raw, "create-token", {
         repository: this.name,
         scope,
         ttl,
@@ -191,12 +190,12 @@ class ArtifactRepoHandle implements ArtifactsRepo {
 
   async listTokens() {
     return listedTokens(
-      await call(this.raw, "list-tokens", { repository: this.name }),
+      await call(this.#raw, "list-tokens", { repository: this.name }),
     );
   }
 
   async revokeToken(tokenOrId: string) {
-    const value = await call(this.raw, "revoke-token", {
+    const value = await call(this.#raw, "revoke-token", {
       repository: this.name,
       tokenOrId,
     });
@@ -212,7 +211,7 @@ class ArtifactRepoHandle implements ArtifactsRepo {
     },
   ) {
     return created(
-      await call(this.raw, "fork", {
+      await call(this.#raw, "fork", {
         repository: this.name,
         name,
         opts,
@@ -222,10 +221,15 @@ class ArtifactRepoHandle implements ArtifactsRepo {
 }
 
 /** Latest pinned Cloudflare Artifacts API over a private namespace transport. */
-export class ArtifactsBinding implements Artifacts {
+export class ArtifactsBinding
+  extends wrappedBinding.WrappedBinding
+  implements Artifacts
+{
   readonly #raw: ArtifactsRawTransport;
   constructor(raw: unknown) {
-    this.#raw = transport(raw);
+    super(raw);
+    if (!isTransport(raw)) protocolError();
+    this.#raw = raw;
   }
 
   async create(
@@ -287,4 +291,11 @@ export class ArtifactsBinding implements Artifacts {
     const value = await call(this.#raw, "delete", { name });
     return typeof value === "boolean" ? value : protocolError();
   }
+}
+
+/** Construct the config-owned Artifacts binding from its scoped native Fetcher. */
+export default function artifactsBinding(env: {
+  fetcher: unknown;
+}): ArtifactsBinding {
+  return new ArtifactsBinding(env.fetcher);
 }

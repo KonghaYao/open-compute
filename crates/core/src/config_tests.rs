@@ -85,6 +85,10 @@ fn checked_in_default_config_matches_the_current_schema() {
     config
         .validate()
         .expect("checked-in default config validates");
+    assert_eq!(
+        config.workers.max_bundle_bytes,
+        WorkersConfig::default().max_bundle_bytes
+    );
 }
 
 #[test]

@@ -1,5 +1,7 @@
 # W1 Worker Loader 兼容审查
 
+此文保留当时 pin 的历史验收；当前普通 Python 已有部署准备 snapshot，Dynamic child 仍不继承它。2026-10-05 正式 R4 pin 的 fresh/cached-key/restart 基线由 [P21](p21-python-workers.md) 记录；剩余 Dynamic 实现见 [#126](https://github.com/elliothux/open-compute/issues/126)。历史 cold-boot 结论不代替当前正式 pin 的执行证据。
+
 状态：**W1 声明子集 verified（2026-09-06）；W2 limits verified（2026-09-14）**。
 
 ## 结论

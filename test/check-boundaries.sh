@@ -44,7 +44,6 @@ allowed = {
     "@open-compute/dashboard": {"@open-compute/sdk"},
     "@open-compute/sdk": set(),
     "@open-compute/runtime": set(),
-    "@open-compute/toolchain": set(),
     "@open-compute/workers-types": set(),
 }
 errors = []

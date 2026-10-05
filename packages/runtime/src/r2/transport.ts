@@ -4,6 +4,7 @@ import type {
   BindingError,
   ResourceBindingProps,
 } from "../bindings/protocol.js";
+import { nativeR2Fetch } from "./native-adapter.js";
 import type {
   R2Checksums,
   R2GetOptions,
@@ -441,8 +442,8 @@ export function makeR2TransportBase(
       );
     }
 
-    async fetch(): Promise<never> {
-      throw bindingError("BINDING_PERMISSION_DENIED");
+    async fetch(request: Request): Promise<Response> {
+      return nativeR2Fetch(request, this);
     }
   };
 }

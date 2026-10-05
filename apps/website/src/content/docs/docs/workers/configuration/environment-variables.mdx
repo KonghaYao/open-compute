@@ -6,14 +6,18 @@ import { Code, TabItem, Tabs } from "@astrojs/starlight/components";
 
 `vars` are public, non-secret values. Structured-clone-compatible JSON enters `env`.
 
-```json
-{
-  "name": "hello-typescript",
-  "main": "src/index.ts",
-  "vars": {
-    "GREETING": "Hello from TypeScript"
-  }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "hello-typescript",
+    entrypoint: "src/index.ts",
+    env: {
+      GREETING: bindings.text("Hello from TypeScript"),
+    },
+  },
+});
 ```
 
 ```ts
@@ -28,24 +32,24 @@ Regenerate types after changing vars:
 
 <Tabs syncKey="package-manager">
   <TabItem label="npm">
-    <Code code="npm exec -- wrangler types" lang="sh" />
+    <Code code="npm exec -- cf workers types" lang="sh" />
   </TabItem>
   <TabItem label="pnpm">
-    <Code code="pnpm exec wrangler types" lang="sh" />
+    <Code code="pnpm exec cf workers types" lang="sh" />
   </TabItem>
   <TabItem label="bun">
-    <Code code="bun run wrangler types" lang="sh" />
+    <Code code="bun run cf workers types" lang="sh" />
   </TabItem>
 </Tabs>
 
-Wrangler writes literals into `worker-configuration.d.ts` (for example `GREETING: "Hello from TypeScript"`). Bundles do not contain vars; development and deployment inject them.
+cf writes literals into `.cloudflare/types/` (for example `GREETING: "Hello from TypeScript"`). Bundles do not contain vars; development and deployment inject them.
 
 ## Compatibility
 
-| Topic                                            | Cloudflare                                                                                                    | open-compute                                                |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Public strings/JSON on `env`, not secrets        | Yes — [Environment variables](https://developers.cloudflare.com/workers/configuration/environment-variables/) | Yes                                                         |
-| Wrangler `[vars]` TOML                           | Yes                                                                                                           | Not provided                                                |
-| Dashboard editor / Wrangler environments product | Yes                                                                                                           | Not provided                                                |
-| Unknown top-level keys                           | May be ignored                                                                                                | Fail the whole project config                               |
-| Where secrets live                               | Secrets product                                                                                               | [secrets](/docs/workers/configuration/secrets/), not `vars` |
+| Topic                                      | Cloudflare                                                                                                    | open-compute                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Public strings/JSON on `env`, not secrets  | Yes — [Environment variables](https://developers.cloudflare.com/workers/configuration/environment-variables/) | Yes                                                         |
+| cf `[vars]` TOML                           | Yes                                                                                                           | Not provided                                                |
+| Dashboard editor / cf environments product | Yes                                                                                                           | Not provided                                                |
+| Unknown top-level keys                     | May be ignored                                                                                                | Fail the whole project config                               |
+| Where secrets live                         | Secrets product                                                                                               | [secrets](/docs/workers/configuration/secrets/), not `vars` |

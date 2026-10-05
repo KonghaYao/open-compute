@@ -1,12 +1,12 @@
+const nativeGet = Reflect.get;
+const nativeFreeze = Object.freeze;
+const nativeDescriptor = Object.getOwnPropertyDescriptor;
+
 const PRIVATE_CACHE = "__OPEN_COMPUTE_PRIVATE_CACHE";
-const CACHE_NAME = /^[^\u0000-\u001f\u007f]{1,128}$/;
 const CACHEABLE_STATUS = new Set([
   200, 203, 204, 300, 301, 404, 405, 410, 414, 501,
 ]);
 
-interface MatchOptions {
-  ignoreMethod?: boolean;
-}
 interface PurgeOptions {
   tags?: string[];
   pathPrefixes?: string[];
@@ -28,18 +28,11 @@ interface CacheTransport {
     name: string | undefined,
     request: Request,
   ): Promise<CacheLookup>;
-  put(
-    namespace: "automatic" | "default" | "named",
-    name: string | undefined,
+  putAutomatic(
     request: Request,
     response: Response,
-    fence?: CacheWriteFence,
+    fence: CacheWriteFence,
   ): Promise<void>;
-  delete(
-    namespace: "default" | "named",
-    name: string | undefined,
-    request: Request,
-  ): Promise<boolean>;
   purge(options: PurgeOptions): Promise<{ success: boolean; deleted: number }>;
 }
 
@@ -58,67 +51,35 @@ const RESPONSE_LOOKUP_STATUSES = new Set<CacheLookupStatus>([
   "STALE_IF_ERROR",
 ]);
 
-let activeTransport: CacheTransport | undefined;
-
-function transport(): CacheTransport {
-  if (activeTransport === undefined) throw new Error("CACHE_UNAVAILABLE");
-  return activeTransport;
-}
-
 function bindTransport(
   environment: object,
   entrypoint: string,
 ): CacheTransport {
-  const transports: unknown = Reflect.get(environment, PRIVATE_CACHE);
+  const transports: unknown = nativeGet(environment, PRIVATE_CACHE);
   const value: unknown =
     transports !== null && typeof transports === "object"
-      ? Reflect.get(transports, entrypoint)
+      ? nativeGet(transports, entrypoint)
       : undefined;
   if (
     value === null ||
     typeof value !== "object" ||
-    typeof Reflect.get(value, "match") !== "function" ||
-    typeof Reflect.get(value, "put") !== "function" ||
-    typeof Reflect.get(value, "delete") !== "function" ||
-    typeof Reflect.get(value, "purge") !== "function"
+    typeof nativeGet(value, "match") !== "function" ||
+    typeof nativeGet(value, "putAutomatic") !== "function" ||
+    typeof nativeGet(value, "purge") !== "function"
   ) {
     throw new Error("CACHE_UNAVAILABLE");
   }
-  const bound = value as CacheTransport;
-  activeTransport = bound;
-  return bound;
-}
-
-function requestOf(value: RequestInfo): Request {
-  const request = value instanceof Request ? value : new Request(value);
-  const url = new URL(request.url);
-  if (!["http:", "https:"].includes(url.protocol) || url.hash)
-    throw new TypeError("CACHE_KEY_INVALID");
-  return request;
-}
-
-function validateOptions(options: MatchOptions | undefined): void {
-  if (options === undefined) return;
-  if (
-    options === null ||
-    typeof options !== "object" ||
-    Array.isArray(options) ||
-    Object.keys(options).some((key) => key !== "ignoreMethod") ||
-    (options.ignoreMethod !== undefined &&
-      typeof options.ignoreMethod !== "boolean")
-  ) {
-    throw new TypeError("CACHE_PROTOCOL_ERROR");
-  }
+  return value as CacheTransport;
 }
 
 function cacheLookup(value: unknown): CacheLookup {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("CACHE_PROTOCOL_ERROR");
   }
-  const status: unknown = Reflect.get(value, "status");
-  const fenceGeneration: unknown = Reflect.get(value, "fenceGeneration");
-  const refreshToken: unknown = Reflect.get(value, "refreshToken");
-  const response: unknown = Reflect.get(value, "response");
+  const status: unknown = nativeGet(value, "status");
+  const fenceGeneration: unknown = nativeGet(value, "fenceGeneration");
+  const refreshToken: unknown = nativeGet(value, "refreshToken");
+  const response: unknown = nativeGet(value, "response");
   if (
     typeof status !== "string" ||
     !LOOKUP_STATUSES.has(status as CacheLookupStatus) ||
@@ -137,97 +98,6 @@ function cacheLookup(value: unknown): CacheLookup {
   return value as CacheLookup;
 }
 
-class LocalCache {
-  readonly #namespace: "default" | "named";
-  readonly #name: string | undefined;
-
-  constructor(namespace: "default" | "named", name?: string) {
-    this.#namespace = namespace;
-    this.#name = name;
-  }
-
-  async match(
-    value: RequestInfo,
-    options?: MatchOptions,
-  ): Promise<Response | undefined> {
-    validateOptions(options);
-    const request = requestOf(value);
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      if (options?.ignoreMethod === true) {
-        return cacheLookup(
-          await transport().match(
-            this.#namespace,
-            this.#name,
-            new Request(request, { method: "GET" }),
-          ),
-        ).response;
-      }
-      return undefined;
-    }
-    return cacheLookup(
-      await transport().match(this.#namespace, this.#name, request),
-    ).response;
-  }
-
-  async put(value: RequestInfo, response: Response): Promise<void> {
-    const request = requestOf(value);
-    if (!(response instanceof Response))
-      throw new TypeError("CACHE_PROTOCOL_ERROR");
-    if (
-      request.method !== "GET" ||
-      response.status === 206 ||
-      response.headers
-        .get("vary")
-        ?.split(",")
-        .some((value) => value.trim() === "*")
-    ) {
-      throw new TypeError("CACHE_PUT_REJECTED");
-    }
-    await transport().put(this.#namespace, this.#name, request, response);
-  }
-
-  async delete(value: RequestInfo, options?: MatchOptions): Promise<boolean> {
-    validateOptions(options);
-    const request = requestOf(value);
-    if (request.method !== "GET" && options?.ignoreMethod !== true)
-      return false;
-    const deleted: unknown = await transport().delete(
-      this.#namespace,
-      this.#name,
-      request.method === "GET"
-        ? request
-        : new Request(request, { method: "GET" }),
-    );
-    if (typeof deleted !== "boolean")
-      throw new TypeError("CACHE_PROTOCOL_ERROR");
-    return deleted;
-  }
-}
-
-class LocalCacheStorage {
-  readonly default = (() => {
-    const cache = new LocalCache("default");
-    Object.freeze(cache);
-    return cache;
-  })();
-
-  async open(name: string): Promise<LocalCache> {
-    if (typeof name !== "string" || !CACHE_NAME.test(name))
-      throw new TypeError("CACHE_KEY_INVALID");
-    const cache = new LocalCache("named", name);
-    Object.freeze(cache);
-    return cache;
-  }
-}
-
-const storage = Object.freeze(new LocalCacheStorage());
-Object.defineProperty(globalThis, "caches", {
-  value: storage,
-  configurable: false,
-  enumerable: true,
-  writable: false,
-});
-
 export interface CacheRuntime {
   readonly context: {
     purge(
@@ -242,7 +112,7 @@ export interface CacheRuntime {
 }
 
 export interface CacheRuntimeFactory {
-  bind(environment: object): CacheRuntime | undefined;
+  bind(): CacheRuntime | undefined;
 }
 
 function cacheable(request: Request, response: Response): boolean {
@@ -289,14 +159,10 @@ function hasExplicitTtl(value: string): boolean {
 }
 
 function withCacheStatus(response: Response, status: string): Response {
-  const headers = new Headers(response.headers);
-  headers.delete("cache-tag");
-  headers.set("cf-cache-status", status);
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
+  const result = new Response(response.body, response);
+  result.headers.delete("cache-tag");
+  result.headers.set("cf-cache-status", status);
+  return result;
 }
 
 async function originResponse(origin: () => unknown): Promise<Response> {
@@ -320,7 +186,7 @@ function cacheFailureCode(error: unknown): string {
   for (const key of ["stableCode", "message"]) {
     let descriptor: PropertyDescriptor | undefined;
     try {
-      descriptor = Object.getOwnPropertyDescriptor(error, key);
+      descriptor = nativeDescriptor(error, key);
     } catch {
       return "CACHE_PROTOCOL_ERROR";
     }
@@ -342,25 +208,24 @@ function cacheFailureCode(error: unknown): string {
 export function createCacheRuntime(
   enabled: boolean,
   failOpen: boolean,
+  privateEnvironment: object,
   entrypoint = "default",
-  transportAvailable = true,
 ): CacheRuntimeFactory {
-  return Object.freeze({
-    bind(environment: object): CacheRuntime | undefined {
-      if (!transportAvailable) return undefined;
-      const raw = bindTransport(environment, entrypoint);
+  return nativeFreeze({
+    bind(): CacheRuntime | undefined {
       if (!enabled) return undefined;
-      return Object.freeze({
-        context: Object.freeze({
+      const raw = bindTransport(privateEnvironment, entrypoint);
+      return nativeFreeze({
+        context: nativeFreeze({
           purge: async (options: PurgeOptions) => {
             const value: unknown = await raw.purge(options);
             if (
               value === null ||
               typeof value !== "object" ||
               Array.isArray(value) ||
-              Reflect.get(value, "success") !== true ||
-              !Number.isSafeInteger(Reflect.get(value, "deleted")) ||
-              (Reflect.get(value, "deleted") as number) < 0
+              nativeGet(value, "success") !== true ||
+              !Number.isSafeInteger(nativeGet(value, "deleted")) ||
+              (nativeGet(value, "deleted") as number) < 0
             ) {
               throw new TypeError("CACHE_PROTOCOL_ERROR");
             }
@@ -403,13 +268,7 @@ export function createCacheRuntime(
                     await discardResponse(response);
                     return;
                   }
-                  return raw.put(
-                    "automatic",
-                    undefined,
-                    request,
-                    response,
-                    lookup,
-                  );
+                  return raw.putAutomatic(request, response, lookup);
                 })
                 .catch(() => undefined);
               ctx.waitUntil(refresh);
@@ -425,13 +284,7 @@ export function createCacheRuntime(
                 if (cacheable(request, response)) {
                   ctx.waitUntil(
                     raw
-                      .put(
-                        "automatic",
-                        undefined,
-                        request,
-                        response.clone(),
-                        lookup,
-                      )
+                      .putAutomatic(request, response.clone(), lookup)
                       .catch(() => undefined),
                   );
                 }
@@ -449,7 +302,7 @@ export function createCacheRuntime(
             return withCacheStatus(response, "BYPASS");
           }
           const store = raw
-            .put("automatic", undefined, request, response.clone(), lookup)
+            .putAutomatic(request, response.clone(), lookup)
             .catch(() => undefined);
           ctx.waitUntil(store);
           return withCacheStatus(

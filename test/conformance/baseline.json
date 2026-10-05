@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "sourceDigest": "21eb54752e190c0f6bb440bb582744517e2dc187145439ba5903f4255777e1f3",
+  "sourceDigest": "9b61834716ffe5ed5dd1fbdacbff05e10a842df3aec0b33d4312d040de0d5936",
   "sourceDigestScope": "git-visible production, test, toolchain, manifest, and maintained reference inputs; excludes generated Python caches, test/conformance/baseline.json, and non-reference docs",
-  "workerdLockSha256": "39870adf11f278f8628024861af0e40c211019d5139792f0a432192bf7084f0b",
+  "workerdLockSha256": "d685331dc96e294b10a1b2365065ab6934d920c037d071b020552c7fc4f0d37f",
   "workerd": {
-    "release": "v1.20260930.0-open-compute-r3.e3bdb07f5",
-    "revision": "e3bdb07f52affc6a618f02ed2b731a581b0b2f69",
+    "release": "v1.20260930.0-open-compute-r4.e98a3e843",
+    "revision": "e98a3e8433979356047a202d3e0d1b0e2e2c4b8c",
     "expectedVersionOutput": "workerd 2026-09-30",
-    "treeSha256": "d3a2b9f7bc182c25f8c72d0a0b6209043b6aeaedc940823de53b778b912d19bb",
+    "treeSha256": "6a1d4f41c74a7569052922db1a62382cca82d16382eedd5353ce95cd35225577",
     "treeDigestAlgorithm": "sha256(git-ls-tree-r-full-tree)"
   },
   "binaryMaximumCompatibilityDate": "2026-10-07",
@@ -19,25 +19,25 @@
   "workersTypes": {
     "version": "5.20260830.1",
     "gitHead": "e9dda5963aba7ee4323960db795690ec78fec118",
-    "lockSha256": "685f6c5c5f8f5d0327a675e606c137d773bdbbfefd29a11c4533d33823ab332b",
+    "lockSha256": "102603fcdf924ee6fdf75e2d85f7cf28e7df2041fd9d9acbe09ad1f37438a18c",
     "packageSha256": "d3d7a80d3b27e53116e34736ec1945eb359f53a1000df37b205c4cb59ce29a8e",
     "indexSha256": "a00b4783854c9028158f776d605790d9a3e17e6a97f4d255beb70035c59c40dd",
     "astSha256": "da29f5ec1d9a81cc0094bd083ed3b28013573fcb2d4febd9fd62aecbfb53c6b3"
   },
   "workersSdk": {
-    "revision": "968d629c9f4978d6842b0e11af511ef59a51cd79",
-    "lockSha256": "63d8ee26dceb27f0c452d62d56d1252d390c7b0bd4fc56deb2dd9eb8c7af4f14",
-    "treeSha256": "cf8f3daec06f99b224e5607ff0e3ecf1a25f92ca9c38cd62c69ba0bda995cbce"
-  },
-  "wrangler": {
-    "version": "4.143.0"
+    "revision": "52b0dc0e99b5bbdb86c06ed53fb703048efc36cf",
+    "lockSha256": "8e7338ab60174f111da39013b3e5dfa1ba94e1ae35e27dab15ceada60567fbf1",
+    "treeSha256": "a429b0f027a078d29b22ff2e6f9133587e70544a8b071c7dae9e89a20e8966f9"
   },
   "vitePlugin": {
-    "version": "1.54.2"
+    "version": "2.0.0-beta.sha-52b0dc0e9"
   },
   "toolchain": {
     "bun": "1.3.14",
     "typescript": "7.0.2",
     "rolldown": "1.2.6"
+  },
+  "cf": {
+    "version": "1.0.0-beta.12"
   }
 }

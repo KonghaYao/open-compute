@@ -42,24 +42,29 @@ fn digest_assets_tokens_and_supervisor_auth_are_fail_closed() {
     let binding = SecretString::new(TOKEN_B);
     let rendered = render_config_with_tokens(
         &format!(
-            "{}:{}:{}",
+            "{}:{}:{}:{}",
             RuntimeLock::token_placeholder(),
             BINDING_TOKEN_PLACEHOLDER,
-            OBSERVABILITY_TOKEN_PLACEHOLDER
+            OBSERVABILITY_TOKEN_PLACEHOLDER,
+            crate::digest::DO_RPC_HOST_PLACEHOLDER
         ),
         &valid,
         &binding,
         &SecretString::new(TOKEN_C),
     )
     .unwrap();
-    assert_eq!(rendered, format!("{TOKEN}:{TOKEN_B}:{TOKEN_C}"));
+    assert_eq!(
+        rendered,
+        format!("{TOKEN}:{TOKEN_B}:{TOKEN_C}:{TOKEN}.do-router.invalid:1")
+    );
     assert_eq!(
         render_config_with_tokens(
             &format!(
-                "{}:{}:{}",
+                "{}:{}:{}:{}",
                 RuntimeLock::token_placeholder(),
                 BINDING_TOKEN_PLACEHOLDER,
-                OBSERVABILITY_TOKEN_PLACEHOLDER
+                OBSERVABILITY_TOKEN_PLACEHOLDER,
+                crate::digest::DO_RPC_HOST_PLACEHOLDER
             ),
             &valid,
             &valid,
@@ -69,6 +74,24 @@ fn digest_assets_tokens_and_supervisor_auth_are_fail_closed() {
         .code(),
         ErrorCode::RuntimeInvalid
     );
+    let host_placeholder = crate::digest::DO_RPC_HOST_PLACEHOLDER;
+    let template = format!(
+        "{}:{}:{}:{host_placeholder}",
+        RuntimeLock::token_placeholder(),
+        BINDING_TOKEN_PLACEHOLDER,
+        OBSERVABILITY_TOKEN_PLACEHOLDER
+    );
+    for invalid in [
+        template.replace(host_placeholder, ""),
+        format!("{template}:{host_placeholder}"),
+    ] {
+        assert_eq!(
+            render_config_with_tokens(&invalid, &valid, &binding, &SecretString::new(TOKEN_C))
+                .unwrap_err()
+                .code(),
+            ErrorCode::ConfigCompileFailed
+        );
+    }
     for token in [
         SecretString::new("short"),
         SecretString::new("g".repeat(64)),

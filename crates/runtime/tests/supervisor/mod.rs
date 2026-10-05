@@ -97,7 +97,7 @@ fn write_lock(dir: &Path, binary_sha: &str) -> PathBuf {
   }},
   "workersSdk": {{
     "revision": "f8085545bcaa2c639f171c25e4424685036a0e10",
-    "wranglerVersion": "4.143.0",
+    "cfVersion": "1.0.0-beta.12",
     "vitePluginVersion": "1.54.2"
   }},
   "targets": {{
@@ -341,4 +341,16 @@ async fn begin_drain_stops_a_running_generation_gracefully() {
 #[tokio::test]
 async fn begin_drain_during_startup_cancels_the_attempt() {
     functional_watchdog::drain_lifecycle::run_during_startup().await;
+}
+
+mod python_preparation_owner;
+
+#[tokio::test]
+async fn isolated_python_preparation_owner_lifecycle() {
+    python_preparation_owner::run().await;
+}
+
+#[tokio::test]
+async fn isolated_python_preparation_owner_rejection_matrix() {
+    python_preparation_owner::rejection_matrix().await;
 }

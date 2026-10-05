@@ -1,3 +1,5 @@
+import entrypoints from "cloudflare-internal:workers";
+import wrapped from "cloudflare-internal:wrapped-binding";
 import {
   exports as currentExports,
   waitUntil,
@@ -10,7 +12,9 @@ import { privateWeakMap } from "../../private-weak-map.js";
 import {
   decodeServiceValue,
   encodeServiceValue,
-} from "../../services/facade.js";
+  serviceCapabilityController,
+} from "../../services/capabilities.js";
+import { serviceRpcMember } from "../../services/rpc-member.js";
 import {
   childServiceFrame,
   rootServiceFrame,
@@ -27,20 +31,16 @@ import {
 } from "./completion.js";
 import { tenantExports } from "./loopback.js";
 import type {
-  BindingFactory,
   Callable,
   CompletionReporter,
   Environment,
-  EnvironmentWrapper,
   TenantConstructor,
   TrackedContext,
 } from "./types.js";
 
 export { loopbackDurableObjectMetadata } from "./loopback.js";
 export type {
-  BindingFactory,
   Environment,
-  EnvironmentWrapper,
   TenantConstructor,
   TrackedContext,
 } from "./types.js";
@@ -57,71 +57,75 @@ interface ScheduledWorkflowRuntime {
   }[];
   readonly trigger: WorkflowScheduleTrigger;
 }
-const PRIVATE_ALARM_INDEX = "__OPEN_COMPUTE_PRIVATE_ALARM_INDEX";
-const PRIVATE_FACET_MANAGER = "__OPEN_COMPUTE_PRIVATE_FACET_MANAGER";
-const PRIVATE_FACET_AUTHORITY = "__OPEN_COMPUTE_PRIVATE_FACET_AUTHORITY";
-const PRIVATE_FACET_PATH = "__OPEN_COMPUTE_PRIVATE_FACET_PATH";
-const PRIVATE_FACET_PROPS = "__OPEN_COMPUTE_PRIVATE_FACET_PROPS";
-const PRIVATE_NATIVE_FACETS = "__OPEN_COMPUTE_PRIVATE_NATIVE_FACETS";
-const PRIVATE_CACHE = "__OPEN_COMPUTE_PRIVATE_CACHE";
-const PRIVATE_FORWARDING_LOADER = "__OPEN_COMPUTE_PRIVATE_FORWARDING_LOADERS";
-const NativeWeakSet = WeakSet;
 const nativeApply = Reflect.apply;
-const weakHas = WeakSet.prototype.has;
-const weakAdd = WeakSet.prototype.add;
-const ownEntries = Object.entries;
-const nativeDefine = Object.defineProperty;
+const nativePush = Array.prototype.push;
+const ownHas = Object.hasOwn;
+const nativeGet = Reflect.get;
+const NativeProxy = Proxy;
+const nativeBind = Function.prototype.bind;
+const nativeHas = Reflect.has;
+const nativeOwnKeys = Reflect.ownKeys;
+const nativeDescriptor = Reflect.getOwnPropertyDescriptor;
+const nativeSet = Reflect.set;
+const nativeReflectDefine = Reflect.defineProperty;
+const nativeDelete = Reflect.deleteProperty;
+const createServiceStub = wrapped.createServiceRpcStub.bind(wrapped);
+
 const SERVICE_RPC = "__openComputeServiceRpc";
 const SERVICE_GET = "__openComputeServiceGet";
-const PUBLIC_METHOD = /^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/;
 const SCHEDULED_WORKFLOW_BINDING = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const RESERVED_METHODS = new Set([
   "constructor",
-  "prototype",
   "__proto__",
   "then",
   SERVICE_RPC,
   SERVICE_GET,
 ]);
-interface NativeFetchContext {
+interface NativeServiceContext {
   scopeId: string;
   frame: string;
-  completion: Fetcher;
+  completion?: Fetcher;
 }
-const nativeFetchContexts = privateWeakMap<object, NativeFetchContext>();
+const nativeServiceContexts = privateWeakMap<object, NativeServiceContext>();
+const constructorFrames = privateWeakMap<TrackedContext, ServiceFrame>();
 
-function serviceFetchContext(ctx: object): {
+function serviceContext(ctx: object): {
   context: object;
-  native?: NativeFetchContext;
+  native?: NativeServiceContext;
 } {
-  const props: unknown = Reflect.get(ctx, "props", ctx);
+  const props: unknown = nativeGet(ctx, "props", ctx);
   if (props === null || typeof props !== "object") return { context: ctx };
-  const native: unknown = Reflect.get(props, "__OPEN_COMPUTE_SERVICE_FETCH");
+  const native: unknown = nativeGet(props, "__OPEN_COMPUTE_SERVICE_CONTEXT");
   if (native === null || typeof native !== "object") return { context: ctx };
-  const completion: unknown = Reflect.get(native, "completion");
+  const completion: unknown = nativeGet(native, "completion");
   if (
-    completion === null ||
-    typeof completion !== "object" ||
-    !callable(Reflect.get(completion, "fetch"))
+    completion !== undefined &&
+    (completion === null ||
+      typeof completion !== "object" ||
+      !callable(nativeGet(completion, "fetch")))
   )
-    return { context: ctx };
+    throw new Error("SERVICE_BINDING_DENIED");
   if (
-    typeof Reflect.get(native, "scopeId") !== "string" ||
-    typeof Reflect.get(native, "frame") !== "string"
+    typeof nativeGet(native, "scopeId") !== "string" ||
+    typeof nativeGet(native, "frame") !== "string"
   )
     throw new Error("SERVICE_BINDING_DENIED");
   return {
-    context: new Proxy(ctx, {
+    context: new NativeProxy(ctx, {
       get(target, property) {
-        if (property === "props") return Reflect.get(props, "userProps");
-        const value: unknown = Reflect.get(target, property, target);
-        return callable(value) ? value.bind(target) : value;
+        if (property === "props") return nativeGet(props, "userProps");
+        const value: unknown = nativeGet(target, property, target);
+        return callable(value)
+          ? nativeApply(nativeBind, value, [target])
+          : value;
       },
     }),
     native: {
-      scopeId: Reflect.get(native, "scopeId"),
-      frame: Reflect.get(native, "frame"),
-      completion: completion as Fetcher,
+      scopeId: nativeGet(native, "scopeId"),
+      frame: nativeGet(native, "frame"),
+      ...(completion === undefined
+        ? {}
+        : { completion: completion as Fetcher }),
     },
   };
 }
@@ -132,10 +136,14 @@ async function nativeServiceFetch(
   request: Request,
   env: Environment,
   tracked: TrackedContext,
-  native: NativeFetchContext,
+  native: NativeServiceContext,
   objectHandler: boolean,
   cache?: CacheRuntime,
 ): Promise<Response> {
+  const completion = native.completion;
+  if (!completion) throw new Error("SERVICE_BINDING_DENIED");
+  constructorFrames.delete(tracked);
+  tracked = takeDispatchContext(tracked);
   let drained: Promise<void> = Promise.resolve();
   let handoffWebSocket = false;
   try {
@@ -144,12 +152,15 @@ async function nativeServiceFetch(
         env,
         childServiceFrame(native.scopeId, native.frame),
         (scoped) =>
-          withTenantEnvironment(scoped, () =>
-            Reflect.apply(
-              fn,
-              owner,
-              objectHandler ? [request, scoped, tracked.context] : [request],
-            ),
+          withTenantEnvironment(
+            scoped,
+            () =>
+              nativeApply(
+                fn,
+                owner,
+                objectHandler ? [request, scoped, tracked.context] : [request],
+              ),
+            tracked,
           ),
       );
     const value: unknown = await (cache === undefined
@@ -165,12 +176,12 @@ async function nativeServiceFetch(
     handoffWebSocket = result.handoffWebSocket;
     return result.value as Response;
   } finally {
-    const background = Promise.all([drainTrackedTasks(tracked), drained]);
+    const background = drained.then(() => drainTrackedTasks(tracked));
     tracked.extendLifetime(
       handoffWebSocket
         ? background
         : background.then(async () => {
-            const response = await native.completion.fetch(
+            const response = await completion.fetch(
               "https://service-completion.internal/",
             );
             if (!response.ok) throw new Error("SERVICE_UNAVAILABLE");
@@ -179,6 +190,7 @@ async function nativeServiceFetch(
   }
 }
 
+const trackedContexts = privateWeakMap<object, TrackedContext>();
 const trackedInstances = privateWeakMap<object, TrackedContext>();
 const instanceEnvironments = privateWeakMap<object, Environment>();
 function callable(value: unknown): value is Callable {
@@ -203,13 +215,23 @@ function catchSubrequestLimit(value: unknown): unknown {
 /** Read the full native export table before tenant export filtering begins. */
 export function trustedContextExports(context: unknown): object | undefined {
   if (context === null || typeof context !== "object") return undefined;
-  const value: unknown = Reflect.get(context, "exports", context);
+  const value: unknown = nativeGet(context, "exports", context);
   return value !== null && typeof value === "object" ? value : undefined;
 }
 
-function withTenantEnvironment<T>(env: Environment, fn: () => T): T {
+function withTenantEnvironment<T>(
+  env: Environment,
+  fn: () => T,
+  tracked?: TrackedContext,
+): T {
   const exports = tenantExports(currentExports);
-  return withEnv(env, () => withExports(exports, fn)) as T;
+  const run = () => withEnv(env, () => withExports(exports, fn)) as T;
+  const tasks = tracked?.tasks;
+  return tasks
+    ? entrypoints.withWaitUntilObserver((promise) => {
+        nativeApply(nativePush, tasks, [promise]);
+      }, run)
+    : run();
 }
 
 /** Validate only constructibility; tenant code still runs inside its isolate. */
@@ -217,28 +239,49 @@ export function tenantConstructor(value: unknown): TenantConstructor {
   if (!constructible(value)) throw new Error("missing entrypoint");
   // A scoped base keeps `super()` as a normal, type-checked constructor call.
   // Reflect.construct preserves new.target and the native inheritance chain.
-  return new Proxy(value, {
+  return new NativeProxy(value, {
     construct(target, args: unknown[], newTarget) {
       const env = args[1];
       if (env === null || typeof env !== "object" || Array.isArray(env))
         throw new Error("invalid tenant env");
-      const instance: unknown = withTenantEnvironment(env as Environment, () =>
-        Reflect.construct(target, args, newTarget),
-      );
-      if (
-        instance === null ||
-        (typeof instance !== "object" && typeof instance !== "function")
-      ) {
-        throw new Error("invalid tenant constructor result");
+      const ctx = args[0];
+      const tracked =
+        ctx !== null && typeof ctx === "object"
+          ? trackedContexts.get(ctx)
+          : undefined;
+      const frame =
+        (tracked && constructorFrames.get(tracked)) ?? rootServiceFrame();
+      if (tracked) constructorFrames.set(tracked, frame);
+      try {
+        const instance: unknown = withServiceScope(
+          env as Environment,
+          frame,
+          (scoped) =>
+            withTenantEnvironment(
+              scoped,
+              () => Reflect.construct(target, args, newTarget),
+              tracked,
+            ),
+        );
+        if (
+          instance === null ||
+          (typeof instance !== "object" && typeof instance !== "function")
+        ) {
+          throw new Error("invalid tenant constructor result");
+        }
+        return instance;
+      } catch (error) {
+        if (frame.parentFrame === null)
+          scheduleRootCompletion(env as Environment, frame, tracked);
+        throw error;
       }
-      return instance;
     },
   });
 }
 
 function constructible(value: unknown): value is TenantConstructor {
   if (typeof value !== "function") return false;
-  const prototype: unknown = Reflect.get(value, "prototype");
+  const prototype: unknown = nativeGet(value, "prototype");
   if (prototype === null || typeof prototype !== "object") return false;
   try {
     Reflect.construct(Object, [], value);
@@ -246,67 +289,6 @@ function constructible(value: unknown): value is TenantConstructor {
   } catch {
     return false;
   }
-}
-
-/** Wrap each declared capability once and remove the private alarm capability. */
-export function createEnvironment(
-  factories: readonly BindingFactory[],
-  durableObject: boolean,
-  capture?: (
-    name: string,
-    facade: object,
-    transport: unknown,
-    rawEnv: Environment,
-  ) => void,
-): EnvironmentWrapper {
-  const wrapped = new NativeWeakSet<object>();
-  return (env) => {
-    if (nativeApply(weakHas, wrapped, [env])) return env;
-    const out: Environment = {};
-    const properties = ownEntries(env);
-    for (let index = 0; index < properties.length; index++) {
-      const entry = properties[index]!;
-      const key = entry[0]!;
-      const value = entry[1];
-      if (
-        key !== PRIVATE_ALARM_INDEX &&
-        key !== PRIVATE_FACET_MANAGER &&
-        key !== PRIVATE_FACET_AUTHORITY &&
-        key !== PRIVATE_FACET_PATH &&
-        key !== PRIVATE_FACET_PROPS &&
-        key !== PRIVATE_NATIVE_FACETS &&
-        key !== PRIVATE_CACHE &&
-        key !== PRIVATE_FORWARDING_LOADER
-      )
-        nativeDefine(out, key, {
-          value,
-          enumerable: true,
-          configurable: true,
-          writable: true,
-        });
-    }
-    for (
-      let factoryIndex = 0;
-      factoryIndex < factories.length;
-      factoryIndex++
-    ) {
-      const factory = factories[factoryIndex]!;
-      for (let nameIndex = 0; nameIndex < factory.names.length; nameIndex++) {
-        const name = factory.names[nameIndex]!;
-        const transport = out[name];
-        const facade = new factory.create(transport, durableObject, name);
-        nativeDefine(out, name, {
-          value: facade,
-          enumerable: true,
-          configurable: true,
-          writable: true,
-        });
-        capture?.(name, facade, transport, env);
-      }
-    }
-    nativeApply(weakAdd, wrapped, [out]);
-    return out;
-  };
 }
 
 /** Track waitUntil work while preserving the native execution-context receiver. */
@@ -317,40 +299,45 @@ export function trackExecutionContext<Context extends object>(
   trustedExports?: object,
 ): TrackedContext<Context> {
   const tasks: Promise<unknown>[] = [];
-  const nativeWaitUntil: unknown = Reflect.get(ctx, "waitUntil", ctx);
+  const nativeWaitUntil: unknown = nativeGet(ctx, "waitUntil", ctx);
   const extendLifetime = callable(nativeWaitUntil)
     ? (promise: Promise<unknown>) => {
-        Reflect.apply(nativeWaitUntil, ctx, [promise]);
+        nativeApply(nativeWaitUntil, ctx, [promise]);
       }
     : (promise: Promise<unknown>) => {
         waitUntil(promise);
       };
   const exports = tenantExports(trustedExports ?? currentExports);
-  const context = new Proxy(Object.create(null) as Context, {
-    get(_target, property) {
+  const trackedWaitUntil = (promise: Promise<unknown>) => {
+    extendLifetime(Promise.resolve(promise));
+  };
+  const context = new NativeProxy(Object.create(null) as Context, {
+    get(target, property, receiver) {
       if (property === "cache" && cacheContext !== undefined)
         return cacheContext;
       if (property === "exports") return exports;
       if (property === "waitUntil")
-        return (promise: Promise<unknown>) => {
-          const tracked = Promise.resolve(promise);
-          tasks.push(tracked);
-          extendLifetime(tracked);
-        };
-      const value: unknown = Reflect.get(ctx, property, ctx);
-      return callable(value) ? value.bind(ctx) : value;
+        return ownHas(target, property)
+          ? nativeGet(target, property, receiver)
+          : trackedWaitUntil;
+      const value: unknown = nativeGet(ctx, property, ctx);
+      return callable(value) ? nativeApply(nativeBind, value, [ctx]) : value;
     },
-    has(_target, property) {
+    has(target, property) {
+      if (ownHas(target, property)) return true;
       if (property === "exports") return true;
       if (property === "cache" && cacheContext !== undefined) return true;
-      return Reflect.has(ctx, property);
+      return nativeHas(ctx, property);
     },
-    ownKeys() {
-      const keys = Reflect.ownKeys(ctx);
+    ownKeys(target) {
+      const keys = nativeOwnKeys(ctx);
+      for (const key of nativeOwnKeys(target))
+        if (!keys.includes(key)) keys.push(key);
       if (!keys.includes("exports")) keys.push("exports");
       return keys;
     },
-    getOwnPropertyDescriptor(_target, property) {
+    getOwnPropertyDescriptor(target, property) {
+      if (ownHas(target, property)) return nativeDescriptor(target, property);
       if (property === "exports") {
         return {
           configurable: true,
@@ -367,38 +354,57 @@ export function trackExecutionContext<Context extends object>(
           value: cacheContext,
         };
       }
-      const descriptor = Reflect.getOwnPropertyDescriptor(ctx, property);
+      const descriptor = nativeDescriptor(ctx, property);
       if (!descriptor) return undefined;
-      const value: unknown = Reflect.get(ctx, property, ctx);
+      const value: unknown = nativeGet(ctx, property, ctx);
       return {
         configurable: true,
         enumerable: descriptor.enumerable ?? false,
         writable: descriptor.writable ?? false,
-        value: callable(value) ? value.bind(ctx) : value,
+        value:
+          property === "waitUntil"
+            ? trackedWaitUntil
+            : callable(value)
+              ? nativeApply(nativeBind, value, [ctx])
+              : value,
       };
     },
     getPrototypeOf() {
       return null;
     },
-    set(_target, property, value) {
+    set(target, property, value) {
       if (property === "exports" || property === "cache") return false;
-      return Reflect.set(ctx, property, value, ctx);
+      if (property === "waitUntil")
+        return nativeSet(target, property, value, target);
+      return nativeSet(ctx, property, value, ctx);
     },
-    defineProperty(_target, property, descriptor) {
+    defineProperty(target, property, descriptor) {
       if (property === "exports" || property === "cache") return false;
-      return Reflect.defineProperty(ctx, property, descriptor);
+      if (property === "waitUntil")
+        return nativeReflectDefine(target, property, descriptor);
+      return nativeReflectDefine(ctx, property, descriptor);
     },
-    deleteProperty(_target, property) {
+    deleteProperty(target, property) {
       if (property === "exports" || property === "cache") return false;
-      return Reflect.deleteProperty(ctx, property);
+      if (property === "waitUntil") return nativeDelete(target, property);
+      return nativeDelete(ctx, property);
     },
   });
-  return {
+  const tracked = {
     context,
     tasks,
     extendLifetime,
     ...(runScope === undefined ? {} : { runScope }),
   };
+  trackedContexts.set(ctx, tracked);
+  trackedContexts.set(context, tracked);
+  return tracked;
+}
+
+function takeDispatchContext(tracked: TrackedContext): TrackedContext {
+  const tasks = tracked.tasks;
+  tracked.tasks = [];
+  return { ...tracked, tasks };
 }
 
 function invoke(
@@ -408,20 +414,28 @@ function invoke(
   env: Environment,
   trackedOverride?: TrackedContext,
 ): unknown {
-  const frame = rootServiceFrame();
-  const tracked =
+  const source =
     trackedOverride ??
     (owner !== null && typeof owner === "object"
       ? trackedInstances.get(owner)
       : undefined);
+  const frame = (source && constructorFrames.get(source)) ?? rootServiceFrame();
+  if (source) constructorFrames.delete(source);
+  const rootScope = frame.parentFrame === null ? frame : null;
+  const tracked =
+    source === undefined ? undefined : takeDispatchContext(source);
   const run = () => {
     try {
       const value = withServiceScope(env, frame, (scoped) =>
-        withTenantEnvironment(scoped, () => Reflect.apply(fn, owner, args)),
+        withTenantEnvironment(
+          scoped,
+          () => nativeApply(fn, owner, args),
+          tracked,
+        ),
       );
-      return rootResult(value, env, frame.scopeId, tracked);
+      return rootResult(value, env, rootScope, tracked);
     } catch (error) {
-      scheduleRootCompletion(env, frame.scopeId, tracked);
+      scheduleRootCompletion(env, rootScope, tracked);
       throw error;
     }
   };
@@ -429,11 +443,9 @@ function invoke(
 }
 
 function serviceMethod(owner: object, method: string): Callable {
-  if (!PUBLIC_METHOD.test(method) || RESERVED_METHODS.has(method))
+  if (typeof method !== "string" || RESERVED_METHODS.has(method))
     throw new Error("SERVICE_ENTRYPOINT_NOT_FOUND");
-  const value: unknown = Reflect.get(owner, method, owner);
-  if (!callable(value)) throw new Error("SERVICE_ENTRYPOINT_NOT_FOUND");
-  return value;
+  return serviceRpcMember(owner, method, "call");
 }
 
 async function invokeService(
@@ -445,18 +457,29 @@ async function invokeService(
   reporter: CompletionReporter,
   tracked: TrackedContext,
 ): Promise<unknown> {
+  constructorFrames.delete(tracked);
+  tracked = takeDispatchContext(tracked);
   try {
-    const args = decodeServiceValue(rawArgs, new WeakMap(), reporter);
+    const controller = serviceCapabilityController(reporter, createServiceStub);
+    const args = decodeServiceValue(
+      rawArgs,
+      privateWeakMap<object, unknown>(),
+      controller,
+    );
     if (!Array.isArray(args)) throw new Error("SERVICE_BINDING_DENIED");
     const value = await withServiceScope(env, frame, (scoped) =>
-      withTenantEnvironment(scoped, async () => {
-        const value = await Reflect.apply(
-          serviceMethod(owner, method),
-          owner,
-          args,
-        );
-        return encodeServiceValue(value, reporter);
-      }),
+      withTenantEnvironment(
+        scoped,
+        async () => {
+          const value = await nativeApply(
+            serviceMethod(owner, method),
+            owner,
+            args,
+          );
+          return encodeServiceValue(value, controller);
+        },
+        tracked,
+      ),
     );
     return serviceSuccess(value, tracked);
   } catch (error) {
@@ -472,15 +495,22 @@ async function getService(
   reporter: CompletionReporter,
   tracked: TrackedContext,
 ): Promise<unknown> {
-  if (!PUBLIC_METHOD.test(property) || RESERVED_METHODS.has(property)) {
+  constructorFrames.delete(tracked);
+  tracked = takeDispatchContext(tracked);
+  if (typeof property !== "string" || RESERVED_METHODS.has(property)) {
     throw new Error("SERVICE_ENTRYPOINT_NOT_FOUND");
   }
   try {
+    const controller = serviceCapabilityController(reporter, createServiceStub);
     const value = await withServiceScope(env, frame, (scoped) =>
-      withTenantEnvironment(scoped, async () => {
-        const value = await Reflect.get(owner, property, owner);
-        return encodeServiceValue(value, reporter);
-      }),
+      withTenantEnvironment(
+        scoped,
+        async () => {
+          const value = await serviceRpcMember(owner, property, "get");
+          return encodeServiceValue(value, controller);
+        },
+        tracked,
+      ),
     );
     return serviceSuccess(value, tracked);
   } catch (error) {
@@ -494,17 +524,25 @@ export function wrapInstance<T extends object>(
   env: Environment,
   tracked?: TrackedContext,
   cache?: CacheRuntime,
+  hostMethods?: Readonly<Record<string, unknown>>,
 ): T {
   if (tracked) {
     trackedInstances.set(instance, tracked);
     instanceEnvironments.set(instance, env);
   }
-  return new Proxy(instance, {
+  return new NativeProxy(instance, {
     get(target, property) {
-      const value: unknown = Reflect.get(target, property, target);
+      const value: unknown =
+        hostMethods &&
+        typeof property === "string" &&
+        ownHas(hostMethods, property)
+          ? hostMethods[property]
+          : nativeGet(target, property, target);
       if (!callable(value)) return value;
+      if (property === SERVICE_RPC || property === SERVICE_GET)
+        return (...args: unknown[]) => nativeApply(value, target, args);
       return (...args: unknown[]) => {
-        const native = nativeFetchContexts.get(target);
+        const native = nativeServiceContexts.get(target);
         if (
           property === "fetch" &&
           native &&
@@ -530,7 +568,7 @@ export function wrapInstance<T extends object>(
         ) {
           const operation: Callable = () =>
             cache.dispatch(
-              () => Reflect.apply(value, target, args),
+              () => nativeApply(value, target, args),
               args[0] as Request,
               tracked.context as ExecutionContext,
             );
@@ -559,14 +597,14 @@ function normalizedEvent(kind: string, event: unknown): unknown {
     kind !== "scheduled" ||
     event === null ||
     typeof event !== "object" ||
-    Reflect.get(event, "type") !== undefined
+    nativeGet(event, "type") !== undefined
   )
     return event;
-  return new Proxy(event, {
+  return new NativeProxy(event, {
     get(target, property) {
       if (property === "type") return "scheduled";
-      const value: unknown = Reflect.get(target, property, target);
-      return callable(value) ? value.bind(target) : value;
+      const value: unknown = nativeGet(target, property, target);
+      return callable(value) ? nativeApply(nativeBind, value, [target]) : value;
     },
   });
 }
@@ -582,8 +620,8 @@ function scheduledInvocation(
 } {
   if (event === null || typeof event !== "object")
     throw new Error("CRON_CUSTOM_EVENT_UNSUPPORTED");
-  const cron: unknown = Reflect.get(event, "cron", event);
-  const time: unknown = Reflect.get(event, "scheduledTime", event);
+  const cron: unknown = nativeGet(event, "cron", event);
+  const time: unknown = nativeGet(event, "scheduledTime", event);
   let scheduledTime = Number.NaN;
   try {
     if (
@@ -649,13 +687,12 @@ function wrapHandler(
   owner: unknown,
   fn: Callable,
   kind: string,
-  wrapEnv: EnvironmentWrapper,
   cache?: CacheRuntimeFactory,
 ) {
   return (event: unknown, env: Environment, ctx: ExecutionContext): unknown => {
-    const boundCache = cache?.bind(env);
+    const boundCache = cache?.bind();
     const trustedExports = trustedContextExports(ctx);
-    const wrapped = wrapEnv(env);
+    const wrapped = env;
     const tracked = trackExecutionContext(
       ctx,
       boundCache?.context,
@@ -670,7 +707,7 @@ function wrapHandler(
     ) {
       const operation: Callable = () =>
         boundCache.dispatch(
-          () => Reflect.apply(fn, owner, args),
+          () => nativeApply(fn, owner, args),
           event,
           tracked.context as ExecutionContext,
         );
@@ -686,7 +723,6 @@ function wrapHandler(
 /** Wrap class entrypoints without replacing their native inheritance chain. */
 export function wrapEntrypoint(
   target: unknown,
-  wrapEnv: EnvironmentWrapper,
   name?: string,
   cache?: CacheRuntimeFactory,
   scheduledWorkflows?: ScheduledWorkflowRuntime,
@@ -696,21 +732,46 @@ export function wrapEntrypoint(
     constructor(ctx: unknown, env: Environment) {
       if (ctx === null || typeof ctx !== "object")
         throw new Error("invalid execution context");
-      const boundCache = cache?.bind(env);
+      const boundCache = cache?.bind();
       const trustedExports = trustedContextExports(ctx);
-      const wrapped = wrapEnv(env);
-      const service = serviceFetchContext(ctx);
+      const wrapped = env;
+      const service = serviceContext(ctx);
       const tracked = trackExecutionContext(
         service.context as ExecutionContext,
         boundCache?.context,
         undefined,
         trustedExports,
       );
+      if (service.native)
+        constructorFrames.set(
+          tracked,
+          childServiceFrame(service.native.scopeId, service.native.frame),
+        );
       super(tracked.context, wrapped);
       trackedInstances.set(this, tracked);
       instanceEnvironments.set(this, wrapped);
-      if (service.native) nativeFetchContexts.set(this, service.native);
-      return wrapInstance(this, wrapped, tracked, boundCache);
+      if (service.native) nativeServiceContexts.set(this, service.native);
+      const methods = { ...hostMethods };
+      const scheduled = methods.scheduled;
+      if (callable(scheduled)) {
+        const observed: unknown = nativeGet(this, "scheduled", this);
+        const original =
+          observed === scheduled
+            ? nativeGet(Base.prototype, "scheduled", this)
+            : observed;
+        methods.scheduled = (event: unknown) =>
+          nativeApply(scheduled, this, [event, original]);
+      } else {
+        const original: unknown = nativeGet(this, "scheduled", this);
+        if (callable(original))
+          methods.scheduled = (event: unknown) =>
+            nativeApply(original, this, [
+              normalizedEvent("scheduled", event),
+              wrapped,
+              tracked.context,
+            ]);
+      }
+      return wrapInstance(this, wrapped, tracked, boundCache, methods);
     }
 
     [SERVICE_RPC](
@@ -755,11 +816,16 @@ export function wrapEntrypoint(
       );
     }
   };
+  // Capture host methods before a tenant constructor can return a Proxy that hides overrides.
+  const hostMethods: Record<string, unknown> = {
+    [SERVICE_RPC]: Wrapped.prototype[SERVICE_RPC],
+    [SERVICE_GET]: Wrapped.prototype[SERVICE_GET],
+  };
   if (name !== undefined)
     Object.defineProperty(Wrapped, "name", { value: name });
   if (scheduledWorkflows === undefined) return Wrapped;
-  return class extends Wrapped {
-    async scheduled(event: unknown): Promise<unknown> {
+  const Scheduled = class extends Wrapped {
+    async scheduled(event: unknown, original: unknown): Promise<unknown> {
       const tracked = trackedInstances.get(this);
       const environment = instanceEnvironments.get(this);
       if (!tracked || !environment)
@@ -770,35 +836,35 @@ export function wrapEntrypoint(
         scheduledWorkflows,
       );
       if (!invocation.scheduledHandler) return undefined;
-      const handler: unknown = Reflect.get(Base.prototype, "scheduled", this);
-      if (!callable(handler)) throw new Error("CRON_CUSTOM_EVENT_UNSUPPORTED");
+      if (!callable(original)) throw new Error("CRON_CUSTOM_EVENT_UNSUPPORTED");
       return invoke(
         this,
-        handler,
-        [invocation.controller],
+        original,
+        [invocation.controller, environment, tracked.context],
         environment,
         tracked,
       );
     }
   };
+  hostMethods.scheduled = Scheduled.prototype.scheduled;
+  return Scheduled;
 }
 
 /** Give object/function-style defaults an env-aware private Service fetch entrypoint. */
 export function wrapDefaultService(
   raw: unknown,
-  wrapEnv: EnvironmentWrapper,
   cache?: CacheRuntimeFactory,
 ): TenantConstructor {
   if (
     callable(raw) &&
     /^\s*class\b/.test(Function.prototype.toString.call(raw))
   ) {
-    return wrapEntrypoint(raw, wrapEnv, "__OpenComputeDefaultService", cache);
+    return wrapEntrypoint(raw, "__OpenComputeDefaultService", cache);
   }
   const owner = raw !== null && typeof raw === "object" ? raw : undefined;
-  const fetch = owner === undefined ? raw : Reflect.get(owner, "fetch");
+  const fetch = owner === undefined ? raw : nativeGet(owner, "fetch");
   const connectHandler =
-    owner === undefined ? undefined : Reflect.get(owner, "connect");
+    owner === undefined ? undefined : nativeGet(owner, "connect");
   return class OpenComputeDefaultService extends WorkerEntrypoint<Environment> {
     readonly #environment: Environment;
     readonly #tracked: TrackedContext;
@@ -807,10 +873,10 @@ export function wrapDefaultService(
     constructor(ctx: unknown, env: Environment) {
       if (ctx === null || typeof ctx !== "object")
         throw new Error("invalid execution context");
-      const boundCache = cache?.bind(env);
+      const boundCache = cache?.bind();
       const trustedExports = trustedContextExports(ctx);
-      const wrapped = wrapEnv(env);
-      const service = serviceFetchContext(ctx);
+      const wrapped = env;
+      const service = serviceContext(ctx);
       const tracked = trackExecutionContext(
         service.context as ExecutionContext,
         boundCache?.context,
@@ -818,14 +884,14 @@ export function wrapDefaultService(
         trustedExports,
       );
       super(tracked.context, wrapped);
-      if (service.native) nativeFetchContexts.set(this, service.native);
+      if (service.native) nativeServiceContexts.set(this, service.native);
       this.#cache = boundCache;
       this.#environment = wrapped;
       this.#tracked = tracked;
     }
 
     async fetch(request: Request): Promise<Response> {
-      const native = nativeFetchContexts.get(this);
+      const native = nativeServiceContexts.get(this);
       if (!native || !callable(fetch))
         throw new Error("SERVICE_BINDING_DENIED");
       return nativeServiceFetch(
@@ -857,7 +923,6 @@ export function wrapDefaultService(
 /** Preserve object handlers, function-style fetch, and class-style Workers. */
 export function wrapDefault(
   raw: unknown,
-  wrapEnv: EnvironmentWrapper,
   cache?: CacheRuntimeFactory,
   scheduledWorkflows?: ScheduledWorkflowRuntime,
 ): unknown {
@@ -874,12 +939,12 @@ export function wrapDefault(
       "test",
       "trace",
     ]) {
-      const handler: unknown = Reflect.get(raw, key);
+      const handler: unknown = nativeGet(raw, key);
       if (callable(handler))
-        result[key] = wrapHandler(raw, handler, key, wrapEnv, cache);
+        result[key] = wrapHandler(raw, handler, key, cache);
     }
     if (scheduledWorkflows !== undefined) {
-      const scheduled: unknown = Reflect.get(raw, "scheduled");
+      const scheduled: unknown = nativeGet(raw, "scheduled");
       result.scheduled = wrapHandler(
         raw,
         async (...args: unknown[]) => {
@@ -904,14 +969,9 @@ export function wrapDefault(
           if (!invocation.scheduledHandler) return undefined;
           if (!callable(scheduled))
             throw new Error("CRON_CUSTOM_EVENT_UNSUPPORTED");
-          return Reflect.apply(scheduled, raw, [
-            invocation.controller,
-            env,
-            ctx,
-          ]);
+          return nativeApply(scheduled, raw, [invocation.controller, env, ctx]);
         },
         "scheduled",
-        wrapEnv,
         cache,
       );
     }
@@ -919,9 +979,9 @@ export function wrapDefault(
   }
   if (callable(raw)) {
     return /^\s*class\b/.test(Function.prototype.toString.call(raw))
-      ? wrapEntrypoint(raw, wrapEnv, undefined, cache, scheduledWorkflows)
+      ? wrapEntrypoint(raw, undefined, cache, scheduledWorkflows)
       : {
-          fetch: wrapHandler(undefined, raw, "fetch", wrapEnv, cache),
+          fetch: wrapHandler(undefined, raw, "fetch", cache),
           ...(scheduledWorkflows !== undefined
             ? {
                 scheduled: wrapHandler(
@@ -945,7 +1005,6 @@ export function wrapDefault(
                       throw new Error("CRON_CUSTOM_EVENT_UNSUPPORTED");
                   },
                   "scheduled",
-                  wrapEnv,
                   cache,
                 ),
               }
@@ -956,8 +1015,16 @@ export function wrapDefault(
 }
 
 /** Validation checks the actual module namespace before returning its probe handler. */
-export function validationHandler(tenant: Environment, name: string) {
-  if (!(name in tenant)) throw new Error("missing entrypoint");
+export function validationHandler(
+  tenant: Environment,
+  name: string,
+  requireConstructor: boolean,
+) {
+  if (
+    !ownHas(tenant, name) ||
+    (requireConstructor && !constructible(tenant[name]))
+  )
+    throw new Error("missing entrypoint");
   return {
     fetch(): Response {
       return new Response("open-compute-validation-v1");

@@ -645,6 +645,56 @@ fn readonly_instance_inspection_validates_identity_and_contract() {
 }
 
 #[test]
+fn existing_store_opens_current_metadata_without_trusting_an_earlier_inspection() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let path = directory.path().join("data.sqlite");
+    let store = store(&path);
+    let expected = Sha256::digest(model_contract("rev")).into();
+    let earlier = inspect_ai_search_instance(&path, "instance-1", expected, 100).unwrap();
+    let mut updated: serde_json::Value =
+        serde_json::from_slice(&earlier.inspection.public_config_json).unwrap();
+    updated["metadata"] = serde_json::json!({"description": "updated"});
+    let updated = serde_json::to_vec(&updated).unwrap();
+    assert!(store.update_public_config(1, &updated, 2).unwrap());
+    let (reopened, authority) =
+        AiSearchStore::open_existing(&path, "instance-1", expected, 100).unwrap();
+    assert_eq!(authority.inspection.config_generation, 2);
+    assert_eq!(authority.inspection.public_config_json, updated);
+    assert_ne!(
+        authority.inspection.public_config_json,
+        earlier.inspection.public_config_json
+    );
+    assert_eq!(reopened.inspect().unwrap(), authority.inspection);
+    assert_eq!(reopened.dimensions(), 1);
+    assert!(reopened.vector_enabled());
+    for (id, digest) in [("other-instance", expected), ("instance-1", [0; 32])] {
+        assert_eq!(
+            AiSearchStore::open_existing(&path, id, digest, 100)
+                .unwrap_err()
+                .code(),
+            ErrorCode::ResourceInvariantViolation
+        );
+    }
+    let missing = directory.path().join("missing.sqlite");
+    assert!(AiSearchStore::open_existing(&missing, "instance-1", expected, 100).is_err());
+    assert!(!missing.exists());
+    store
+        .lock()
+        .unwrap()
+        .execute(
+            "UPDATE instance_meta SET public_config_json=X'7b7d' WHERE singleton=1",
+            [],
+        )
+        .unwrap();
+    assert_eq!(
+        AiSearchStore::open_existing(&path, "instance-1", expected, 100)
+            .unwrap_err()
+            .code(),
+        ErrorCode::ResourceInvariantViolation
+    );
+}
+
+#[test]
 fn identity_and_metadata_mismatch_fail_closed() {
     let directory = tempfile::tempdir().expect("tempdir");
     let path = directory.path().join("data.sqlite");
@@ -823,7 +873,11 @@ fn full_reindex_is_generation_fenced_and_survives_reopen() {
     assert_eq!(pending.pending_job_count, 1);
     drop(store);
 
-    let reopened = AiSearchStore::open(&path, &contract, 1).expect("reopen");
+    let (reopened, authority) =
+        AiSearchStore::open_existing(&path, "instance-1", contract.model_contract_sha256, 100)
+            .expect("reopen");
+    assert!(authority.inspection.reindex_pending);
+    assert_eq!(authority.inspection.config_generation, 2);
     let claim = reopened.claim_due_job(20, 100).unwrap().unwrap();
     assert_eq!(claim.config_generation, 2);
     assert_eq!(claim.index_generation, 2);

@@ -2,10 +2,10 @@
 title: "Routing"
 ---
 
-`ocd wrangler deploy` activates a deployment on the selected platform. Each Worker receives a local-machine origin using its canonical name and account ID.
+`ocd cf deploy` activates a deployment on the selected platform. Each Worker receives a local-machine origin using its canonical name and account ID.
 
 ```sh
-ocd wrangler --project examples/hello-worker deploy --env dev
+ocd cf --project examples/hello-worker deploy --mode dev
 # Worker is serving at http://hello-worker.<account-id>.localhost:8787/
 ```
 

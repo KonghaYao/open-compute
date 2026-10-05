@@ -65,13 +65,13 @@ export async function cloudflareRunnerSafety(): Promise<void> {
     name,
   );
   if (url !== `https://${name}.account.workers.dev/`)
-    throw new Error("Wrangler deployment URL parsing differs");
+    throw new Error("cf deployment URL parsing differs");
   if (
     !cloudflareWorkerMissing("Worker not found [code: 10007]") ||
     !cloudflareWorkerMissing("environment missing [code: 10090]") ||
     cloudflareWorkerMissing("authentication failed [code: 10000]")
   ) {
-    throw new Error("Wrangler missing-Worker classification differs");
+    throw new Error("cf missing-Worker classification differs");
   }
   if (
     !cloudflareTransientFailure(
@@ -79,7 +79,7 @@ export async function cloudflareRunnerSafety(): Promise<void> {
     ) ||
     cloudflareTransientFailure("authentication failed [code: 10000]")
   ) {
-    throw new Error("Wrangler transient failure classification differs");
+    throw new Error("cf transient failure classification differs");
   }
   if (
     observationUrl("http://worker.account.localhost:8787/", "/reset") !==
@@ -97,8 +97,10 @@ export async function cloudflareRunnerSafety(): Promise<void> {
   ]
     .map((path) => readFileSync(join(ROOT, path), "utf8"))
     .join("\n");
-  if (source.includes("--force")) {
-    throw new Error("differential cleanup may force-delete resources");
+  if (source.includes("--delete-with-references")) {
+    throw new Error(
+      "differential cleanup may delete foreign Worker references",
+    );
   }
   for (const obsoleteTransport of [
     "/operator/api",
@@ -114,25 +116,25 @@ export async function cloudflareRunnerSafety(): Promise<void> {
   if (
     !source.includes("CLOUDFLARE_API_BASE_URL") ||
     !source.includes('new URL("/client/v4", endpoint)') ||
-    !source.includes("wrangler-open-compute.jsonc")
+    !source.includes("cloudflare.config.ts")
   ) {
     throw new Error(
-      "open-compute differential runner does not use the official Wrangler v4 boundary",
+      "open-compute differential runner does not use the official cf v4 boundary",
     );
   }
-  if (!source.includes('WRANGLER_HIDE_BANNER: "true"')) {
+  if (!source.includes('CF_SEND_TELEMETRY: "false"')) {
     throw new Error(
-      "Wrangler's non-essential update check can escape differential-run cleanup",
+      "cf telemetry was not disabled for the differential runner",
     );
   }
   for (const requiredOperation of [
     "ensureCloudflareAbsent",
     "deployments",
     "delete",
-    "verifyWranglerAccount",
+    "verifyCfAccount",
     "verifyOpenComputeAccount",
     "recordOwnership",
-    "readOnlyWrangler",
+    "readOnlyCf",
     "ensureCloudflareKvAbsent",
     "createCloudflareKv",
     "cleanupCloudflareKv",
@@ -148,14 +150,14 @@ export async function cloudflareRunnerSafety(): Promise<void> {
     "ensureWorkflowAbsent",
     "verifyWorkflowCreated",
     "cleanupWorkflow",
-    "--skip-confirmation",
+    "--force",
   ]) {
     if (!source.includes(requiredOperation))
       throw new Error(
         `Cloudflare runner safety operation is missing: ${requiredOperation}`,
       );
   }
-  if (!source.includes('["delete", "--name", name, "--config", config]')) {
+  if (!source.includes('["workers", "delete", name, "--force"]')) {
     throw new Error(
       "differential Worker cleanup is not scoped to the exact run-owned name",
     );
@@ -179,12 +181,12 @@ export async function cloudflareRunnerSafety(): Promise<void> {
     "0123456789abcdef0123456789abcdef",
   );
   if (
-    project.main !== "src/index.ts" ||
-    project.account_id !== "0123456789abcdef0123456789abcdef" ||
-    project.workers_dev !== false
+    record(project.worker, "worker").entrypoint !== "src/index.ts" ||
+    project.accountId !== "0123456789abcdef0123456789abcdef" ||
+    record(project.worker, "worker").workersDev !== false
   ) {
     throw new Error(
-      "open-compute differential project is not a standard local Wrangler config",
+      "open-compute differential project is not a standard local cf config",
     );
   }
   const kvFixture = (
@@ -199,17 +201,10 @@ export async function cloudflareRunnerSafety(): Promise<void> {
     { KV: "019c0000-0000-7000-8000-000000000002" },
   );
   if (
-    JSON.stringify(kvProject.kv_namespaces) !==
-    JSON.stringify([
-      {
-        binding: "KV",
-        id: "019c0000-0000-7000-8000-000000000002",
-      },
-    ])
+    JSON.stringify(record(record(kvProject.worker, "worker").env, "env").KV) !==
+    JSON.stringify({ type: "kv", id: "019c0000-0000-7000-8000-000000000002" })
   )
-    throw new Error(
-      "portable KV binding does not use standard Wrangler syntax",
-    );
+    throw new Error("portable KV binding identity drift");
   const d1Fixture = (
     await loadPortableFixtures(join(ROOT, "test/conformance/fixtures"))
   ).find((item) => item.id === "d1/portable/database");
@@ -227,13 +222,10 @@ export async function cloudflareRunnerSafety(): Promise<void> {
     { DB: `${name}-d1-0`, OTHER: `${name}-d1-1` },
   );
   if (
-    !Array.isArray(d1Project.d1_databases) ||
-    d1Project.d1_databases.length !== 2
-  ) {
-    throw new Error(
-      "portable D1 binding does not use standard Wrangler syntax",
-    );
-  }
+    Object.keys(record(record(d1Project.worker, "worker").env, "env"))
+      .length !== 2
+  )
+    throw new Error("portable D1 binding identity drift");
   const cfD1 = cloudflareProject(
     d1Fixture,
     name,
@@ -244,14 +236,13 @@ export async function cloudflareRunnerSafety(): Promise<void> {
     },
     { DB: `${name}-d1-0`, OTHER: `${name}-d1-1` },
   );
+  const cfEnv = record(record(cfD1.worker, "worker").env, "env");
   if (
-    !Array.isArray(cfD1.d1_databases) ||
-    cfD1.d1_databases.length !== 2 ||
-    !Array.isArray(cfD1.kv_namespaces) ||
-    cfD1.kv_namespaces.length !== 0
-  ) {
+    Object.keys(cfEnv).length !== 2 ||
+    record(cfEnv.DB, "DB").type !== "d1" ||
+    record(cfEnv.OTHER, "OTHER").type !== "d1"
+  )
     throw new Error(
       "portable Cloudflare D1 project does not bind only exact owned databases",
     );
-  }
 }

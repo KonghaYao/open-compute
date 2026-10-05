@@ -238,6 +238,7 @@ fn insert_ready_result(
     Ok(id)
 }
 
+mod python_prepared_authority;
 mod service_declarations_follow_active_targets_and_protect_worker_identity;
 
 mod queue_consumer_unique_index_serializes_concurrent_worker_attachments;

@@ -94,11 +94,17 @@ pub(super) async fn upload(
         Ok(value) => value,
         Err(error) => return platform_error(context.request_id(), &error),
     };
-    let upload_observability = upload.metadata.observability.clone();
-    if !deploy && upload_observability.is_some() {
-        return error_response(V4Error::InvalidRequest, context.request_id());
-    }
-    let observability = upload_observability.as_ref().map(observability_patch);
+    // cf redeploy carries this non-versioned policy in its Version upload,
+    // then applies it through script-settings after creating the Deployment.
+    let observability = if deploy {
+        upload
+            .metadata
+            .observability
+            .as_ref()
+            .map(observability_patch)
+    } else {
+        None
+    };
     let now = now_ms();
     let _upload_guard = api.upload_serial.lock().await;
     let worker = match domain::worker_by_name(&api, account, &script) {
@@ -146,7 +152,9 @@ pub(super) async fn upload(
                 .filter(|version| version.deleted_at_ms.is_none())
                 .map(|version| version.id)
                 .collect::<Vec<_>>(),
-            Err(error) => return platform_error(context.request_id(), &error),
+            Err(error) => {
+                return platform_error(context.request_id(), &error);
+            }
         };
         if let Err(cleanup) = repository.delete_worker(
             account,

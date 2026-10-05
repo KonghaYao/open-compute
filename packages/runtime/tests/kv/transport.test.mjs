@@ -1,16 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { importRuntime, moduleUrl } from "../compiled-runtime.mjs";
+import {
+  compileRuntime,
+  importRuntime,
+  moduleUrl,
+} from "../compiled-runtime.mjs";
 
 const base = moduleUrl(
   "export class WorkerEntrypoint { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }",
 );
 const host = moduleUrl(
-  "export const bindingError = code => new Error(code); export const currentStartupGeneration = () => 'generation';",
+  "export const bindingError = code => Object.assign(new Error(code), { stableCode: code }); export const currentStartupGeneration = () => 'generation';",
+);
+const jsonBody = moduleUrl(await compileRuntime("bindings/json-body.ts"));
+const native = moduleUrl(
+  await compileRuntime("kv/native-adapter.ts", {
+    "../bindings/json-body.js": jsonBody,
+  }),
 );
 const { KVNamespace } = await importRuntime("kv/transport.ts", {
   "cloudflare:workers": base,
   "../loader/shared.js": host,
+  "./native-adapter.js": native,
 });
 const contentType = "application/vnd.open-compute.kv.v1+frame";
 const props = {
@@ -25,6 +36,214 @@ const transport = (fetch, permissions = props.permissions) =>
     { props: { ...props, permissions } },
     { BINDING_BACKEND: { fetch }, BINDING_BACKEND_TOKEN: "token" },
   );
+
+test("native KV bulk rejects JSON expansion above the response budget", async () => {
+  const value = "\u0000".repeat(5 * 1024 * 1024);
+  const kv = transport(async () => bulk([{ value, metadata: null }]));
+  const response = await kv.fetch(
+    new Request("https://fake-host/bulk/get", {
+      method: "POST",
+      body: JSON.stringify({ keys: ["control"] }),
+    }),
+  );
+  assert.equal(response.status, 413);
+  assert.equal(response.statusText, "KV_BULK_TOO_LARGE");
+  assert.equal(await response.text(), "");
+});
+
+test("native KV bulk counts escaped UTF-8, JSON containers and metadata at the exact limit", async () => {
+  const maximum = 25 * 1024 * 1024;
+  const key = 'control\n"\\你😀';
+  const special = '\b\t\n\f\r\u0000"\\aé你😀\ud800x\udc00';
+  for (const withMetadata of [false, true]) {
+    const metadata = {
+      nested: [true, false, null, 1.25, { [special]: special }],
+    };
+    const value = (padding) =>
+      withMetadata
+        ? [padding, { special, missing: null }]
+        : padding + '\b\t\n\f\r\u0000"\\aé你😀';
+    const output = (padding) => ({
+      [key]: withMetadata
+        ? { value: value(padding), metadata }
+        : value(padding),
+    });
+    const available = maximum - Buffer.byteLength(JSON.stringify(output("")));
+    const padding =
+      "\u0000".repeat(Math.floor(available / 6)) + "a".repeat(available % 6);
+    for (const extra of ["", "a"]) {
+      const expected = output(padding + extra);
+      const stored = value(padding + extra);
+      const kv = transport(async () =>
+        bulk([
+          {
+            value: withMetadata ? JSON.stringify(stored) : stored,
+            metadata,
+          },
+        ]),
+      );
+      const response = await kv.fetch(
+        new Request("https://fake-host/bulk/get", {
+          method: "POST",
+          body: JSON.stringify({
+            keys: [key],
+            type: withMetadata ? "json" : "text",
+            withMetadata,
+          }),
+        }),
+      );
+      if (extra) {
+        assert.equal(response.status, 413);
+        assert.equal(response.statusText, "KV_BULK_TOO_LARGE");
+        assert.equal(await response.text(), "");
+      } else {
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("content-type"), "application/json");
+        const body = await response.text();
+        assert.equal(Buffer.byteLength(body), maximum);
+        assert.deepEqual(JSON.parse(body), expected);
+      }
+    }
+  }
+});
+
+test("native KV wire reuses authority, streams values and sanitizes failure responses", async () => {
+  const calls = [];
+  const kv = transport(async (url, options) => {
+    const operation = url.split("/").at(-1);
+    if (operation === "put") {
+      const bytes = Buffer.from(await new Response(options.body).arrayBuffer());
+      const length = bytes.readUInt32BE();
+      calls.push({
+        operation,
+        header: JSON.parse(bytes.subarray(4, 4 + length)),
+        value: bytes.subarray(4 + length).toString(),
+      });
+      return new Response(null, { status: 204 });
+    }
+    const input = JSON.parse(options.body);
+    calls.push({ operation, input });
+    if (operation === "get-with-metadata")
+      return input.keys[0] === "missing"
+        ? result(null)
+        : result("value", {
+            owner: "tenant",
+          });
+    if (operation === "get-many")
+      return bulk(
+        input.keys.map((key) =>
+          key === "missing" ? null : { value: '{"v":1}', metadata: { key } },
+        ),
+      );
+    if (operation === "list")
+      return Response.json({
+        keys: [{ name: "key", expiration: null, metadata: { value: 1 } }],
+        list_complete: true,
+        cursor: null,
+      });
+    assert.equal(operation, "delete");
+    return new Response(null, { status: 204 });
+  });
+  const fetch = (path, options) =>
+    kv.fetch(new Request(`https://fake-host${path}`, options));
+  const read = await fetch(
+    "/nested%2F%E4%BD%A0%25?urlencoded=true&cache_ttl=30",
+  );
+  assert.equal(await read.text(), "value");
+  assert.deepEqual(JSON.parse(read.headers.get("cf-kv-metadata")), {
+    owner: "tenant",
+  });
+  assert.deepEqual(calls.at(-1).input, { keys: ["nested/你%"], cacheTtl: 30 });
+  assert.equal((await fetch("/missing?urlencoded=true")).status, 404);
+  assert.equal(
+    (
+      await fetch("/key?urlencoded=true&expiration_ttl=60", {
+        method: "PUT",
+        headers: { "cf-kv-metadata": '{"m":1}' },
+        body: "streamed",
+      })
+    ).status,
+    204,
+  );
+  assert.equal(calls.at(-1).value, "streamed");
+  assert.equal(calls.at(-1).header.expirationTtl, 60);
+  assert.deepEqual(calls.at(-1).header.metadata, { m: 1 });
+  const expiration = Math.floor(Date.now() / 1000) + 120;
+  assert.equal(
+    (
+      await fetch(`/key?urlencoded=true&expiration=${expiration}`, {
+        method: "PUT",
+      })
+    ).status,
+    204,
+  );
+  assert.equal(calls.at(-1).header.expiration, expiration);
+  assert.equal(calls.at(-1).value, "");
+  assert.equal(
+    (await fetch("/key?urlencoded=true", { method: "DELETE" })).status,
+    204,
+  );
+  assert.deepEqual(calls.at(-1).input, { key: "key" });
+  const listed = await (
+    await fetch("/?prefix=k&key_count_limit=7&cursor=c")
+  ).json();
+  assert.equal(listed.keys[0].metadata, '{"value":1}');
+  assert.deepEqual(calls.at(-1).input, { prefix: "k", limit: 7, cursor: "c" });
+  const readMany = (input) =>
+    fetch("/bulk/get", { method: "POST", body: JSON.stringify(input) });
+  assert.deepEqual(
+    await (
+      await readMany({ keys: ["key", "missing"], type: "json", cacheTtl: "30" })
+    ).json(),
+    { key: { v: 1 }, missing: null },
+  );
+  assert.deepEqual(
+    await (
+      await readMany({ keys: ["key", "missing"], withMetadata: true })
+    ).json(),
+    { key: { value: '{"v":1}', metadata: { key: "key" } }, missing: null },
+  );
+  for (const input of [
+    null,
+    {},
+    { keys: [4] },
+    { keys: ["k"], type: "stream" },
+    { keys: ["k"], withMetadata: "yes" },
+    { keys: [] },
+    { keys: ["k"], cacheTtl: "bad" },
+  ]) {
+    assert.equal((await readMany(input)).status, 400);
+  }
+  assert.equal((await readMany({ keys: ["x".repeat(65 * 1024)] })).status, 400);
+  assert.equal((await fetch("/key")).status, 400);
+  assert.equal(
+    (await fetch("/key?urlencoded=true", { method: "PATCH" })).status,
+    400,
+  );
+  assert.equal(
+    (await kv.fetch(new Request("https://other/key?urlencoded=true"))).status,
+    400,
+  );
+  const failed = transport(async () => {
+    throw new Error("private token=hidden");
+  });
+  const sanitized = await failed.fetch(
+    new Request("https://fake-host/key?urlencoded=true"),
+  );
+  assert.equal(sanitized.statusText, "KV_INTERNAL_PROTOCOL_ERROR");
+  assert.equal(await sanitized.text(), "");
+  const uppercase = transport(async () => {
+    throw new Error("KV_PRIVATE_SECRET");
+  });
+  assert.equal(
+    (
+      await uppercase.fetch(
+        new Request("https://fake-host/key?urlencoded=true"),
+      )
+    ).statusText,
+    "KV_INTERNAL_PROTOCOL_ERROR",
+  );
+});
 
 function header(valueLength, metadata = null) {
   const encoded =
@@ -590,7 +809,11 @@ test("KV denies undeclared permissions and exposes no echo extension", async () 
   await assert.rejects(kv.put("key", "value"), /BINDING_PERMISSION_DENIED/);
   await assert.rejects(kv.delete("key"), /BINDING_PERMISSION_DENIED/);
   await assert.rejects(kv.list(), /BINDING_PERMISSION_DENIED/);
-  await assert.rejects(kv.fetch(), /BINDING_PERMISSION_DENIED/);
+  const denied = await kv.fetch(
+    new Request("https://fake-host/key?urlencoded=true"),
+  );
+  assert.equal(denied.status, 403);
+  assert.equal(denied.statusText, "BINDING_PERMISSION_DENIED");
   assert.equal(kv.echoStream, undefined);
   const failed = transport(
     async () =>
@@ -602,4 +825,161 @@ test("KV denies undeclared permissions and exposes no echo extension", async () 
   await assert.rejects(failed.put("key", "value"), {
     message: "KV_RESULT_UNKNOWN",
   });
+});
+
+test("native KV preserves sanitized resource authority errors", async () => {
+  const kv = transport(
+    async () =>
+      new Response("private resource details", {
+        status: 503,
+        headers: { "x-open-compute-error-code": "RESOURCE_UNAVAILABLE" },
+      }),
+  );
+  const response = await kv.fetch(
+    new Request("https://fake-host/key?urlencoded=true"),
+  );
+  assert.equal(response.status, 500);
+  assert.equal(response.statusText, "RESOURCE_UNAVAILABLE");
+  assert.equal(await response.text(), "");
+});
+
+test("native KV denied PUT drains the upload and leaves storage untouched", async () => {
+  const kv = transport(
+    async () => {
+      throw new Error("denied PUT must not reach storage");
+    },
+    { read: true, write: false },
+  );
+  const direct = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array([1, 2, 3]));
+      controller.close();
+    },
+  });
+  await assert.rejects(kv.put("key", direct), /BINDING_PERMISSION_DENIED/);
+  assert.equal(direct.locked, false);
+  const request = new Request("https://fake-host/key?urlencoded=true", {
+    method: "PUT",
+    body: "denied",
+  });
+  const response = await kv.fetch(request);
+  assert.equal(response.status, 403);
+  assert.equal(response.statusText, "BINDING_PERMISSION_DENIED");
+  assert.equal(request.bodyUsed, true);
+  assert.equal(request.body.locked, false);
+  assert.equal(await response.text(), "");
+
+  let cancelled = false;
+  const oversized = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array(25 * 1024 * 1024 + 1));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const overflow = new Request("https://fake-host/key?urlencoded=true", {
+    method: "PUT",
+    body: oversized,
+    duplex: "half",
+  });
+  assert.equal((await kv.fetch(overflow)).status, 403);
+  assert.equal(cancelled, true);
+  assert.equal(overflow.body.locked, false);
+});
+
+test("native KV translates an invalid authority cursor to the native error", async () => {
+  const kv = transport(
+    async () =>
+      new Response("private cursor details", {
+        status: 400,
+        headers: { "x-open-compute-error-code": "KV_CURSOR_INVALID" },
+      }),
+  );
+  const response = await kv.fetch(
+    new Request("https://fake-host/?cursor=tampered"),
+  );
+  assert.equal(response.status, 400);
+  assert.equal(response.statusText, "Invalid cursor");
+  assert.equal(await response.text(), "");
+});
+
+test("native KV rejects invalid wire inputs with public protocol errors", async () => {
+  const kv = transport(async () => {
+    throw new Error("invalid input must not reach the authority");
+  });
+  const cases = [
+    ["/bulk/get", { keys: [] }, 400, "You must request a minimum of 1 key"],
+    [
+      "/bulk/get",
+      { keys: Array(101).fill("k") },
+      400,
+      "You can request a maximum of 100 keys",
+    ],
+    ["/bulk/get", { keys: ["."] }, 400, "Key name . is not legal"],
+    [
+      "/bulk/get",
+      { keys: ["x".repeat(513)] },
+      414,
+      "Encoded length of 513 is too long",
+    ],
+    [
+      "/bulk/get",
+      { keys: ["key"], type: "stream" },
+      400,
+      '"stream" is not a valid type. Use "json" or "text"',
+    ],
+    [
+      "/bulk/get",
+      { keys: ["key"], cacheTtl: 29 },
+      400,
+      "Invalid cache_ttl of 29. Cache TTL must be at least 30.",
+    ],
+    [
+      "/key?urlencoded=true&cache_ttl=29",
+      undefined,
+      400,
+      "Invalid cache_ttl of 29. Cache TTL must be at least 30.",
+    ],
+    [
+      "/?key_count_limit=1001",
+      undefined,
+      400,
+      "Invalid key_count_limit of 1001. Please specify integer less than 1000.",
+    ],
+    [
+      "/%ED%A0%80?urlencoded=true",
+      undefined,
+      400,
+      "Could not URL-decode key name",
+    ],
+  ];
+  for (const [path, input, status, message] of cases) {
+    const response = await kv.fetch(
+      new Request(
+        `https://fake-host${path}`,
+        input === undefined
+          ? {}
+          : { method: "POST", body: JSON.stringify(input) },
+      ),
+    );
+    assert.equal(response.status, status, path);
+    assert.equal(response.statusText, message, path);
+    assert.equal(await response.text(), "", path);
+  }
+  const request = new Request(
+    "https://fake-host/key?urlencoded=true&expiration_ttl=59",
+    {
+      method: "PUT",
+      body: "value",
+    },
+  );
+  const response = await kv.fetch(request);
+  assert.equal(response.status, 400);
+  assert.equal(
+    response.statusText,
+    "Invalid expiration_ttl of 59. Expiration TTL must be at least 60.",
+  );
+  assert.equal(request.bodyUsed, true);
+  assert.equal(await response.text(), "");
 });

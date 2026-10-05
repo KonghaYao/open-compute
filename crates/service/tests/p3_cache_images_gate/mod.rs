@@ -67,10 +67,43 @@ export default class Main extends WorkerEntrypoint {
       });
     }
     if (path === "/api-put") {
+      if (!(caches instanceof CacheStorage) || !(caches.default instanceof Cache)) throw new Error("native Cache unavailable");
       await caches.default.put("https://cache-key.example/value", new Response(`stored-${LABEL}`, {
         headers: { "cache-control": "max-age=120", "cache-tag": "explicit", "etag": "\"v1\"" },
       }));
       return new Response("put");
+    }
+    if (path === "/api-encoding-put") {
+      const key = "https://cache-key.example/encoded";
+      const response = new Response(`gzip-${LABEL}`, {
+        headers: { "cache-control": "max-age=120", "content-encoding": "gzip" },
+      });
+      const storing = caches.default.put(key, response);
+      if (!response.bodyUsed) throw new Error("native Cache did not consume the body");
+      await storing;
+      const named = await caches.open("reports:中文 /");
+      const stream = new ReadableStream({ start(controller) {
+        controller.enqueue(new TextEncoder().encode("stream-"));
+        controller.enqueue(new TextEncoder().encode(LABEL));
+        controller.close();
+      }});
+      await named.put(key, new Response(stream, { headers: { "cache-control": "max-age=120" } }));
+      return new Response("encoded");
+    }
+    if (path === "/api-encoding-match") {
+      const key = "https://cache-key.example/encoded";
+      const named = await caches.open("reports:中文 /");
+      const cached = await caches.default.match(key);
+      const scoped = await named.match(key);
+      if (!cached || !scoped) throw new Error("encoded cache missing");
+      for (const name of cached.headers.keys()) {
+        if (name.startsWith("x-open-compute-")) throw new Error("private cache metadata exposed");
+      }
+      return Response.json({ default: await cached.text(), named: await scoped.text() });
+    }
+    if (path === "/automatic-encoding") {
+      const response = await this.ctx.exports.Named.fetch("https://ctx.example/gzip");
+      return Response.json({ body: await response.text(), status: response.headers.get("cf-cache-status") });
     }
     if (path === "/api-match") {
       const value = await caches.default.match("https://cache-key.example/value");
@@ -111,7 +144,10 @@ export default class Main extends WorkerEntrypoint {
   rpcValue() { rpcCount += 1; return rpcCount; }
 }
 export class Named extends WorkerEntrypoint {
-  fetch() {
+  fetch(request) {
+    if (new URL(request.url).pathname === "/gzip") {
+      return new Response(`automatic-gzip-${LABEL}`, { headers: { "cache-control": "max-age=120", "content-encoding": "gzip" } });
+    }
     namedCount += 1;
     return new Response(`${LABEL}-named:${namedCount}`, { headers: { "cache-control": "max-age=120" } });
   }
@@ -403,6 +439,7 @@ async fn wait_cache_entries(
     worker: open_compute_core::WorkerId,
     minimum: u64,
     timeout: Duration,
+    metrics: &open_compute_service::metrics::MetricsRegistry,
 ) {
     let deadline = Instant::now() + timeout;
     loop {
@@ -412,7 +449,16 @@ async fn wait_cache_entries(
         if stats.entries >= minimum {
             return;
         }
-        assert!(Instant::now() < deadline, "cache store did not commit");
+        assert!(
+            Instant::now() < deadline,
+            "cache store did not commit: stats={stats:?}; metrics={}",
+            metrics
+                .render(&open_compute_core::PlatformStatus::starting())
+                .lines()
+                .filter(|line| line.starts_with("response_cache_"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }

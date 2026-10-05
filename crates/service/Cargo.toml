@@ -22,6 +22,7 @@ test-support = [
 ]
 
 [dependencies]
+semver.workspace = true
 axum.workspace = true
 base64.workspace = true
 blake3.workspace = true
@@ -73,6 +74,8 @@ tracing-subscriber.workspace = true
 url.workspace = true
 uuid.workspace = true
 webpki-root-certs.workspace = true
+
+zeroize.workspace = true
 
 [build-dependencies]
 hex.workspace = true
@@ -157,8 +160,43 @@ path = "tests/p3_services_product/mod.rs"
 required-features = ["test-support"]
 
 [[test]]
-name = "p6_wrangler_resource_gate"
-path = "tests/p6_wrangler_resource_gate/mod.rs"
+name = "p6_cf_resource_gate"
+path = "tests/p6_cf_resource_gate/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_main"
+path = "tests/p21_python_main/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_frameworks"
+path = "tests/p21_python_frameworks/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_services"
+path = "tests/p21_python_services/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_queues"
+path = "tests/p21_python_queues/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_durable_objects"
+path = "tests/p21_python_durable_objects/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_workflows"
+path = "tests/p21_python_workflows/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_runtime"
+path = "tests/p21_python_runtime/mod.rs"
 required-features = ["test-support"]
 
 [[test]]
@@ -168,3 +206,10 @@ required-features = ["test-support"]
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "install-upgrade-fixture"
+path = "src/bin/install_upgrade_fixture.rs"
+required-features = ["test-support"]
+test = false
+bench = false

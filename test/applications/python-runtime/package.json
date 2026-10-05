@@ -1,0 +1,13 @@
+{
+  "name": "@open-compute/python-runtime-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run typecheck && node ../../../scripts/build-python.ts . --assets-directory public",
+    "typecheck": "WRANGLER_CACHE_DIR=../../../.temp/cf-cli-cache/python-runtime MINIFLARE_CACHE_DIR=../../../.temp/cf-cli-cache/python-runtime cf workers types && tsc --project tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "cf": "catalog:",
+    "typescript": "catalog:"
+  }
+}

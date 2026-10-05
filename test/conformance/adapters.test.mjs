@@ -97,23 +97,25 @@ test("portable fixture schema is strict and its digest covers the whole fixture"
     {},
     { EVENTS: "portable-queue", FLOW: "portable-workflow" },
   );
-  assert.equal(ocProduct.workers_dev, false);
-  assert.deepEqual(ocProduct.durable_objects, {
-    bindings: [{ name: "OBJECTS", class_name: "PortableObject" }],
-  });
-  assert.deepEqual(ocProduct.migrations, [
-    { tag: "v1", new_sqlite_classes: ["PortableObject"] },
-  ]);
-  assert.deepEqual(ocProduct.queues, {
-    producers: [{ binding: "EVENTS", queue: "portable-queue" }],
-  });
-  assert.deepEqual(ocProduct.workflows, [
-    {
-      binding: "FLOW",
-      name: "portable-workflow",
-      class_name: "PortableWorkflow",
+  assert.equal(ocProduct.worker.workersDev, false);
+  assert.deepEqual(ocProduct.worker.env, {
+    OBJECTS: {
+      type: "durable-object",
+      worker: "portable-product",
+      exportName: "PortableObject",
     },
-  ]);
+    EVENTS: { type: "queue", name: "portable-queue" },
+    FLOW: {
+      type: "workflow",
+      worker: "portable-product",
+      exportName: "PortableWorkflow",
+      name: "portable-workflow",
+    },
+  });
+  assert.deepEqual(ocProduct.worker.exports, {
+    PortableObject: { type: "durable-object", storage: "sqlite" },
+    PortableWorkflow: { type: "workflow", name: "portable-workflow" },
+  });
   const cfProduct = cloudflareProject(
     loadedProductBound,
     "portable-product",
@@ -121,23 +123,9 @@ test("portable fixture schema is strict and its digest covers the whole fixture"
     {},
     { EVENTS: "portable-queue", FLOW: "portable-workflow" },
   );
-  assert.deepEqual(cfProduct.durable_objects, {
-    bindings: [{ name: "OBJECTS", class_name: "PortableObject" }],
-  });
-  assert.deepEqual(cfProduct.migrations, [
-    { tag: "v1", new_sqlite_classes: ["PortableObject"] },
-  ]);
-  assert.deepEqual(cfProduct.queues, {
-    producers: [{ binding: "EVENTS", queue: "portable-queue" }],
-  });
-  assert.deepEqual(cfProduct.workflows, [
-    {
-      binding: "FLOW",
-      name: "portable-workflow",
-      class_name: "PortableWorkflow",
-    },
-  ]);
-  assert.equal(cfProduct.workers_dev, true);
+  assert.deepEqual(cfProduct.worker.env, ocProduct.worker.env);
+  assert.deepEqual(cfProduct.worker.exports, ocProduct.worker.exports);
+  assert.equal(cfProduct.worker.workersDev, true);
   const missingClass = await fixture({
     bindings: { OBJECTS: { type: "do_namespace" } },
     cleanup: {
@@ -175,7 +163,7 @@ test("Worker Loader uses a native binding without provisioned resource identity 
       "dynamic-parent",
       "0123456789abcdef0123456789abcdef",
     );
-    assert.deepEqual(config.worker_loaders, [{ binding: "LOADER" }]);
+    assert.deepEqual(config.worker.env.LOADER, { type: "worker-loader" });
     assert.throws(
       () =>
         project(loaded, "dynamic-parent", "0123456789abcdef0123456789abcdef", {

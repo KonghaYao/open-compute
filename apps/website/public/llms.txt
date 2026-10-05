@@ -32,21 +32,21 @@ Full setup guide: https://open-compute.dev/docs/get-started/
 
 ## Develop and deploy
 
-Keep Wrangler as a project-local dependency. Use the package manager already selected by the project; do not assume Bun.
+Keep cf as a project-local dependency. Use the package manager already selected by the project; do not assume Bun.
 
-Develop locally with Wrangler:
+Develop locally with cf:
 
 ```sh
-npm exec -- wrangler dev
-# or: pnpm exec wrangler dev
-# or: bun run wrangler dev
+npm exec -- cf dev
+# or: pnpm exec cf dev
+# or: bun run cf dev
 ```
 
 Deploy to open-compute and inspect logs:
 
 ```sh
-ocd wrangler deploy
-ocd wrangler tail
+ocd cf deploy --mode production
+# Live logs: use Dashboard Live Tail
 ```
 
 Native Dynamic Worker Loader, explicit child limits, and binding forwarding are supported. Full Workers for Platforms and dispatch namespaces are not.

@@ -41,7 +41,7 @@
       "mode": "build",
       "repetition": "ONCE",
       "cloudflareSupportCategory": "App Router and Pages Router",
-      "fixture": "test/applications/vinext/wrangler.jsonc",
+      "fixture": "test/applications/vinext/cloudflare.config.ts",
       "requestSequence": [
         "import the generated locator and formal Worker config without rebundling"
       ],
@@ -63,7 +63,7 @@
       "mode": "build",
       "repetition": "ONCE",
       "cloudflareSupportCategory": "Cloudflare bindings",
-      "fixture": "test/applications/vinext/wrangler.jsonc",
+      "fixture": "test/applications/vinext/cloudflare.config.ts",
       "requestSequence": [
         "compare generated logical binding declarations with local resource mappings"
       ],

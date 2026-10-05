@@ -26,17 +26,23 @@ export default {
 } satisfies ExportedHandler<{ BUCKET: R2Bucket }>;
 ```
 
-Bind an existing logical bucket with Wrangler's standard R2 field:
+Bind an existing logical bucket with cf's standard R2 field:
 
-```json
-{
-  "name": "r2-app",
-  "main": "src/index.ts",
-  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "files" }]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "r2-app",
+    entrypoint: "src/index.ts",
+    env: {
+      BUCKET: bindings.r2({ name: "files" }),
+    },
+  },
+});
 ```
 
-`bucket_name` names an existing logical bucket in the account. Binding grammar: [bindings](/docs/workers/configuration/bindings/). Use pinned Wrangler or the official SDK for bucket and object operations.
+`bucket_name` names an existing logical bucket in the account. Binding grammar: [bindings](/docs/workers/configuration/bindings/). Use pinned cf or the official SDK for bucket and object operations.
 
 ## Compatibility
 

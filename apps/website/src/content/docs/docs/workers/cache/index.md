@@ -4,15 +4,27 @@ title: "Workers Cache"
 
 HTTP response cache driven by deployment config, plus the tenant Cache API.
 
-```json
-{
-  "name": "cached",
-  "main": "src/index.ts",
-  "cache": { "enabled": true, "cross_version_cache": false },
-  "exports": {
-    "Admin": { "type": "worker", "cache": { "enabled": false } }
-  }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "cached",
+    entrypoint: "src/index.ts",
+    cache: {
+      enabled: true,
+      cross_version_cache: false,
+    },
+    exports: {
+      Admin: {
+        type: "worker",
+        cache: {
+          enabled: false,
+        },
+      },
+    },
+  },
+});
 ```
 
 `cache.enabled` turns on the default HTTP cache. `cross_version_cache` allows sharing across deployment versions; isolation is the default. `exports.<name>` may only override cache policy for a named Worker entrypoint. Automatic caching requires an explicit `s-maxage` or `max-age`.

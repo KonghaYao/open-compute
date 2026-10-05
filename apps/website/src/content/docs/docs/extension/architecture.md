@@ -9,7 +9,7 @@ An extension call has four participants and two transports. `ocd` authenticates 
 
 | Participant | Role                                                                                                                                                               |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| User Worker | Declares `services` + `props`. Calls facade RPC such as `env.FILES.list()`. Never sees `HOST`.                                                                     |
+| User Worker | Declares `bindings.worker` + `props`. Calls facade RPC such as `env.FILES.list()`. Never sees `HOST`.                                                              |
 | Facade      | Operator JavaScript loaded from `extension.toml` `[worker].main`. Reads `this.ctx.props`. Calls `env.HOST`.                                                        |
 | workerd     | The target instance's supervised pinned runtime. Holds the private `HostExtensionFactory`, broker fd 4, and the session Cap'n Proto client.                        |
 | `ocd`       | Loads the extension when the instance starts, issues session identity, brokers one socketpair, waits for Provider ACK, then leaves the data path.                  |

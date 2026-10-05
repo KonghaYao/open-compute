@@ -27,6 +27,7 @@ const {
   runWithOutputGate,
   currentOutputGate,
   FLUSH_OUTPUT,
+  registerOutputPublisher,
   FINALIZE_OUTPUT,
 } = await importRuntime("durable-objects/output-gate.ts", {
   "node:async_hooks": asyncHooks,
@@ -128,6 +129,12 @@ function sqlStorage() {
   };
 }
 
+async function recover(gate, env) {
+  for (const binding of Object.values(env))
+    registerOutputPublisher(binding, binding);
+  return gate.recover(env);
+}
+
 test("awaited transaction mutation stages immediately and commit publishes once", async () => {
   const storage = sqlStorage();
   const gate = new DoOutputGate(storage);
@@ -218,7 +225,7 @@ test("recover publishes remaining committed intents through the named publisher"
       },
     },
   };
-  await gate.recover(env);
+  await recover(gate, env);
   assert.deepEqual(flushed, [[9, 9]]);
   assert.equal((storage._tables.get("output") ?? []).length, 0);
 });
@@ -246,7 +253,7 @@ test("failed publish records retry evidence and recovery keeps the operation ide
   assert.equal(intent.attempt_count, 1);
   assert.equal(intent.last_error, "QUEUE_STORAGE_UNAVAILABLE");
   let recoveredOperation;
-  await gate.recover({
+  await recover(gate, {
     EVENTS: {
       async [FLUSH_OUTPUT](_payload, operationId) {
         recoveredOperation = operationId;
@@ -274,7 +281,7 @@ test("malformed committed intent fails closed and remains retryable", async () =
     },
   ]);
   await assert.rejects(
-    gate.recover({ EVENTS: { async [FLUSH_OUTPUT]() {} } }),
+    recover(gate, { EVENTS: { async [FLUSH_OUTPUT]() {} } }),
     /DO_OUTPUT_GATE_UNPUBLISHABLE/,
   );
   const [intent] = storage._tables.get("output");
@@ -328,7 +335,7 @@ test("finalize failure recovery never republishes an acknowledged output", async
   const [published] = storage._tables.get("output");
   assert.equal(published.state, "published");
   assert.equal(published.attempt_count, 1);
-  await gate.recover({
+  await recover(gate, {
     EVENTS: {
       async [FLUSH_OUTPUT]() {
         publishes += 1;
@@ -340,5 +347,62 @@ test("finalize failure recovery never republishes an acknowledged output", async
   });
   assert.equal(publishes, 1);
   assert.equal(finalizes, 2);
+  assert.equal((storage._tables.get("output") ?? []).length, 0);
+});
+
+test("tenant async-context prototype edits cannot observe the private output gate", async () => {
+  const { AsyncLocalStorage } = await import(asyncHooks);
+  const getStore = AsyncLocalStorage.prototype.getStore;
+  const run = AsyncLocalStorage.prototype.run;
+  const gate = new DoOutputGate(sqlStorage());
+  const observed = [];
+  try {
+    AsyncLocalStorage.prototype.getStore = function () {
+      observed.push(this);
+      return getStore.call(this);
+    };
+    AsyncLocalStorage.prototype.run = function (store, fn) {
+      observed.push(store);
+      return run.call(this, store, fn);
+    };
+    runWithOutputGate(gate, () => assert.equal(currentOutputGate(), gate));
+    assert.equal(currentOutputGate(), undefined);
+  } finally {
+    AsyncLocalStorage.prototype.getStore = getStore;
+    AsyncLocalStorage.prototype.run = run;
+  }
+  assert.deepEqual(observed, []);
+});
+
+test("recovery rejects tenant forged publisher symbols and uses only the registered authority", async () => {
+  const storage = sqlStorage();
+  const gate = new DoOutputGate(storage);
+  await assert.rejects(
+    gate.schedule("queue", "EVENTS", new Uint8Array([1]), async () => {
+      throw Error("crash");
+    }),
+  );
+  let forged = 0;
+  const fake = {
+    async [FLUSH_OUTPUT]() {
+      ++forged;
+    },
+  };
+  await assert.rejects(
+    gate.recover({ EVENTS: fake }),
+    /DO_OUTPUT_GATE_UNPUBLISHABLE/,
+  );
+  assert.equal(forged, 0);
+  let actual = 0;
+  const binding = {};
+  registerOutputPublisher(binding, {
+    async [FLUSH_OUTPUT]() {
+      ++actual;
+    },
+  });
+  binding[FLUSH_OUTPUT] = fake[FLUSH_OUTPUT];
+  await gate.recover({ EVENTS: binding });
+  assert.equal(actual, 1);
+  assert.equal(forged, 0);
   assert.equal((storage._tables.get("output") ?? []).length, 0);
 });

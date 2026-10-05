@@ -2,22 +2,28 @@
 title: "Configuration"
 ---
 
-`wrangler@4.143.0/config-schema.json` is the project grammar authority. `ocd wrangler` does not parse the project. Use project-local Wrangler for config resolution and type generation.
+Official `cloudflare.config.ts` / `cf/config` owns configuration. `ocd cf` checks files and selects a target; it does not parse TypeScript or bindings.
 
-```json
-{
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "app",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-09-08",
-  "workers_dev": false,
-  "limits": { "cpu_ms": 60000, "subrequests": 20000 },
-  "vars": { "LOG_LEVEL": "info" }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "app",
+    entrypoint: "src/index.ts",
+    compatibilityDate: "2026-09-08",
+    workersDev: false,
+    limits: {
+      cpuMs: 60000,
+      subrequests: 20000,
+    },
+    env: {
+      LOG_LEVEL: bindings.text("info"),
+    },
+  },
+});
 ```
 
-Supported fields include standard `name`, `account_id`, `main`, `compatibility_date`, `compatibility_flags`, `limits`, `env`, build fields, `vars`, product binding arrays, Service Bindings, Static Assets, cron triggers, Images, Workers AI, Version Metadata, cache configuration, and the local-only `secrets.required` declaration. A field passing Wrangler schema validation is not sufficient by itself: unsupported server capabilities fail closed during API or upload validation.
+Declare variables and bindings with `worker.env` / `bindings`, and DO / Workflow lifecycle with `worker.exports`. Vite owns bundling, assets directories, and source maps. Official Build Output lives under `.cloudflare/`; there is no old deployment-config redirect.
 
-Framework adapters keep the user `wrangler.jsonc` and emit the standard `.wrangler/deploy/config.json` redirect to a generated Wrangler config. Project-local Wrangler owns type generation and deployment.
-
-See [resource limits](/docs/platform/limits/), [routing](/docs/workers/configuration/routing/), [Bindings](/docs/workers/configuration/bindings/), [compatibility dates](/docs/workers/configuration/compatibility-dates/), [compatibility flags](/docs/workers/configuration/compatibility-flags/), [Cron](/docs/workers/configuration/cron-triggers/), [variables](/docs/workers/configuration/environment-variables/), and [secrets](/docs/workers/configuration/secrets/).
+A type or configuration accepted by the official tools does not imply OCD supports the product. Unsupported bindings are rejected at the upload authority.

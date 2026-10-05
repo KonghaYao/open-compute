@@ -57,11 +57,15 @@ pub(crate) fn router() -> Router<HttpState> {
         )
         .route(
             "/accounts/{account}/workers/workers/{worker}",
-            get(get_beta_worker),
+            get(get_beta_worker).delete(delete_beta_worker),
+        )
+        .route(
+            "/accounts/{account}/workers/workers/{worker}/versions",
+            get(list_beta_versions),
         )
         .route(
             "/accounts/{account}/workers/workers/{worker}/versions/{version}",
-            axum::routing::delete(delete_beta_version),
+            get(get_beta_version).delete(delete_beta_version),
         )
         .route(
             "/accounts/{account}/workers/scripts/{script}/deployments",
@@ -227,7 +231,7 @@ async fn get_service_metadata(
                 script: ServiceScript {
                     tag: authority.public_worker_tag(worker.id),
                     tags: Vec::new(),
-                    last_deployed_from: "wrangler",
+                    last_deployed_from: "open-compute",
                     migration_tag:
                         open_compute_storage::durable_objects::DurableObjectRepository::new(
                             &api.storage,
@@ -323,7 +327,7 @@ impl VersionItem {
             metadata: VersionMetadata {
                 created_on: created.clone(),
                 modified_on: created,
-                source: "wrangler",
+                source: "open-compute",
                 has_preview: false,
             },
             annotations: snapshot.annotations.clone(),
@@ -332,7 +336,7 @@ impl VersionItem {
                     .map_err(|error| V4Error::from(&error))?,
                 script: VersionScript {
                     etag: hex::encode(version.worker_code_sha256),
-                    last_deployed_from: "wrangler",
+                    last_deployed_from: "open-compute",
                 },
                 script_runtime: VersionScriptRuntime {
                     compatibility_date: version.compatibility_date.clone(),
@@ -367,7 +371,7 @@ impl VersionShort {
             metadata: VersionMetadata {
                 created_on: created.clone(),
                 modified_on: created,
-                source: "wrangler",
+                source: "open-compute",
                 has_preview: false,
             },
             annotations,
@@ -397,7 +401,7 @@ impl DeploymentItem {
             id: record.id,
             source: match record.source {
                 DeploymentSource::ScriptUpload => "script_upload",
-                DeploymentSource::VersionsApi => "api",
+                DeploymentSource::VersionsApi => "open-compute",
                 DeploymentSource::Rollback => "rollback",
                 DeploymentSource::System => "system",
             },

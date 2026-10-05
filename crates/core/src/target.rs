@@ -1,4 +1,4 @@
-//! Validated values used by the per-user Wrangler target registry.
+//! Validated values used by the per-user cf CLI target registry.
 
 use crate::{ErrorCode, PlatformError};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

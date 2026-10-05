@@ -1,3 +1,5 @@
+import wrappedBinding from "cloudflare-internal:wrapped-binding";
+
 interface AssetRequestWire {
   readonly url: string;
   readonly method: string;
@@ -9,10 +11,11 @@ interface AssetTransport {
 }
 
 /** Tenant-visible Fetcher facade backed by one version-scoped trusted transport. */
-export class AssetsBinding {
+export class Fetcher extends wrappedBinding.WrappedBinding {
   readonly #transport: AssetTransport;
 
   constructor(transport: unknown) {
+    super(transport);
     if (
       !transport ||
       typeof transport !== "object" ||
@@ -31,4 +34,9 @@ export class AssetsBinding {
       headers: [...request.headers],
     });
   }
+}
+
+/** Construct the config-owned Assets binding from its scoped native Fetcher. */
+export default function assetsBinding(env: { fetcher: unknown }): Fetcher {
+  return new Fetcher(env.fetcher);
 }

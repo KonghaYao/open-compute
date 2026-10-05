@@ -79,13 +79,13 @@ export type OpenComputeBinaryBody =
       arrayBuffer(): Promise<ArrayBuffer>;
     };
 
-/** Native Dynamic Worker Loader binding accepted by open-compute and Wrangler. */
+/** Native Dynamic Worker Loader upload binding. */
 export type OpenComputeWorkerLoaderBinding = {
   readonly type: "worker_loader";
   readonly name: string;
 };
 
-/** Artifacts binding wire supported by Wrangler and open-compute uploads. */
+/** Artifacts upload binding. */
 export type OpenComputeArtifactsBinding = {
   readonly type: "artifacts";
   readonly name: string;
@@ -282,7 +282,7 @@ export type CacheStatus = {
 
 export type Capabilities = {
   readonly release: string;
-  readonly wrangler_version: "4.143.0";
+  readonly cf_version: "1.0.0-beta.12";
   readonly compatibility: {
     readonly validation: "workerd_code_version";
     readonly binary_maximum_date: string;
@@ -1313,11 +1313,14 @@ export interface OpenComputeWorkersBetaNode {
 
 export interface OpenComputeWorkersBetaWorkersNode {
   readonly versions: OpenComputeWorkersBetaWorkersVersionsNode;
+  readonly delete: BaseWorkers["delete"];
   readonly get: BaseWorkers["get"];
 }
 
 export interface OpenComputeWorkersBetaWorkersVersionsNode {
   readonly delete: BaseVersions["delete"];
+  readonly get: BaseVersions["get"];
+  readonly list: BaseVersions["list"];
 }
 
 export interface OpenComputeWorkersObservabilityNode {
@@ -2048,7 +2051,14 @@ export function buildFacade(transport: BaseCloudflare): OpenComputeSurface {
             delete: workersbetaworkersversions.delete.bind(
               workersbetaworkersversions,
             ),
+            get: workersbetaworkersversions.get.bind(
+              workersbetaworkersversions,
+            ),
+            list: workersbetaworkersversions.list.bind(
+              workersbetaworkersversions,
+            ),
           },
+          delete: workersbetaworkers.delete.bind(workersbetaworkers),
           get: workersbetaworkers.get.bind(workersbetaworkers),
         },
       },
@@ -2401,11 +2411,17 @@ export type {
   UploadCreateResponse as WorkersAssetsUploadUploadCreateResponse,
 } from "cloudflare/resources/workers/assets/upload";
 export type {
+  Version,
   VersionDeleteParams,
   VersionDeleteResponse,
+  VersionsV4PagePaginationArray,
+  VersionGetParams as WorkersBetaWorkersVersionsVersionGetParams,
+  VersionListParams as WorkersBetaWorkersVersionsVersionListParams,
 } from "cloudflare/resources/workers/beta/workers/versions";
 export type {
   Worker,
+  WorkerDeleteParams,
+  WorkerDeleteResponse,
   WorkerGetParams,
 } from "cloudflare/resources/workers/beta/workers/workers";
 export type {

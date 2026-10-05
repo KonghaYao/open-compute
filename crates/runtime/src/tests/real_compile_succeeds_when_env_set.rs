@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn real_compile_succeeds_when_env_set() {
     let path = std::env::var_os("OPEN_COMPUTE_TEST_WORKERD")
-        .expect("OPEN_COMPUTE_TEST_WORKERD must name the verified stock runtime");
+        .expect("OPEN_COMPUTE_TEST_WORKERD must name the verified pinned runtime");
     let binary = PathBuf::from(path);
     let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../packages/runtime")
@@ -41,6 +41,39 @@ async fn real_compile_succeeds_when_env_set() {
     let mut bytes = Vec::new();
     std::io::Read::read_to_end(&mut file, &mut bytes).unwrap();
     assert!(!bytes.is_empty());
+    assert!(
+        bytes
+            .windows(b"do-storage".len())
+            .any(|window| window == b"do-storage")
+    );
+    let mut prepare_request = compile_req(
+        &runtime,
+        &lock_path,
+        &assets,
+        &data,
+        &platform,
+        &token,
+        &redactor,
+        Duration::from_secs(20),
+    );
+    prepare_request.role = crate::ConfigRole::PythonPreparation;
+    let prepared = compile_static_config(prepare_request)
+        .await
+        .expect("real prepare compile");
+    let prepared_bytes = prepared.read_bytes().unwrap();
+    assert_ne!(prepared.digest(), compiled.digest());
+    assert_ne!(prepared_bytes, bytes);
+    assert!(
+        !prepared_bytes
+            .windows(b"do-storage".len())
+            .any(|window| window == b"do-storage")
+    );
+    assert!(
+        prepared_bytes
+            .windows(b"do-router".len())
+            .any(|window| window == b"do-router")
+    );
+    assert_eq!(compiled.read_bytes().unwrap(), bytes);
     assert!(!format!("{compiled:?}").contains(TOKEN));
     assert!(!compiled.to_string().contains(TOKEN));
     let err = open_compute_core::PlatformError::new(

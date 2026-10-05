@@ -2,12 +2,9 @@
 
 use super::*;
 
-pub(super) struct AttemptArgs {
-    pub(super) compiler: Arc<dyn ConfigCompiler>,
+pub(super) struct ChildStartOptions {
     pub(super) runtime: VerifiedRuntime,
     pub(super) token: SecretString,
-    pub(super) redactor: Redactor,
-    pub(super) startup_id: StartupId,
     pub(super) startup: Duration,
     pub(super) owners: OwnerRegistry,
     pub(super) external_services: Arc<[ExternalServiceAddress]>,
@@ -17,26 +14,15 @@ pub(super) struct AttemptArgs {
 }
 
 pub(super) async fn run_attempt(
-    args: AttemptArgs,
+    compiler: Arc<dyn ConfigCompiler>,
+    startup_id: StartupId,
+    options: ChildStartOptions,
     mut cancel: oneshot::Receiver<()>,
 ) -> AttemptOutcome {
-    let AttemptArgs {
-        compiler,
-        runtime,
-        token,
-        redactor,
-        startup_id,
-        startup,
-        owners,
-        external_services,
-        directory_services,
-        lease_path,
-        host_extension_fd,
-    } = args;
     let compiled = tokio::select! {
         biased;
         _ = &mut cancel => return AttemptOutcome::Cancelled,
-        compiled = compiler.compile(token.clone(), startup_id) => compiled,
+        compiled = compiler.compile(options.token.clone(), startup_id) => compiled,
     };
     let compiled = match compiled {
         Ok(c) => c,
@@ -49,18 +35,31 @@ pub(super) async fn run_attempt(
             });
         }
     };
+    spawn_ready(options, compiled, cancel).await
+}
 
+pub(super) async fn spawn_ready(
+    options: ChildStartOptions,
+    compiled: CompiledConfig,
+    mut cancel: oneshot::Receiver<()>,
+) -> AttemptOutcome {
+    let ChildStartOptions {
+        runtime,
+        token,
+        startup,
+        owners,
+        external_services,
+        directory_services,
+        lease_path,
+        host_extension_fd,
+    } = options;
     let runtime_spawn = runtime.clone();
-    let token_spawn = token.clone();
-    let redactor_spawn = redactor.clone();
     let owners_spawn = owners.clone();
     let spawn_lease_path = lease_path.clone();
     let spawn_task = tokio::task::spawn_blocking(move || {
         spawn_child(&SpawnRequest {
             runtime: &runtime_spawn,
             compiled: &compiled,
-            token: &token_spawn,
-            redactor: &redactor_spawn,
             owners: &owners_spawn,
             external_services: &external_services,
             directory_services: &directory_services,

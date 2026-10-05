@@ -20,6 +20,33 @@ fn instance_missing_uses_the_existing_cf_not_found_boundary() {
     assert_eq!(V4Error::from(&error), V4Error::NotFound);
 }
 
+#[tokio::test]
+async fn referenced_service_target_returns_conflict_without_exposing_platform_detail() {
+    let error = open_compute_core::PlatformError::new(
+        open_compute_core::ErrorCode::ServiceTargetReferenced,
+        "sensitive service target authority detail",
+    );
+    let mapped = V4Error::from(&error);
+    assert_eq!(mapped, V4Error::Conflict);
+    let request_id = open_compute_core::RequestId::generate();
+    let response = error_response(mapped, request_id);
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        response.headers()[REQUEST_ID_HEADER],
+        request_id.to_string()
+    );
+    let bytes = to_bytes(response.into_body(), 4096).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body["success"], false);
+    assert_eq!(body["result"], serde_json::Value::Null);
+    assert_eq!(body["errors"][0]["code"], 9_100_006);
+    assert_eq!(
+        body["errors"][0]["message"],
+        "the request conflicts with current state"
+    );
+    assert!(!String::from_utf8_lossy(&bytes).contains("sensitive service target"));
+}
+
 fn state() -> (HttpState, V4InstanceContext) {
     let authority = V4InstanceContext::new(InstanceId::generate(), 1_000);
     let metrics = Arc::new(

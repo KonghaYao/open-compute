@@ -92,7 +92,13 @@ async fn assets_only_pipeline_commits_real_refs_without_fabricating_worker_code(
     assert_eq!(stored.logical_total_bytes, 12);
     assert_eq!(workers.referenced_artifacts().unwrap().len(), 2);
     assert_eq!(mock.object_count(), 2);
-    let source = RuntimeSource::new(storage.clone(), store, BundleLimits::default());
+    let source = RuntimeSource::new(
+        storage.clone(),
+        store,
+        BundleLimits::default(),
+        python_runtime_pin(),
+    )
+    .unwrap();
     let static_snapshot = source
         .resolve(
             &loader_key(account, worker.id, result.version.id),

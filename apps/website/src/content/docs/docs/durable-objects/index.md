@@ -31,19 +31,32 @@ export default {
 } satisfies ExportedHandler<{ COUNTER: DurableObjectNamespace }>;
 ```
 
-Bind in `wrangler.jsonc` with Wrangler's standard Durable Object field:
+Bind in `cloudflare.config.ts` with cf's standard Durable Object field:
 
-```json
-{
-  "name": "do-app",
-  "main": "src/index.ts",
-  "durable_objects": {
-    "bindings": [{ "name": "COUNTER", "class_name": "Counter" }]
-  }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "do-app",
+    entrypoint: "src/index.ts",
+    exports: {
+      Counter: {
+        type: "durable-object",
+        storage: "sqlite",
+      },
+    },
+    env: {
+      COUNTER: bindings.durableObject({
+        worker: "do-app",
+        exportName: "Counter",
+      }),
+    },
+  },
+});
 ```
 
-The class is part of the uploaded Worker; Durable Object migrations follow Wrangler's standard `migrations` field. Grammar: [bindings](/docs/workers/configuration/bindings/).
+The class is part of the uploaded Worker; Durable Object lifecycle uses the official `worker.exports` declarations. Grammar: [bindings](/docs/workers/configuration/bindings/).
 
 ## Compatibility
 
@@ -53,7 +66,7 @@ The class is part of the uploaded Worker; Durable Object migrations follow Wrang
 | Placement           | Geographic scheduling, `locationHint` / jurisdiction / migration              | All objects on the instance's local workerd; `locationHint` / jurisdiction / migration have no geo effect                                                      |
 | Alarms              | Available                                                                     | 7 methods supported: `getAlarm` / `setAlarm` / `deleteAlarm` and the `alarm()` handler                                                                         |
 | Hibernation         | Available                                                                     | Supported                                                                                                                                                      |
-| Binding             | Wrangler `durable_objects`                                                    | Standard `name` and `class_name`; `class_name` required                                                                                                        |
+| Binding             | cf `bindings.durableObject`                                                   | Standard `name` and `class_name`; `class_name` required                                                                                                        |
 | `Fetcher.connect()` | General outbound                                                              | Declared capability tunnel                                                                                                                                     |
 
 Next: [Alarms](/docs/durable-objects/alarms/) · [Develop with bindings](/docs/develop/) · [Compatibility and limits](/docs/reference/)

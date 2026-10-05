@@ -19,10 +19,7 @@ const catalog = JSON.parse(
 test("P6 pinned OpenAPI subset and capability projection are internally reproducible", () => {
   assert.doesNotThrow(() =>
     validateCommitted({
-      wranglerRoot: new URL(
-        "../../packages/toolchain/node_modules/wrangler/",
-        import.meta.url,
-      ).pathname,
+      cfRoot: new URL("../../node_modules/cf/", import.meta.url).pathname,
       sdkRoot: new URL(
         "../../packages/sdk/node_modules/cloudflare/",
         import.meta.url,
@@ -37,15 +34,9 @@ test("P6 pinned OpenAPI subset and capability projection are internally reproduc
     catalog.managementApi.deviations,
     capability.managementApi.deviations,
   );
-  assert.equal(catalog.wrangler.fieldCount, capability.wrangler.fields.length);
-  assert.equal(
-    catalog.wrangler.bindingCount,
-    capability.wrangler.bindings.length,
-  );
-  assert.equal(
-    catalog.wrangler.commandCount,
-    capability.wrangler.commands.length,
-  );
+  assert.equal(catalog.cf.fieldCount, capability.cf.fields.length);
+  assert.equal(catalog.cf.bindingCount, capability.cf.bindings.length);
+  assert.equal(catalog.cf.commandCount, capability.cf.commands.length);
 });
 
 test("vendor extension operations have stable typed envelopes and exact request media", () => {
@@ -167,7 +158,7 @@ test("settings surfaces, asset upload variants, and old routes are classified ex
     capability.managementApi.routes.filter(
       (item) => item.status === "supported",
     ).length,
-    198,
+    201,
   );
   assert.equal(
     capability.managementApi.routes.filter(
@@ -293,21 +284,19 @@ test("settings surfaces, asset upload variants, and old routes are classified ex
 });
 
 test("implemented P7 fields and later handoffs remain explicit", () => {
-  const fields = new Map(
-    capability.wrangler.fields.map((item) => [item.id, item]),
-  );
+  const fields = new Map(capability.cf.fields.map((item) => [item.id, item]));
   const bindings = new Map(
-    capability.wrangler.bindings.map((item) => [item.id, item]),
+    capability.cf.bindings.map((item) => [item.id, item]),
   );
   const commands = new Map(
-    capability.wrangler.commands.map((item) => [item.id, item]),
+    capability.cf.commands.map((item) => [item.id, item]),
   );
   assert.deepEqual(
     [fields.get("observability")?.status, fields.get("observability")?.source],
-    ["supported", "wrangler-config-schema"],
+    ["supported", "cf-config-schema"],
   );
   assert.deepEqual(
-    [fields.get("limits.cpu_ms")?.status, fields.get("limits.cpu_ms")?.stage],
+    [fields.get("limits.cpuMs")?.status, fields.get("limits.cpuMs")?.stage],
     ["supported", undefined],
   );
   assert.deepEqual(
@@ -317,13 +306,10 @@ test("implemented P7 fields and later handoffs remain explicit", () => {
     ],
     ["supported", undefined],
   );
-  assert.equal(fields.get("worker_loaders[].binding")?.status, "supported");
+  assert.equal(fields.get("env")?.status, "supported");
   assert.equal(bindings.get("worker_loader")?.status, "supported");
-  assert.deepEqual(
-    [commands.get("tail")?.status, commands.get("tail")?.source],
-    ["supported", "wrangler-cli"],
-  );
-  assert.equal(fields.get("usage_model")?.source, "pinned-schema-absence");
+  assert.equal(commands.get("deploy")?.status, "supported");
+  assert.equal(commands.has("tail"), false);
 });
 
 test("trace sanitizer removes credentials, multipart boundaries, and secret JSON values", () => {

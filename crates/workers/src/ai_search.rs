@@ -387,24 +387,11 @@ impl ResourceDriver for AiSearchInstanceResourceDriver<'_> {
         }
         let record = AiSearchCatalog::new(self.storage.db())
             .get_instance(resource.instance_id, resource.id)?;
-        let authority = inspect_ai_search_instance(
+        let (store, _) = AiSearchStore::open_existing(
             &live.join("data.sqlite"),
             &resource.id.to_string(),
             record.model_contract_sha256,
             self.busy_timeout_ms,
-        )?;
-        let store = AiSearchStore::open(
-            &live.join("data.sqlite"),
-            &AiSearchInstanceStorageContract {
-                resource_id: &authority.resource_id,
-                model_contract_sha256: authority.model_contract_sha256,
-                model_contract_json: &authority.inspection.indexing_model_contract_json,
-                public_config_json: &authority.inspection.indexing_public_config_json,
-                dimensions: authority.dimensions,
-                vector_enabled: authority.vector_enabled,
-                keyword_enabled: authority.keyword_enabled,
-            },
-            resource.created_at_ms,
         )?;
         if store.pending_object_gc_count()? != 0 || !store.object_references()?.is_empty() {
             return Err(not_ready());

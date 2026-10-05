@@ -6,7 +6,7 @@ title: "Workers"
 
 可以：
 
-- 使用项目内 Wrangler 部署模块 Worker（`export default { fetch }`）
+- 使用项目内 cf 部署模块 Worker（`export default { fetch }`）
 - 绑定 KV、R2、D1、Durable Objects、Queues、Workflows 以及其他 Worker
 - 使用 UTC cron 触发 `scheduled()`
 - 在同一份部署中提供静态资源
@@ -26,20 +26,20 @@ export default {
 
 ```sh
 cd examples/hello-worker
-ocd wrangler deploy --env dev
+ocd cf deploy --mode dev
 ```
 
 ## 兼容性
 
-| 主题                                                            | Cloudflare        | open-compute                                                                                  |
-| --------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------- |
-| 模块 Worker（`export default { fetch }`）                       | 提供              | 提供                                                                                          |
-| isolate、`env` 绑定、`fetch` / `scheduled` / `queue`            | 提供              | 提供                                                                                          |
-| Cache API、WebSocket hibernation、`cloudflare:sockets`、`node:` | 提供              | 提供，与 [Workers runtime APIs](https://developers.cloudflare.com/workers/runtime-apis/) 一致 |
-| 全球 Anycast / workers.dev / Cloudflare Custom Domains API      | 提供              | 不提供；公网 HTTPS origin 使用 operator [Gateway](/zh/docs/gateway/)                          |
-| 项目文件                                                        | `wrangler.jsonc`  | 使用相同的固定 Wrangler schema                                                                |
-| `compatibility_date`                                            | 提供              | 必填，并按不可变 Version 持久化                                                               |
-| 部署状态                                                        | Cloudflare 控制面 | 每个实例自己的 SQLite 和受监督 runtime generation                                             |
+| 主题                                                            | Cloudflare             | open-compute                                                                                  |
+| --------------------------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------- |
+| 模块 Worker（`export default { fetch }`）                       | 提供                   | 提供                                                                                          |
+| isolate、`env` 绑定、`fetch` / `scheduled` / `queue`            | 提供                   | 提供                                                                                          |
+| Cache API、WebSocket hibernation、`cloudflare:sockets`、`node:` | 提供                   | 提供，与 [Workers runtime APIs](https://developers.cloudflare.com/workers/runtime-apis/) 一致 |
+| 全球 Anycast / workers.dev / Cloudflare Custom Domains API      | 提供                   | 不提供；公网 HTTPS origin 使用 operator [Gateway](/zh/docs/gateway/)                          |
+| 项目文件                                                        | `cloudflare.config.ts` | 使用相同的固定 cf schema                                                                      |
+| `compatibility_date`                                            | 提供                   | 必填，并按不可变 Version 持久化                                                               |
+| 部署状态                                                        | Cloudflare 控制面      | 每个实例自己的 SQLite 和受监督 runtime generation                                             |
 
 ## 下一步
 

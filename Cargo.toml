@@ -15,7 +15,7 @@ members = [
 exclude = ["third_party/gitserver"]
 
 [workspace.package]
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 license = "Apache-2.0"
 homepage = "https://open-compute.dev"
@@ -24,6 +24,7 @@ description = "Open Compute local Cloudflare Workers-compatible platform"
 publish = false
 
 [workspace.dependencies]
+semver = "1.0.28"
 aws-credential-types = "1.2.3"
 # Production injects the verified Smithy HTTP client; SDK TLS/SigV4a defaults are unused.
 aws-sdk-s3 = { version = "=1.96.0", default-features = false, features = ["rt-tokio"] }

@@ -1,4 +1,4 @@
-import { tenantEnv } from "../loader/bindings.js";
+import { tenantEnv, validationEnv } from "../loader/bindings.js";
 import { modulesFor } from "../loader/modules.js";
 import type { LoaderEnv } from "../loader/protocol.js";
 import {
@@ -88,24 +88,29 @@ export async function handleWorkflow(
     const snapshot = await resolveSnapshot(
       env,
       { loaderKey, expected },
-      validation,
-      true,
+      validation ? "probe" : "runtime",
       request.headers.get("x-open-compute-internal-token"),
     );
-    const built = modulesFor(snapshot, false, className, false, true);
+    const built = modulesFor(snapshot, validation, className, false, true);
     const versionId = loaderKey.split("/")[2]!;
     let cold = false;
     const key = `workflow/${validation}/${loaderKey}/${expected}/${className}/${body.versionDescriptorSha256}`;
-    const loaded = env.LOADER.get(key, () => {
+    const loaded = env.LOADER.get(key, async () => {
       cold = true;
       const code = {
-        ...snapshotWorkerCode(snapshot),
+        ...(await snapshotWorkerCode(
+          env,
+          snapshot,
+          validation ? "probe" : "runtime",
+          request.headers.get("x-open-compute-internal-token"),
+        )),
         mainModule: built.mainModule,
         modules: built.modules,
         ...(validation
-          ? { env: {} }
+          ? validationEnv(snapshot, built.policy, env.WORKER_LOADER_FACTORY)
           : tenantEnv(
               snapshot,
+              built.policy,
               ctx,
               env.WORKER_LOADER_FACTORY,
               versionId,

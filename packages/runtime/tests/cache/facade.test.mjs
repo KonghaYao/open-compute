@@ -16,11 +16,11 @@ const transport = {
     ]);
     return this.lookup;
   },
-  async put(namespace, name, request, response, fence) {
+  async putAutomatic(request, response, fence) {
     calls.push([
       "put",
-      namespace,
-      name,
+      "automatic",
+      undefined,
       request.url,
       await response.text(),
       fence,
@@ -40,21 +40,19 @@ globalThis.__openComputeCacheEnv = {
 };
 const { createCacheRuntime } = await importRuntime("cache/facade.ts", {});
 const automaticRuntime = (failOpen) => {
-  const runtime = createCacheRuntime(true, failOpen).bind(
+  const runtime = createCacheRuntime(
+    true,
+    failOpen,
     globalThis.__openComputeCacheEnv,
-  );
+  ).bind();
   assert.ok(runtime);
   return runtime;
 };
-createCacheRuntime(false, true).bind(globalThis.__openComputeCacheEnv);
 
 test("dynamic workers without a cache capability skip cache transport binding", () => {
-  assert.equal(
-    createCacheRuntime(false, false, "default", false).bind({}),
-    undefined,
-  );
+  assert.equal(createCacheRuntime(false, false, {}).bind(), undefined);
   assert.throws(
-    () => createCacheRuntime(false, false).bind({}),
+    () => createCacheRuntime(true, false, {}).bind(),
     /CACHE_UNAVAILABLE/,
   );
 });
@@ -63,47 +61,10 @@ test("automatic cache construction defers request-scoped transport resolution", 
   const prior = globalThis.__openComputeCacheEnv.__OPEN_COMPUTE_PRIVATE_CACHE;
   delete globalThis.__openComputeCacheEnv.__OPEN_COMPUTE_PRIVATE_CACHE;
   try {
-    assert.ok(createCacheRuntime(true, true));
+    assert.ok(createCacheRuntime(true, true, globalThis.__openComputeCacheEnv));
   } finally {
     globalThis.__openComputeCacheEnv.__OPEN_COMPUTE_PRIVATE_CACHE = prior;
   }
-});
-
-test("default and named Cache API calls use strict isolated namespaces", async () => {
-  calls.length = 0;
-  transport.lookup = {
-    status: "HIT",
-    fenceGeneration: "2",
-    response: new Response("cached", { headers: { etag: '"v1"' } }),
-  };
-  assert.equal(
-    await (await caches.default.match("https://example.test/a")).text(),
-    "cached",
-  );
-  const named = await caches.open("rendered:pages");
-  await named.put(
-    "https://example.test/b",
-    new Response("stored", {
-      headers: { "cache-control": "max-age=60" },
-    }),
-  );
-  assert.equal(await named.delete("https://example.test/b"), true);
-  assert.deepEqual(
-    calls.map((call) => call.slice(0, 3)),
-    [
-      ["match", "default", undefined],
-      ["put", "named", "rendered:pages"],
-      ["delete", "named", "rendered:pages"],
-    ],
-  );
-  await assert.rejects(
-    named.put(
-      new Request("https://example.test/b", { method: "POST" }),
-      new Response("bad"),
-    ),
-    /CACHE_PUT_REJECTED/,
-  );
-  await assert.rejects(caches.open("\n"), /CACHE_KEY_INVALID/);
 });
 
 test("automatic cache reports miss, hit, SWR refresh, SIE, bypass, and purge", async () => {
@@ -392,7 +353,6 @@ test("automatic cache never fail-opens protocol or integrity failures", async ()
 
 test("cache lookup protocol requires canonical fences and status-response alignment", async () => {
   const prior = transport.lookup;
-  const priorDelete = transport.delete;
   try {
     for (const lookup of [
       { status: "HIT", fenceGeneration: "8" },
@@ -417,21 +377,56 @@ test("cache lookup protocol requires canonical fences and status-response alignm
     ]) {
       transport.lookup = lookup;
       await assert.rejects(
-        caches.default.match("https://example.test/malformed"),
+        automaticRuntime(true).dispatch(
+          () => new Response("origin"),
+          new Request("https://example.test/malformed"),
+          { waitUntil() {} },
+        ),
         /CACHE_PROTOCOL_ERROR/,
       );
     }
-    await assert.rejects(
-      caches.default.put("https://example.test/malformed", {}),
-      /CACHE_PROTOCOL_ERROR/,
-    );
-    transport.delete = async () => "false";
-    await assert.rejects(
-      caches.default.delete("https://example.test/malformed"),
-      /CACHE_PROTOCOL_ERROR/,
-    );
   } finally {
     transport.lookup = prior;
-    transport.delete = priorDelete;
   }
+});
+
+test("tenant reflection cannot read cache authority or raw failures", async () => {
+  const error = Object.assign(new Error("private-upstream-location"), {
+    stableCode: "CACHE_UNAVAILABLE",
+  });
+  const raw = {
+    ...transport,
+    async match() {
+      throw error;
+    },
+  };
+  const transports = { default: raw };
+  const environment = { __OPEN_COMPUTE_PRIVATE_CACHE: transports };
+  const secrets = new Set([environment, transports, raw, error]);
+  const leaks = [];
+  const get = Reflect.get;
+  const descriptor = Object.getOwnPropertyDescriptor;
+  try {
+    Reflect.get = (target, ...args) => {
+      if (secrets.has(target)) leaks.push("get");
+      return get(target, ...args);
+    };
+    Object.getOwnPropertyDescriptor = (target, ...args) => {
+      if (secrets.has(target)) leaks.push("descriptor");
+      return descriptor(target, ...args);
+    };
+    const runtime = createCacheRuntime(true, false, environment).bind();
+    await assert.rejects(
+      runtime.dispatch(
+        () => new Response("origin"),
+        new Request("https://cache.test/"),
+        { waitUntil() {} },
+      ),
+      /CACHE_UNAVAILABLE/,
+    );
+  } finally {
+    Reflect.get = get;
+    Object.getOwnPropertyDescriptor = descriptor;
+  }
+  assert.deepEqual(leaks, []);
 });

@@ -32,6 +32,13 @@ export function assertSnapshot(
 ): asserts value is RuntimeSnapshot {
   if (
     !record(value) ||
+    Object.hasOwn(value, "pythonSnapshot") ||
+    (value.pythonPreparedSha256 !== undefined &&
+      (typeof value.pythonPreparedSha256 !== "string" ||
+        !/^[0-9a-f]{64}$/.test(value.pythonPreparedSha256) ||
+        value.contentKind !== "worker" ||
+        typeof value.mainModule !== "string" ||
+        !value.mainModule.endsWith(".py"))) ||
     value.schemaVersion !== 1 ||
     typeof value.loaderKey !== "string" ||
     typeof value.workerCodeSha256 !== "string" ||
@@ -182,11 +189,18 @@ export function assertSnapshot(
       !record(module) ||
       typeof module.name !== "string" ||
       module.name.startsWith("open-compute:") ||
+      module.name.startsWith("cloudflare-internal:") ||
       typeof module.bytesBase64 !== "string" ||
       typeof module.type !== "string" ||
-      !["esModule", "commonJsModule", "text", "json", "data", "wasm"].includes(
-        module.type,
-      )
+      ![
+        "esModule",
+        "commonJsModule",
+        "python",
+        "text",
+        "json",
+        "data",
+        "wasm",
+      ].includes(module.type)
     )
       invalid();
   }

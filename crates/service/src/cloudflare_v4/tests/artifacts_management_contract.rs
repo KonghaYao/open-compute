@@ -61,6 +61,33 @@ async fn artifacts_crud_tokens_and_pagination_match_the_frozen_contract() {
     assert_eq!(body["result"]["repo_count"], 0);
 
     let repos = format!("{namespaces}/apps/repos");
+    for collection in [&namespaces, &repos] {
+        for query in ["page=1", "limit=1&page=2", "per_page=1", "cursor=invalid!"] {
+            let response = request(
+                state.clone(),
+                Method::GET,
+                &format!("{collection}?{query}"),
+                "read-token",
+                None,
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(json(response).await["errors"][0]["code"], 10100);
+        }
+        let response = request(
+            state.clone(),
+            Method::GET,
+            &format!("{collection}?limit=1"),
+            "read-token",
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let page = json(response).await;
+        assert!(page["result_info"]["cursor"].is_string());
+        assert!(page["result_info"].get("page").is_none());
+        assert!(page["result_info"].get("total_pages").is_none());
+    }
     let created = request(
         state.clone(),
         Method::POST,

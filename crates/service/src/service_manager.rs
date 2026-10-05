@@ -4,6 +4,7 @@ use crate::instance_registry::ServiceScope;
 use open_compute_core::{ErrorCode, PlatformError};
 use open_compute_storage::fs::{atomic_write, ensure_dir_secure};
 use std::fs;
+use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
@@ -234,18 +235,8 @@ impl ServiceManager for SystemdManager {
         ocd_path: &Path,
     ) -> Result<(), PlatformError> {
         let path = self.unit_path(scope)?;
-        if let Some(parent) = path.parent() {
-            ensure_dir_secure(parent).or_else(|_| {
-                fs::create_dir_all(parent).map_err(|_| {
-                    PlatformError::new(
-                        ErrorCode::InstanceRegistryInvalid,
-                        "failed to create systemd unit directory",
-                    )
-                })
-            })?;
-        }
         let body = render_systemd_unit(scope, service_user, ocd_path)?;
-        install_definition(&path, body.as_bytes(), "systemd unit")?;
+        install_definition(&path, body.as_bytes())?;
         if self.unit_root.is_none() {
             systemctl(scope, &["daemon-reload"])?;
         }
@@ -378,12 +369,8 @@ impl ServiceManager for LaunchdManager {
         ocd_path: &Path,
     ) -> Result<(), PlatformError> {
         let path = self.plist_path(scope)?;
-        if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
-            let _ = ensure_dir_secure(parent);
-        }
         let body = render_launchd_plist(scope, service_user, ocd_path)?;
-        install_definition(&path, body.as_bytes(), "launchd plist")
+        install_definition(&path, body.as_bytes())
     }
 
     fn enable(&self, scope: ServiceScope) -> Result<(), PlatformError> {
@@ -595,7 +582,28 @@ fn lookup_user_id(user: &str, flag: &str) -> Result<u32, PlatformError> {
         .map_err(|_| PlatformError::new(ErrorCode::PathInvalid, "service user ID is invalid"))
 }
 
-fn install_definition(path: &Path, body: &[u8], label: &str) -> Result<(), PlatformError> {
+fn install_definition(path: &Path, body: &[u8]) -> Result<(), PlatformError> {
+    let parent = path
+        .parent()
+        .filter(|_| path.is_absolute())
+        .ok_or_else(|| {
+            PlatformError::new(
+                ErrorCode::InstanceRegistryInvalid,
+                "service definition path must be absolute and have a parent",
+            )
+        })?;
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(parent)
+        .map_err(|_| {
+            PlatformError::new(
+                ErrorCode::InstanceRegistryInvalid,
+                "failed to create service definition directory",
+            )
+        })?;
+    ensure_dir_secure(parent)
+        .map_err(|error| PlatformError::new(ErrorCode::InstanceRegistryInvalid, error.message()))?;
     match fs::read(path) {
         Ok(existing) if existing == body => return Ok(()),
         Ok(_) => {
@@ -612,13 +620,8 @@ fn install_definition(path: &Path, body: &[u8], label: &str) -> Result<(), Platf
             ));
         }
     }
-    let write_error = match label {
-        "systemd unit" => "failed to write systemd unit",
-        "launchd plist" => "failed to write launchd plist",
-        _ => "failed to write service definition",
-    };
     atomic_write(path, body)
-        .map_err(|_| PlatformError::new(ErrorCode::InstanceRegistryInvalid, write_error))
+        .map_err(|error| PlatformError::new(ErrorCode::InstanceRegistryInvalid, error.message()))
 }
 
 fn shell_escape(value: &str) -> String {

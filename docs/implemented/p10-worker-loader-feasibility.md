@@ -1,5 +1,8 @@
 # P10 Worker Loader 可行性复核
 
+当前 CLI/应用配置与构建入口由 [P20](p20-cf-cli-migration.md) 拥有：`ocd cf`、`cloudflare.config.ts`、官方 Vite 插件 v2 与 Build Output。
+本文旧客户端命令、版本、fixture 与 PASS 保留为当时证据，不要求恢复旧入口，也不证明当前 cf 的资格。
+
 日期：2026-09-05。结论：**当时 No-Go；未实现。** 这是固定 stock workerd 的一次性调查；
 后续 fork 实现见 [W1 Worker Loader](w1-dynamic-workers-worker-loader.md)。
 

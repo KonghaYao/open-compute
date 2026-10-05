@@ -34,10 +34,10 @@ bun run check:generated
 bun run test:js
 ```
 
-`build` 先严格检查源码和构建脚本，根 build 也检查 toolchain、examples 和 scripts；
+`build` 先严格检查源码和构建脚本，根 build 也检查 dashboard、website、examples 和 scripts；
 无需在完整构建前重复 typecheck。只需类型反馈时可独立执行 `bun run typecheck`。
 `build.ts` 递归编译 TS，生成的 JS 保留领域相对路径；例如
-`src/d1/facade.ts` 对应 `d1/facade.js`，不同领域的同名文件不会互相覆盖。
+`src/d1/transport.ts` 对应 `d1/transport.js`，不同领域的同名文件不会互相覆盖。
 可用 `--output-dir` 指定独立的构建目录，再用 `--check` 校验同一目录。
 
 `dist/` 完全由 TS 生成，`config.capnp` 使用相同的领域模块路径。

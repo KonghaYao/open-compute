@@ -124,9 +124,9 @@ pub struct PyodideBundlePin {
 pub struct WorkersSdkPin {
     /// workers-sdk git revision.
     pub revision: String,
-    /// Wrangler package version from that revision.
-    #[serde(rename = "wranglerVersion")]
-    pub wrangler_version: String,
+    /// Cloudflare CLI version qualified with this runtime and integration reference.
+    #[serde(rename = "cfVersion")]
+    pub cf_version: String,
     /// Vite plugin package version from that revision.
     #[serde(rename = "vitePluginVersion")]
     pub vite_plugin_version: String,
@@ -432,7 +432,7 @@ impl RuntimeSourcePin {
 impl WorkersSdkPin {
     fn validate(&self) -> Result<(), PlatformError> {
         require_git_sha(&self.revision)?;
-        require_nonempty(&self.wrangler_version, "workersSdk.wranglerVersion")?;
+        require_nonempty(&self.cf_version, "workersSdk.cfVersion")?;
         require_nonempty(&self.vite_plugin_version, "workersSdk.vitePluginVersion")?;
         Ok(())
     }

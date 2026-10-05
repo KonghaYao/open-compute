@@ -17,7 +17,7 @@ description: "open-compute 支持的 Workers、存储、计算、媒体、AI 与
 
 Vectorize 在单机执行确定性的精确搜索。AI Search 和 Markdown Conversion 使用 operator-configured provider，不代表支持通用 Workers AI model inference。
 
-operator 拥有的原生扩展不是 Cloudflare 产品 Binding。它们继续使用现有 Service Binding 的 `services` + `props` 字段，说明见[扩展](/zh/docs/extension/)。
+operator 拥有的原生扩展不是 Cloudflare 产品 Binding。它们继续使用现有 Service Binding 的 `bindings.worker` + `props` 字段，说明见[扩展](/zh/docs/extension/)。
 
 ## 未提供
 

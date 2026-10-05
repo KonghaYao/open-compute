@@ -11,7 +11,7 @@ pub(super) async fn list_versions(
         Err(response) => return response.into_response(),
     };
     let result = (|| {
-        let query = query::version_list(request.uri().query())?;
+        let query = query::version_list(request.uri().query(), true)?;
         let account = domain::resolve_instance(&state, &account)?;
         let api = worker_api(&state)?;
         let worker =

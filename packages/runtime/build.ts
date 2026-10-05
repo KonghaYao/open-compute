@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { build } from "rolldown";
 import { transform } from "rolldown/utils";
 
 const root = fileURLToPath(new URL("./", import.meta.url));
@@ -63,6 +64,9 @@ async function filesIn(
 
 const inputs = [
   "bun.lock",
+  "third_party/workerd/src/cloudflare/workers.ts",
+  "third_party/workerd/src/cloudflare/workflows.ts",
+  "third_party/workerd/src/node/async_hooks.ts",
   "package.json",
   "tsconfig.json",
   ...["build.ts", "package.json", "tsconfig.json", "tsconfig.build.json"].map(
@@ -92,15 +96,61 @@ for (const name of sources) {
   if (!(await lstat(sourcePath)).isFile())
     throw new Error("runtime source must be a regular file");
   const source = await readFile(sourcePath, "utf8");
-  const result = await transform(name, source, {
-    target: "esnext",
-    sourcemap: false,
-    tsconfig: resolve(root, "tsconfig.json"),
-  });
-  if (result.errors.length || result.warnings.length)
-    throw new Error(`runtime transform failed: ${name}`);
+  let code: string;
+  if (
+    name === "loader/host-policy.ts" ||
+    name === "loader/forwarding.ts" ||
+    name === "ai-search/namespace-binding.ts" ||
+    name === "ai-search/instance-binding.ts"
+  ) {
+    // Private entrypoints bundle their local closure; only workerd builtins remain imports.
+    const result = await build({
+      cwd: root,
+      input: sourcePath,
+      external: (id) =>
+        id.startsWith("cloudflare-internal:") ||
+        id.startsWith("node-internal:"),
+      resolve: {
+        alias: {
+          "cloudflare:workers": resolve(
+            root,
+            "../../third_party/workerd/src/cloudflare/workers.ts",
+          ),
+          "cloudflare:workflows": resolve(
+            root,
+            "../../third_party/workerd/src/cloudflare/workflows.ts",
+          ),
+          "node:async_hooks": resolve(
+            root,
+            "../../third_party/workerd/src/node/async_hooks.ts",
+          ),
+        },
+      },
+      tsconfig: resolve(root, "tsconfig.json"),
+      output: { format: "esm", sourcemap: false, codeSplitting: false },
+      write: false,
+      onwarn(warning) {
+        throw new Error(
+          `runtime binding bundle failed: ${name}: ${warning.code}`,
+        );
+      },
+    });
+    const chunk = result.output[0];
+    if (result.output.length !== 1 || chunk?.type !== "chunk")
+      throw new Error(`runtime binding must produce one module: ${name}`);
+    code = chunk.code;
+  } else {
+    const result = await transform(name, source, {
+      target: "esnext",
+      sourcemap: false,
+      tsconfig: resolve(root, "tsconfig.json"),
+    });
+    if (result.errors.length || result.warnings.length)
+      throw new Error(`runtime transform failed: ${name}`);
+    code = result.code;
+  }
   const outputName = name.replace(/\.ts$/, ".js");
-  const output = `// Generated from packages/runtime/src/${name} by Rolldown. Do not edit.\n${result.code}`;
+  const output = `// Generated from packages/runtime/src/${name} by Rolldown. Do not edit.\n${code}`;
   emitted.set(outputName, output);
 }
 emitted.set(

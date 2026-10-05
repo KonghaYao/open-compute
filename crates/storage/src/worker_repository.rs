@@ -23,10 +23,12 @@ mod idempotency;
 mod lifecycle;
 mod model;
 mod public_origins;
+mod python_prepared;
 mod retention;
 mod version_create;
 
 pub use model::*;
+pub use python_prepared::PythonPreparedArtifactRecord;
 
 pub(crate) fn validate_worker_name(name: &str) -> Result<(), PlatformError> {
     let bytes = name.as_bytes();

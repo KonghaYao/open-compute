@@ -3,7 +3,7 @@ title: "Extensions"
 description: "Operator-owned native extensions that user Workers call through ordinary Service Bindings."
 ---
 
-An extension is operator-owned code that one instance loads at startup and exposes as a Service Binding target. A user Worker still binds with Wrangler `services` and `props`. There is no new public Binding type.
+An extension is operator-owned code that one instance loads at startup and exposes as a Service Binding target. A user Worker still binds with cf `services` and `props`. There is no new public Binding type.
 
 An extension is not tenant-uploaded native code, not a plugin installer, and not a second workerd. Cloudflare hosted Workers do not provide this native Provider path; it is an open-compute superset on macOS and Linux.
 
@@ -43,7 +43,7 @@ The user Worker calls an ordinary Service Binding. The `service` value is the ex
 | Owner       | The operator who placed the files and listed them in config                                    |
 | Load time   | Instance startup only; replace files and restart that instance to pick up a new implementation |
 | Runtime     | That instance's supervised pinned workerd; the Provider is a separate host process             |
-| User API    | Wrangler `services` + `props` / `ctx.props`; facade-only `HOST.call` / `HOST.stream`           |
+| User API    | cf `bindings.worker` + `props` / `ctx.props`; facade-only `HOST.call` / `HOST.stream`          |
 | Namespace   | Extension names share the live Worker service namespace                                        |
 | Persistence | Deployments pin the extension **name**, entrypoint, and canonical props — not the file bytes   |
 

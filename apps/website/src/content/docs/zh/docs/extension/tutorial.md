@@ -3,7 +3,7 @@ title: "实现一个扩展"
 description: "动手实现 local-files 扩展：manifest、facade Worker、native Provider、ocd 配置，以及用户 Worker 绑定。"
 ---
 
-本教程实现一个 `local-files` 扩展：列出并读取 operator 放在 Provider 工作目录旁的文件。用户 Worker 用 Wrangler `services` 和 `props` 绑定它。没有新的公开 Binding 类型。
+本教程实现一个 `local-files` 扩展：列出并读取 operator 放在 Provider 工作目录旁的文件。用户 Worker 用 cf `services` 和 `props` 绑定它。没有新的公开 Binding 类型。
 
 需要一台正在运行的 macOS 或 Linux `ocd`、可写配置文件，以及能处理 Unix `SCM_RIGHTS` 与 Cap'n Proto 的原生工具链。open-compute 仓库自带一个完整可运行的 Provider：测试 fixture [crates/service/src/bin/host_extension_test_provider/](https://github.com/elliothux/open-compute/blob/main/crates/service/src/bin/host_extension_test_provider/main.rs)——schema、Cap'n Proto 绑定与 attach 循环共约 300 行 Rust。把它当作你自己的 Provider 的活参考；它是 `test-support` 二进制，不进入 release artifact。
 
@@ -125,21 +125,24 @@ ocd instance restart default
 
 ## 5. 从用户 Worker 绑定
 
-在应用的 `wrangler.jsonc` 里声明 Service Binding，`service` 填扩展名：
+在应用的 `cloudflare.config.ts` 里声明 Service Binding，`service` 填扩展名：
 
-```json
-{
-  "name": "billing",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-09-08",
-  "services": [
-    {
-      "binding": "FILES",
-      "service": "local-files",
-      "props": { "directory": "invoices" }
-    }
-  ]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "billing",
+    entrypoint: "src/index.ts",
+    compatibilityDate: "2026-09-08",
+    env: {
+      FILES: bindings.worker({
+        worker: "local-files",
+        props: { directory: "invoices" },
+      }),
+    },
+  },
+});
 ```
 
 同一个扩展、不同 `props` 的两个 Binding 使用不同的 facade cache key 和 session，可以共享同一个 Provider 进程。部署固定名字、entrypoint 和 canonical props；operator 替换文件并重启该实例后，现有部署使用新实现。
@@ -157,7 +160,7 @@ export default {
 ```
 
 ```sh
-ocd wrangler deploy
+ocd cf deploy
 ```
 
 用户 Worker 看不到 `HOST`，只看到 facade 导出的方法。

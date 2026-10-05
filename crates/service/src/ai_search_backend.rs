@@ -617,7 +617,7 @@ impl AiSearchBindingService {
             record.resource.instance_id,
             record.resource.id,
         )?;
-        let authority = open_compute_storage::ai_search::inspect_ai_search_instance(
+        let (store, authority) = AiSearchStore::open_existing(
             &path,
             &record.resource.id.to_string(),
             record.model_contract_sha256,
@@ -639,19 +639,6 @@ impl AiSearchBindingService {
             }
         }
         let mut inspection = authority.inspection;
-        let store = AiSearchStore::open(
-            &path,
-            &AiSearchInstanceStorageContract {
-                resource_id: &authority.resource_id,
-                model_contract_sha256: authority.model_contract_sha256,
-                model_contract_json: &inspection.indexing_model_contract_json,
-                public_config_json: &inspection.indexing_public_config_json,
-                dimensions: authority.dimensions,
-                vector_enabled: authority.vector_enabled,
-                keyword_enabled: authority.keyword_enabled,
-            },
-            record.resource.created_at_ms,
-        )?;
         if inspection.reindex_pending && inspection.item_count == 0 {
             if !store.complete_empty_reindex(authority.model_contract_sha256, unix_ms())? {
                 return Err(corrupt());

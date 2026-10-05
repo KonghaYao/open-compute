@@ -83,6 +83,9 @@ jobs:
         run: |
           bun run test:js:ci
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s test -p 'test_gate.py'
+      - name: Service installation permissions and umask regression
+        if: matrix.suite == 'core'
+        run: cargo test --locked -p open-compute-service --lib service_manager::tests -- --test-threads=1
       - name: SDK package pack inspection and isolated consumer smoke
         if: matrix.suite == 'core'
         run: bun packages/sdk/scripts/inspect-package.ts
@@ -157,7 +160,6 @@ jobs:
             *,website,*) bun run --filter @open-compute/website build ;;
           esac
           case ",$COMPONENTS," in
-            *,toolchain,*) bun run --filter @open-compute/toolchain build ;;
           esac
           case ",$COMPONENTS," in
             *,docs,*) bun scripts/check-docs.ts ;;
@@ -172,7 +174,7 @@ jobs:
         with:
           lfs: true
       - name: Initialize pinned source submodules
-        run: git submodule update --init --depth 1 third_party/caddy third_party/gitserver
+        run: git submodule update --init --depth 1 third_party/caddy third_party/gitserver third_party/workerd
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14

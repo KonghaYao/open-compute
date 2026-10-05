@@ -1,8 +1,8 @@
-import type { BindingEnv } from "../bindings/protocol.js";
 import type { DoPolicyEnv, DoRouterRpc } from "../durable-objects/protocol.js";
+import type { QueueTransportEnv } from "../queues/protocol.js";
 
 /** Private system services; this shape must never be copied into tenant env. */
-export interface LoaderEnv extends BindingEnv, DoPolicyEnv {
+export interface LoaderEnv extends QueueTransportEnv, DoPolicyEnv {
   LOADER: WorkerLoader;
   WORKER_LOADER_FACTORY: NativeWorkerLoaderFactory;
   HOST_EXTENSION_FACTORY: NativeHostExtensionFactory;
@@ -29,9 +29,10 @@ export interface NativeHostExtensionPort {
 
 /** Host-only fork capability; it is never exposed to tenant isolates. */
 export interface NativeWorkerLoaderFactory {
+  readonly hostPolicyVersion: 1;
   getFacets(facets: DurableObjectFacets): NativeHostFacets;
   get(namespaceKey: string): WorkerLoader;
-  getPrivate(namespaceKey: string): WorkerLoader;
+  getPrivate(namespaceKey: string): NativePrivateWorkerLoader;
   revoke(namespaceKey: string): void;
   revokePrefix(namespacePrefix: string): void;
   getEntrypoint<T extends Rpc.WorkerEntrypointBranded | undefined = undefined>(
@@ -40,6 +41,11 @@ export interface NativeWorkerLoaderFactory {
     name?: string,
     options?: WorkerStubEntrypointOptions,
   ): Fetcher<T>;
+}
+
+/** Non-delegatable host grant for the fork's single-use snapshot operation. */
+export interface NativePrivateWorkerLoader extends WorkerLoader {
+  preparePython(code: WorkerLoaderWorkerCode): Promise<Uint8Array<ArrayBuffer>>;
 }
 
 /** Private, revocable host grant retained only by the trusted DO wrapper. */
@@ -113,7 +119,14 @@ export interface RuntimeServiceBinding {
 }
 export interface RuntimeModule {
   name: string;
-  type: "esModule" | "commonJsModule" | "text" | "json" | "data" | "wasm";
+  type:
+    | "esModule"
+    | "commonJsModule"
+    | "python"
+    | "text"
+    | "json"
+    | "data"
+    | "wasm";
   bytesBase64: string;
 }
 export interface RuntimeModuleBinding {
@@ -121,8 +134,13 @@ export interface RuntimeModuleBinding {
   type: "text" | "data" | "wasm";
   bytesBase64: string;
 }
+/** Exact private RuntimeSource authority operation selected by the host caller. */
+export type RuntimeSourceScope =
+  "runtime" | "validation" | "probe" | "preparation";
+
 /** Wire projection produced only by Rust RuntimeSource::internal_payload. */
 export interface RuntimeSnapshot {
+  pythonPreparedSha256?: string;
   schemaVersion: 1;
   loaderKey: string;
   workerCodeSha256: string;

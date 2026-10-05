@@ -3,7 +3,7 @@ title: "Implement an extension"
 description: "Build a local-files extension: manifest, facade Worker, native Provider, ocd config, and a user Worker binding."
 ---
 
-This walkthrough implements a `local-files` extension that lists and reads files from directories the operator placed next to the Provider. A user Worker binds it with Wrangler `services` and `props`. There is no new public Binding type.
+This walkthrough implements a `local-files` extension that lists and reads files from directories the operator placed next to the Provider. A user Worker binds it with cf `services` and `props`. There is no new public Binding type.
 
 You need a running `ocd` on macOS or Linux, a writable config file, and a native toolchain that can speak Unix SCM_RIGHTS plus Cap'n Proto. A complete working Provider ships in the open-compute repository as the test fixture [crates/service/src/bin/host_extension_test_provider/](https://github.com/elliothux/open-compute/blob/main/crates/service/src/bin/host_extension_test_provider/main.rs) — schema, Cap'n Proto bindings, and the attach loop in about 300 lines of Rust. Use it as the live reference for your own Provider; it is a `test-support` binary and is not part of the release artifact.
 
@@ -125,21 +125,24 @@ ocd instance restart default
 
 ## 5. Bind from a user Worker
 
-In the application `wrangler.jsonc`, declare a Service Binding whose `service` is the extension name:
+In the application `cloudflare.config.ts`, declare a Service Binding whose `service` is the extension name:
 
-```json
-{
-  "name": "billing",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-09-08",
-  "services": [
-    {
-      "binding": "FILES",
-      "service": "local-files",
-      "props": { "directory": "invoices" }
-    }
-  ]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "billing",
+    entrypoint: "src/index.ts",
+    compatibilityDate: "2026-09-08",
+    env: {
+      FILES: bindings.worker({
+        worker: "local-files",
+        props: { directory: "invoices" },
+      }),
+    },
+  },
+});
 ```
 
 Two Bindings to the same extension with different `props` get different facade cache keys and sessions. They may share one Provider process. Deploy pins the name, entrypoint, and canonical props; replacing extension files and restarting the instance makes existing deployments use the new implementation.
@@ -157,7 +160,7 @@ export default {
 ```
 
 ```sh
-ocd wrangler deploy
+ocd cf deploy
 ```
 
 The user Worker never sees `HOST`. It only sees the facade's exported methods.

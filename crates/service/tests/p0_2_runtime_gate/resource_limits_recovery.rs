@@ -101,8 +101,13 @@ async fn w2_resource_limits_protect_neighbors_and_recover_a_wedged_generation() 
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
     let mut binding_shutdown_rx = shutdown_tx.subscribe();
     let source_task = tokio::spawn({
-        let source =
-            RuntimeSource::new(storage.clone(), artifacts.clone(), BundleLimits::default());
+        let source = RuntimeSource::new(
+            storage.clone(),
+            artifacts.clone(),
+            BundleLimits::default(),
+            open_compute_service::runtime_bridge::python_runtime_pin(&runtime),
+        )
+        .unwrap();
         let auth = auth.clone();
         async move {
             serve_runtime_source(source_listener, source, auth, async move {
@@ -165,7 +170,6 @@ async fn w2_resource_limits_protect_neighbors_and_recover_a_wedged_generation() 
             config: runtime_config(),
             clock: Arc::new(SystemClock),
             jitter: Arc::new(OsJitter),
-            redactor: Redactor::new(),
             lease_path: Some(
                 storage
                     .data_dir()

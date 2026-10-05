@@ -171,7 +171,7 @@ fn test_startup_id() -> StartupId {
         .expect("fixed test startup id")
 }
 
-fn storage_config(root: &Path) -> DataConfig {
+pub(super) fn storage_config(root: &Path) -> DataConfig {
     DataConfig {
         path: root.to_owned(),
         master_key_file: root.join("keys/master.key"),
@@ -182,7 +182,7 @@ fn storage_config(root: &Path) -> DataConfig {
     }
 }
 
-fn artifact_store(mock: &MockS3) -> ArtifactStore {
+pub(super) fn artifact_store(mock: &MockS3) -> ArtifactStore {
     let config = PlatformConfig::from_toml_str(&format!(
         r#"
 [data]

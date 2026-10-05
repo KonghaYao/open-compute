@@ -1,0 +1,121 @@
+{
+  "package": "workers-runtime-sdk",
+  "version": "1.9.2",
+  "wheelSha256": "f928e20afddaaf01f216b3ced8884ca1e7675681bb44692add753317fc9ce89d",
+  "modules": [
+    {
+      "name": "python_modules/_workers_sdk_entropy_import_context.py",
+      "mime": "application/octet-stream",
+      "size": 7113,
+      "sha256": "604040e7befae759261369fe48987c88e969728c366a0929693cf60659e14a6b"
+    },
+    {
+      "name": "python_modules/_workers_sdk_package_patches.py",
+      "mime": "application/octet-stream",
+      "size": 1868,
+      "sha256": "5dbb2e92bfa5dbf481591275684ad0edea06a38b2a0c51437c75926d6136597e"
+    },
+    {
+      "name": "python_modules/_workers_sdk_patch_loader.pth",
+      "mime": "application/octet-stream",
+      "size": 33,
+      "sha256": "9536373b73d71adbb4dea7682cf1a5aad4a9d112028472429db99c7a5a0398b6"
+    },
+    {
+      "name": "python_modules/_workers_sdk_patch_loader.py",
+      "mime": "application/octet-stream",
+      "size": 683,
+      "sha256": "4f2803722e658e0fcc00a7559620e290ebf4c4c586e037567849e39f6817dc24"
+    },
+    {
+      "name": "python_modules/asgi.py",
+      "mime": "application/octet-stream",
+      "size": 148,
+      "sha256": "91abb4905574643f8f5ec7fc4cd2575c6d5c09290b843f28d658e382f7a2f5b4"
+    },
+    {
+      "name": "python_modules/workers/__init__.py",
+      "mime": "application/octet-stream",
+      "size": 1446,
+      "sha256": "7c3c5bcc3c2ca594238b96c9a0aa94ef2e45e758bdd9b608c3c747b11c8f6e25"
+    },
+    {
+      "name": "python_modules/workers/asgi.py",
+      "mime": "application/octet-stream",
+      "size": 17891,
+      "sha256": "f606250b2087c7bfffcdcae8a9dd95f080954820e457e932daa77803c4fdd35d"
+    },
+    {
+      "name": "python_modules/workers/blob.py",
+      "mime": "application/octet-stream",
+      "size": 4767,
+      "sha256": "a60824ff75f77c0661aec3f51dc4a0f887a9ba270d3d841d48780e31f4604a2e"
+    },
+    {
+      "name": "python_modules/workers/entrypoints.py",
+      "mime": "application/octet-stream",
+      "size": 12987,
+      "sha256": "07dc371cf68e5ebd4683a8c46cf515654798c5320a33f2e014c588b15e89ae49"
+    },
+    {
+      "name": "python_modules/workers/fetch.py",
+      "mime": "application/octet-stream",
+      "size": 1416,
+      "sha256": "1f02d22f93b847f5e1d0d3de96c963bb59d180ade108cfc275b8ce18c301df74"
+    },
+    {
+      "name": "python_modules/workers/formdata.py",
+      "mime": "application/octet-stream",
+      "size": 3025,
+      "sha256": "54c4efc11b7c94a774a60b94fe0943c8e34b22568e44409e74a4624a21019aff"
+    },
+    {
+      "name": "python_modules/workers/request.py",
+      "mime": "application/octet-stream",
+      "size": 5270,
+      "sha256": "2afb0c6e5bf91495d48f6cec91358a4882854b9405e06ecb6b9135282a0079c5"
+    },
+    {
+      "name": "python_modules/workers/response.py",
+      "mime": "application/octet-stream",
+      "size": 7128,
+      "sha256": "a87282adff519607d2ba3a68a6e7af4ad66a2b95507d9ddfa79ea723931adb80"
+    },
+    {
+      "name": "python_modules/workers/rpc.py",
+      "mime": "application/octet-stream",
+      "size": 14182,
+      "sha256": "ea2e4e8b9bcc284edccf4c2786218fa049b684fad114e2d41acb4b00bbd5b55d"
+    },
+    {
+      "name": "python_modules/workers/types.py",
+      "mime": "application/octet-stream",
+      "size": 1468,
+      "sha256": "127a8fef1f90c91cf449d8a74db296ccedfb48e54f7ca8a8a36b551e6403349c"
+    },
+    {
+      "name": "python_modules/workers/utils.py",
+      "mime": "application/octet-stream",
+      "size": 9708,
+      "sha256": "722d886d6f970e67673a28d5cfe3706c72ed301e643e954b18574003a5b5c382"
+    },
+    {
+      "name": "python_modules/workers/workflows.js",
+      "mime": "application/javascript+module",
+      "size": 2898,
+      "sha256": "79122b38dde2e597646cbcc9989a5b78921f1ce46b3fb51f625edc15473b22a1"
+    },
+    {
+      "name": "python_modules/workers/workflows.py",
+      "mime": "application/octet-stream",
+      "size": 270,
+      "sha256": "9379fdf416da56d2400369165a51b72da83f724aea893ac785285631d09803bf"
+    },
+    {
+      "name": "python_modules/workers/wsgi.py",
+      "mime": "application/octet-stream",
+      "size": 13426,
+      "sha256": "64738dbf226a764a1085befaefa8f69c8aee47a1a7ac22ac33458315eb33e97f"
+    }
+  ]
+}

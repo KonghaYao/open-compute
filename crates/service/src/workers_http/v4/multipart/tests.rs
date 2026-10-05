@@ -32,6 +32,82 @@ fn string_part(name: &str, bytes: &[u8]) -> RawPart {
 }
 
 #[test]
+fn python_multipart_preserves_source_package_data_and_rejects_mismatched_main() {
+    let metadata = br#"{"main_module":"src/entry.py","compatibility_date":"2026-09-08","compatibility_flags":["python_workers","enable_python_external_sdk"]}"#;
+    let source = b"from workers import WorkerEntrypoint\nclass Default(WorkerEntrypoint): pass\n";
+    let parsed = parse_parts(
+        vec![
+            part("metadata", "application/json", metadata),
+            part("src/entry.py", "text/x-python; charset=utf-8", source),
+            part("src/helpers.py", "text/x-python", b"message = 'hello'"),
+            part(
+                "python_modules/example/data.bin",
+                "application/octet-stream",
+                &[255, 0],
+            ),
+        ],
+        BundleLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        parsed.metadata.compatibility_flags,
+        ["python_workers", "enable_python_external_sdk"]
+    );
+    let bundle = CanonicalBundle::parse(parsed.bundle.unwrap(), BundleLimits::default()).unwrap();
+    assert_eq!(bundle.manifest().main_module, "src/entry.py");
+    let main = bundle
+        .manifest()
+        .modules
+        .iter()
+        .find(|entry| entry.name == "src/entry.py")
+        .unwrap();
+    assert_eq!(main.module_type, ModuleType::Python);
+    assert_eq!(bundle.module_bytes(main).unwrap(), source);
+    for mime in [
+        "application/javascript+module",
+        "text/plain",
+        "python-requirement",
+        "application/octet-stream",
+    ] {
+        assert!(
+            parse_parts(
+                vec![
+                    part("metadata", "application/json", metadata),
+                    part("src/entry.py", mime, source)
+                ],
+                BundleLimits::default()
+            )
+            .is_err()
+        );
+    }
+    for metadata in [
+        br#"{"main_module":"entry.js","compatibility_date":"2026-09-08"}"#.as_slice(),
+        br#"{"body_part":"src/entry.py","compatibility_date":"2026-09-08"}"#.as_slice(),
+    ] {
+        assert!(
+            parse_parts(
+                vec![
+                    part("metadata", "application/json", metadata),
+                    part("src/entry.py", "text/x-python", source)
+                ],
+                BundleLimits::default()
+            )
+            .is_err()
+        );
+    }
+    assert!(
+        parse_parts(
+            vec![
+                part("metadata", "application/json", metadata),
+                part("src/entry.py", "text/x-python", &[255])
+            ],
+            BundleLimits::default()
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn parses_exact_pinned_compatibility_metadata_and_modules() {
     let parsed = parse_parts(
             vec![
@@ -463,4 +539,87 @@ fn fixed_wrangler_deprecated_queue_delay_metadata_is_accepted() {
         panic!("fixed Wrangler Queue binding was not parsed");
     };
     assert_eq!(delay.as_u64(), Some(60));
+}
+
+#[test]
+fn workflow_exports_validate_definition_names_and_binding_consistency() {
+    let metadata = |name: &str, bound: &str| {
+        serde_json::from_value::<WorkerUploadMetadata>(serde_json::json!({
+            "main_module":"index.js",
+            "exports":{"Flow":{"type":"workflow","name":name}},
+            "bindings":[{"type":"workflow","name":"FLOW","workflow_name":bound,"class_name":"Flow","script_name":"owner"}]
+        })).unwrap()
+    };
+    assert!(validate_metadata(&metadata("flow-name", "flow-name")).is_ok());
+    assert!(validate_metadata(&metadata("flow-name", "different-flow")).is_err());
+    assert!(validate_metadata(&metadata("invalid/name", "invalid/name")).is_err());
+    assert!(serde_json::from_value::<WorkerUploadMetadata>(serde_json::json!({
+        "main_module":"index.js","exports":{"Flow":{"type":"workflow","name":"flow-name","unknown":true}}
+    })).is_err());
+}
+
+#[test]
+fn cf_split_modules_are_canonicalized_and_ambiguous_paths_are_rejected() {
+    let metadata = br#"{"main_module":"./index.js","bindings":[{"type":"text_blob","name":"COPY","part":"./copy.txt"}]}"#;
+    let parsed = parse_parts(
+        vec![
+            part("metadata", "application/json", metadata),
+            part(
+                "./index.js",
+                "application/javascript+module",
+                b"export default {async fetch(){return import('./assets/lazy.js')}}",
+            ),
+            part(
+                "./assets/lazy.js",
+                "application/javascript+module",
+                b"export const value = 42;",
+            ),
+            part("./copy.txt", "text/plain", b"copy"),
+        ],
+        BundleLimits::DEFAULT,
+    )
+    .unwrap();
+    assert_eq!(parsed.metadata.main_module.as_deref(), Some("index.js"));
+    assert_eq!(parsed.metadata.bindings[0].part().unwrap().0, "copy.txt");
+    let bundle = CanonicalBundle::parse(parsed.bundle.unwrap(), BundleLimits::DEFAULT).unwrap();
+    assert_eq!(
+        bundle
+            .manifest()
+            .modules
+            .iter()
+            .map(|module| module.name.as_str())
+            .collect::<Vec<_>>(),
+        ["assets/lazy.js", "copy.txt", "index.js"]
+    );
+    for name in [
+        "./../secret.js",
+        "././index.js",
+        ".//index.js",
+        "./",
+        "/index.js",
+        "dir/../index.js",
+    ] {
+        assert!(validate_part_name(name).is_err(), "accepted {name}");
+    }
+    let duplicate = parse_parts(
+        vec![
+            part(
+                "metadata",
+                "application/json",
+                br#"{"main_module":"index.js"}"#,
+            ),
+            part(
+                "index.js",
+                "application/javascript+module",
+                b"export default {}",
+            ),
+            part(
+                "./index.js",
+                "application/javascript+module",
+                b"export default {}",
+            ),
+        ],
+        BundleLimits::DEFAULT,
+    );
+    assert!(duplicate.is_err());
 }

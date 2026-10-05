@@ -2,10 +2,10 @@
 title: "Routing"
 ---
 
-`ocd wrangler deploy` 在所选平台上激活部署。每个 Worker 使用 canonical name 与 account ID 取得一个本机 origin。
+`ocd cf deploy` 在所选平台上激活部署。每个 Worker 使用 canonical name 与 account ID 取得一个本机 origin。
 
 ```sh
-ocd wrangler --project examples/hello-worker deploy --env dev
+ocd cf --project examples/hello-worker deploy --mode dev
 # Worker is serving at http://hello-worker.<account-id>.localhost:8787/
 ```
 

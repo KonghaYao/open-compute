@@ -13,13 +13,19 @@ export default {
 } satisfies ExportedHandler<Env>;
 ```
 
-```json
-{
-  "name": "front",
-  "main": "src/index.ts",
-  "services": [{ "binding": "AUTH", "service": "auth-worker" }],
-  "version_metadata": { "binding": "VERSION", "tag": "release-1" }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "front",
+    entrypoint: "src/index.ts",
+    env: {
+      AUTH: bindings.worker({ worker: "auth-worker" }),
+      VERSION: bindings.versionMetadata(),
+    },
+  },
+});
 ```
 
 Service Bindings: default/named `fetch` and RPC. The target is a uniquely resolvable Worker name, an operator-configured [extension](/docs/extension/) slug, or a fixed [private HTTP target](/docs/ocd/configuration/) in the same instance; deploy time freezes the target identity and policy revision. `entrypoint` is optional. Private HTTP targets expose `fetch` only. There is no new public Binding type.

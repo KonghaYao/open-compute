@@ -137,10 +137,11 @@ fn multipart_response(
     )
 }
 
-fn module_content_type(module_type: ModuleType) -> &'static str {
+pub(super) fn module_content_type(module_type: ModuleType) -> &'static str {
     match module_type {
         ModuleType::EsModule => "application/javascript+module",
         ModuleType::CommonJsModule => "application/javascript",
+        ModuleType::Python => "text/x-python",
         ModuleType::Text => "text/plain",
         ModuleType::Data => "application/octet-stream",
         ModuleType::Json => "application/json",
@@ -182,13 +183,17 @@ mod tests {
     use crate::cloudflare_v4::accounts::V4InstanceContext;
     use crate::http;
     use axum::body::to_bytes;
-    use open_compute_core::{InstanceId, RequestId, SecretString};
+    use open_compute_core::{InstanceId, RequestId, SecretBytes, SecretString};
     use open_compute_storage::worker_repository::{DeploymentSource, WorkerRepository};
+    use open_compute_workers::python_artifact::{
+        PreparedPythonIdentity, PythonRuntimePin, publish_prepared_python,
+    };
     use open_compute_workers::{
         AssetEntryV1, AssetManifestV1, AssetRoutingConfigV1, CreateVersionOutcome,
         CreateVersionRequest, ModuleInput, NotFoundHandling, RunWorkerFirst, RuntimeValidator,
         ValidationCandidate, VersionAssets, VersionBundle, VersionContent, VersionController,
     };
+    use open_compute_workers::{RuntimeScope, RuntimeSource};
     use sha2::{Digest as _, Sha256};
     use std::collections::BTreeMap;
     use std::sync::Arc;
@@ -205,9 +210,74 @@ mod tests {
             .unwrap()
             .0;
         let main = modules[0].name.clone();
+        let python = modules[0].module_type == ModuleType::Python;
         let bundle = CanonicalBundle::build(&main, modules, api.bundle_limits).unwrap();
+        let storage = api.storage.clone();
+        let artifacts = api.artifacts.clone();
+        // Download reconstruction is a storage/HTTP unit: the validator supplies
+        // opaque snapshot bytes, while the actual publication/AEAD path stays real.
+        let pin = PythonRuntimePin {
+            workerd_revision: "a".repeat(40),
+            workerd_binary_sha256: "b".repeat(64),
+            process_flags: vec!["--experimental".to_owned()],
+            pyodide_bundle_sha256: "c".repeat(64),
+            runtime_assets_sha256: "d".repeat(64),
+        };
+        let source = RuntimeSource::new(
+            storage.clone(),
+            artifacts.clone(),
+            api.bundle_limits,
+            pin.clone(),
+        )
+        .unwrap();
         let validator: Arc<dyn RuntimeValidator> =
-            Arc::new(|_: ValidationCandidate| async { Ok(()) });
+            Arc::new(move |candidate: ValidationCandidate| {
+                let storage = storage.clone();
+                let artifacts = artifacts.clone();
+                let source = source.clone();
+                let pin = pin.clone();
+                async move {
+                    if python {
+                        let authority = WorkerRepository::new(storage.db()).version_snapshot(
+                            candidate.instance_id,
+                            candidate.worker_id,
+                            candidate.version_id,
+                            true,
+                        )?;
+                        // Promotion validates the already-ready version a second time.
+                        // Its prepared authority must be retained rather than republished.
+                        if authority.python_prepared.is_some() {
+                            assert_eq!(
+                                authority.version.state,
+                                open_compute_storage::worker_repository::VersionState::Ready
+                            );
+                            return Ok(());
+                        }
+                        let key = format!(
+                            "{}/{}/{}",
+                            candidate.instance_id, candidate.worker_id, candidate.version_id
+                        );
+                        let snapshot = source
+                            .resolve(
+                                &key,
+                                &hex::encode(candidate.worker_code_sha256),
+                                RuntimeScope::Preparation,
+                            )
+                            .await?;
+                        let identity = PreparedPythonIdentity::from_snapshot(pin, &snapshot)?;
+                        publish_prepared_python(
+                            &storage,
+                            &artifacts,
+                            &identity,
+                            &SecretBytes::new(b"opaque download snapshot fixture".to_vec()),
+                            10,
+                            |publish| publish(),
+                        )
+                        .await?;
+                    }
+                    Ok(())
+                }
+            });
         let result = VersionController::new(
             &api.storage,
             api.artifacts.clone(),
@@ -239,7 +309,13 @@ mod tests {
         })
         .await
         .unwrap();
-        assert!(matches!(result, CreateVersionOutcome::Applied(_)));
+        let CreateVersionOutcome::Applied(result) = result else {
+            panic!("unexpected seed replay");
+        };
+        let snapshot = WorkerRepository::new(api.storage.db())
+            .version_snapshot(account, worker.id, result.version.id, false)
+            .unwrap();
+        assert_eq!(snapshot.python_prepared.is_some(), python);
     }
 
     async fn seed_assets_only(api: &crate::workers_http::WorkerApiState, account: InstanceId) {
@@ -313,7 +389,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn reconstructs_service_worker_modules_etag_and_assets_only_downloads() {
+    async fn reconstructs_javascript_python_modules_etag_and_assets_only_downloads() {
         let (_dir, _mock, state, account, _storage) =
             crate::tests::initialized_worker_http_fixture().await;
         let api = state.worker_api().unwrap().clone();
@@ -346,6 +422,21 @@ mod tests {
             ],
         )
         .await;
+        let python_modules = vec![
+            ModuleInput {
+                name: "entry.py".to_owned(),
+                module_type: ModuleType::Python,
+                bytes:
+                    b"from workers import WorkerEntrypoint\nclass Default(WorkerEntrypoint): pass\n"
+                        .to_vec(),
+            },
+            ModuleInput {
+                name: "python_modules/example/data.bin".to_owned(),
+                module_type: ModuleType::Data,
+                bytes: vec![0, 255, 42],
+            },
+        ];
+        seed_worker(&api, account, "python-worker", python_modules.clone()).await;
         seed_assets_only(&api, account).await;
         let authority = V4InstanceContext::new(account, 1_000);
         let public_account = authority.public_id().to_owned();
@@ -414,6 +505,41 @@ mod tests {
                 .any(|value| value == b"application/source-map")
         );
         assert!(!modules_body.windows(8).any(|value| value == b"metadata"));
+
+        let python = app.clone().oneshot(get("python-worker")).await.unwrap();
+        assert_eq!(python.status(), StatusCode::OK);
+        let boundary =
+            multer::parse_boundary(python.headers()[header::CONTENT_TYPE].to_str().unwrap())
+                .unwrap();
+        let mut multipart = multer::Multipart::new(python.into_body().into_data_stream(), boundary);
+        let mut downloaded = Vec::new();
+        while let Some(field) = multipart.next_field().await.unwrap() {
+            let name = field.name().unwrap().to_owned();
+            let original = python_modules
+                .iter()
+                .find(|module| module.name == name)
+                .unwrap();
+            assert_eq!(
+                field.content_type().unwrap().as_ref(),
+                module_content_type(original.module_type)
+            );
+            let bytes = field.bytes().await.unwrap().to_vec();
+            assert_eq!(bytes, original.bytes);
+            downloaded.push(ModuleInput {
+                name,
+                module_type: original.module_type,
+                bytes,
+            });
+        }
+        assert_eq!(downloaded.len(), python_modules.len());
+        assert_eq!(
+            CanonicalBundle::build("entry.py", downloaded, api.bundle_limits)
+                .unwrap()
+                .sha256(),
+            CanonicalBundle::build("entry.py", python_modules, api.bundle_limits)
+                .unwrap()
+                .sha256(),
+        );
 
         let assets = app.oneshot(get("assets-only")).await.unwrap();
         assert_eq!(assets.status(), StatusCode::OK);

@@ -5,12 +5,18 @@ import type {
   ResourceBindingProps,
 } from "../bindings/protocol.js";
 import { makeD1TransportBase } from "../d1/transport.js";
+import {
+  encodeObjectIdentity,
+  identityFromHeaders,
+  OBJECT_IDENTITY_HEADER,
+  objectIdentity,
+} from "../durable-objects/identity.js";
 import type {
   AlarmIdentity,
   AlarmProjection,
+  DoObjectIdentity,
 } from "../durable-objects/protocol.js";
 import { collectObservabilityTail } from "../observability/collector.js";
-import type { QueueBindingProps } from "../queues/protocol.js";
 import { makeR2TransportBase } from "../r2/transport.js";
 import {
   inboundSocketAddress,
@@ -28,6 +34,7 @@ import {
 } from "./shared.js";
 
 export { ArtifactsTransport } from "../artifacts/transport.js";
+export { QueueTransport } from "../queues/transport.js";
 
 /** Direct main-module entrypoint used by Worker Loader tail service stubs. */
 export class ObservabilityTail extends WorkerEntrypoint<
@@ -47,6 +54,7 @@ const doConnects = new Map<
     channelId: string;
     expiresAt: number;
     objectId: string;
+    identity: DoObjectIdentity;
     sequence: number;
   }
 >();
@@ -97,94 +105,6 @@ const D1TransportBase = makeD1TransportBase(
 );
 
 export class D1Transport extends D1TransportBase {}
-
-export class QueueTransport extends WorkerEntrypoint<
-  BindingEnv,
-  QueueBindingProps
-> {
-  #props() {
-    const props = this.ctx.props;
-    if (
-      !props ||
-      typeof props.bindingId !== "string" ||
-      typeof props.versionId !== "string" ||
-      typeof props.queueId !== "string" ||
-      !/^[0-9a-f]{64}$/.test(props.descriptorSha256) ||
-      !Number.isSafeInteger(props.queueLifecycleGeneration) ||
-      props.queueLifecycleGeneration < 1
-    ) {
-      throw bindingError("QUEUE_INVARIANT_VIOLATION");
-    }
-    return props;
-  }
-
-  async #request(
-    operation: string,
-    body?: BodyInit,
-    operationId?: string,
-  ): Promise<unknown> {
-    const props = this.#props();
-    if (
-      operationId !== undefined &&
-      (typeof operationId !== "string" ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
-          operationId,
-        ))
-    ) {
-      throw bindingError("QUEUE_INVARIANT_VIOLATION");
-    }
-    const response = await this.env.BINDING_BACKEND.fetch(
-      `http://binding-backend/internal/bindings/v1/queue/${props.bindingId}/${operation}`,
-      {
-        method: "POST",
-        headers: {
-          "content-type":
-            body === undefined
-              ? "application/json"
-              : "application/vnd.open-compute.queue.v1+frame",
-          [BINDING_TOKEN_HEADER]: this.env.BINDING_BACKEND_TOKEN,
-          "x-open-compute-startup-generation": currentStartupGeneration(),
-          "x-open-compute-version-id": props.versionId,
-          "x-open-compute-descriptor-sha256": props.descriptorSha256,
-          "x-open-compute-request-id": operationId ?? crypto.randomUUID(),
-          "x-open-compute-output-gate": operationId === undefined ? "0" : "1",
-        },
-        ...(body === undefined ? {} : { body }),
-      },
-    );
-    if (!response.ok) {
-      const code =
-        response.headers.get("x-open-compute-error-code") ||
-        "QUEUE_STORAGE_UNAVAILABLE";
-      try {
-        await response.body?.cancel();
-      } catch {
-        /* best effort */
-      }
-      throw bindingError(code);
-    }
-    const result: unknown = await response.json();
-    if (!result || typeof result !== "object")
-      throw bindingError("QUEUE_INVARIANT_VIOLATION");
-    return result;
-  }
-
-  send(frame: Uint8Array, operationId?: string) {
-    return this.#request("send", frame, operationId);
-  }
-
-  sendBatch(frame: Uint8Array, operationId?: string) {
-    return this.#request("batch", frame, operationId);
-  }
-
-  async finalize(operationId: string): Promise<void> {
-    await this.#request("finalize", undefined, operationId);
-  }
-
-  metrics() {
-    return this.#request("metrics");
-  }
-}
 
 export class AssetTransport extends WorkerEntrypoint<
   BindingEnv,
@@ -362,8 +282,13 @@ export class DoTransport extends WorkerEntrypoint<
     const objectId = match[1]!;
     const channelId = match[2]!;
     const sequence = Number(match[3]);
-    const identity = doTransportHeaders(props, objectId, channelId, sequence);
+    const metadata = identityFromHeaders(request.headers, objectId);
+    const identity = {
+      ...doTransportHeaders(props, objectId, channelId, sequence),
+      [OBJECT_IDENTITY_HEADER]: encodeObjectIdentity(metadata),
+    };
     const headers = new Headers(request.headers);
+    headers.delete(OBJECT_IDENTITY_HEADER);
     const tenantMethod =
       headers.get("x-open-compute-do-method") || request.method;
     const tenantUrl =
@@ -404,8 +329,11 @@ export class DoTransport extends WorkerEntrypoint<
     kind: "call" | "get",
     member: string,
     args: unknown[],
+    identity: DoObjectIdentity,
   ): DoRpcResult {
     const props = this.#props();
+    const metadata = objectIdentity(identity);
+    if (metadata.value !== objectId) throw bindingError("DO_ID_INVALID");
     if (
       (kind !== "call" && kind !== "get") ||
       typeof member !== "string" ||
@@ -416,6 +344,7 @@ export class DoTransport extends WorkerEntrypoint<
     }
     const headers = {
       ...doTransportHeaders(props, objectId, channelId, sequence),
+      [OBJECT_IDENTITY_HEADER]: encodeObjectIdentity(metadata),
       "x-open-compute-do-operation": "rpc",
       "content-type": "application/json",
     };
@@ -445,8 +374,11 @@ export class DoTransport extends WorkerEntrypoint<
     sequence: number,
     operationId: string,
     authority: SocketAuthorityWire,
+    identity: DoObjectIdentity,
   ): Promise<void> {
     const props = this.#props();
+    const metadata = objectIdentity(identity);
+    if (metadata.value !== objectId) throw bindingError("DO_ID_INVALID");
     doTransportHeaders(props, objectId, channelId, sequence);
     if (!DO_ORDER_CHANNEL.test(operationId)) {
       throw bindingError("DO_RUNTIME_EXCEPTION");
@@ -468,6 +400,7 @@ export class DoTransport extends WorkerEntrypoint<
       channelId,
       expiresAt: now + 10_000,
       objectId,
+      identity: metadata,
       sequence,
     };
     doConnects.set(operationId, pending);
@@ -503,6 +436,7 @@ export class DoTransport extends WorkerEntrypoint<
             pending.sequence,
           ),
           "x-open-compute-do-operation": "connect",
+          [OBJECT_IDENTITY_HEADER]: encodeObjectIdentity(pending.identity),
           "content-type": "application/json",
         },
         pending.authority,

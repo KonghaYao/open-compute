@@ -52,11 +52,11 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
+mod cf;
 mod http;
 mod nodejs;
 mod postgres;
 mod resource_limits_recovery;
-mod wrangler;
 
 mod p0_2_real_worker_create_validate_dispatch_promote_rollback_restart;
 
@@ -166,7 +166,7 @@ async fn deploy_postgres(
         vec![ModuleInput {
             name: "index.js".to_owned(),
             module_type: ModuleType::EsModule,
-            bytes: include_bytes!("../../../../test/applications/postgres-driver/dist/worker.js")
+            bytes: include_bytes!("../../../../test/applications/postgres-driver/.cloudflare/output/v0/workers/default/bundle/index.js")
                 .to_vec(),
         }],
         BundleLimits::default(),

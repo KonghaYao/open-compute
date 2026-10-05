@@ -174,52 +174,7 @@ impl<'a> WorkerRepository<'a> {
                     "version acquired a registered referrer while deleting",
                 ));
             }
-            tx.execute(
-                "DELETE FROM version_services WHERE version_id = ?1",
-                [version_id.to_string()],
-            )
-            .map_err(|_| db_error())?;
-            tx.execute(
-                "DELETE FROM version_cron_declarations WHERE version_id = ?1",
-                [version_id.to_string()],
-            )
-            .map_err(|_| db_error())?;
-            tx.execute(
-                "DELETE FROM version_cron_configs WHERE version_id = ?1",
-                [version_id.to_string()],
-            )
-            .map_err(|_| db_error())?;
-            tx.execute(
-                "DELETE FROM version_queue_consumers WHERE version_id = ?1",
-                [version_id.to_string()],
-            )
-            .map_err(|_| db_error())?;
-            tx.execute(
-                "DELETE FROM queue_producer_bindings WHERE version_id = ?1",
-                [version_id.to_string()],
-            )
-            .map_err(|_| db_error())?;
-            tx.execute(
-                "DELETE FROM workflow_bindings WHERE version_id = ?1",
-                [version_id.to_string()],
-            )
-            .map_err(|_| db_error())?;
-            tx.execute(
-                "DELETE FROM version_bindings WHERE version_id = ?1",
-                [version_id.to_string()],
-            )
-            .map_err(|_| db_error())?;
-            tx.execute(
-                "DELETE FROM version_vars WHERE version_id = ?1",
-                [version_id.to_string()],
-            )
-            .map_err(|_| db_error())?;
-            tx.execute(
-                "DELETE FROM version_secrets WHERE version_id = ?1",
-                [version_id.to_string()],
-            )
-            .map_err(|_| db_error())?;
-            crate::assets::delete_version_assets(tx, version_id)?;
+            delete_version_products(tx, version_id)?;
             let changed = tx
                 .execute(
                     "UPDATE worker_versions SET state = 'tombstoned', deleted_at_ms = ?1
@@ -309,50 +264,8 @@ impl<'a> WorkerRepository<'a> {
             };
             let mut recovered = 0_u32;
             for version in candidates {
-                tx.execute(
-                    "DELETE FROM version_services WHERE version_id = ?1",
-                    [&version],
-                )
-                .map_err(|_| db_error())?;
-                tx.execute(
-                    "DELETE FROM version_cron_declarations WHERE version_id = ?1",
-                    [&version],
-                )
-                .map_err(|_| db_error())?;
-                tx.execute(
-                    "DELETE FROM version_cron_configs WHERE version_id = ?1",
-                    [&version],
-                )
-                .map_err(|_| db_error())?;
-                tx.execute(
-                    "DELETE FROM version_queue_consumers WHERE version_id = ?1",
-                    [&version],
-                )
-                .map_err(|_| db_error())?;
-                tx.execute(
-                    "DELETE FROM queue_producer_bindings WHERE version_id = ?1",
-                    [&version],
-                )
-                .map_err(|_| db_error())?;
-                tx.execute(
-                    "DELETE FROM workflow_bindings WHERE version_id = ?1",
-                    [&version],
-                )
-                .map_err(|_| db_error())?;
-                tx.execute(
-                    "DELETE FROM version_bindings WHERE version_id = ?1",
-                    [&version],
-                )
-                .map_err(|_| db_error())?;
-                tx.execute("DELETE FROM version_vars WHERE version_id = ?1", [&version])
-                    .map_err(|_| db_error())?;
-                tx.execute(
-                    "DELETE FROM version_secrets WHERE version_id = ?1",
-                    [&version],
-                )
-                .map_err(|_| db_error())?;
                 let version_id = VersionId::from_str(&version).map_err(|_| invariant())?;
-                crate::assets::delete_version_assets(tx, version_id)?;
+                delete_version_products(tx, version_id)?;
                 let changed = tx
                     .execute(
                         "UPDATE worker_versions
@@ -531,6 +444,11 @@ impl<'a> WorkerRepository<'a> {
                      JOIN worker_versions d ON d.id = r.version_id
                      WHERE d.state != 'tombstoned'
                      UNION
+                     SELECT p.artifact_sha256, p.artifact_size
+                     FROM version_python_prepared p
+                     JOIN worker_versions d ON d.id = p.version_id
+                     WHERE d.state != 'tombstoned'
+                     UNION
                      SELECT DISTINCT o.sha256, o.size
                      FROM version_upload_objects o
                      JOIN version_uploads u ON u.id = o.session_id
@@ -555,4 +473,23 @@ impl<'a> WorkerRepository<'a> {
             Ok(out)
         })
     }
+}
+
+fn delete_version_products(tx: &Transaction<'_>, version: VersionId) -> Result<(), PlatformError> {
+    for statement in [
+        "DELETE FROM version_services WHERE version_id=?1",
+        "DELETE FROM version_cron_declarations WHERE version_id=?1",
+        "DELETE FROM version_cron_configs WHERE version_id=?1",
+        "DELETE FROM version_queue_consumers WHERE version_id=?1",
+        "DELETE FROM queue_producer_bindings WHERE version_id=?1",
+        "DELETE FROM workflow_bindings WHERE version_id=?1",
+        "DELETE FROM version_bindings WHERE version_id=?1",
+        "DELETE FROM version_vars WHERE version_id=?1",
+        "DELETE FROM version_secrets WHERE version_id=?1",
+        "DELETE FROM version_python_prepared WHERE version_id=?1",
+    ] {
+        tx.execute(statement, [version.to_string()])
+            .map_err(|_| db_error())?;
+    }
+    crate::assets::delete_version_assets(tx, version)
 }

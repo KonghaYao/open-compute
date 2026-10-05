@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import socket
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -18,10 +19,252 @@ spec.loader.exec_module(gate)
 
 
 class GateTests(unittest.TestCase):
+    def test_python_main_is_one_exclusive_registered_scenario_in_acceptance_groups(self):
+        name = 'p21-python-main'
+        case = 'python_main::p21_python_main_upload_prepare_dispatch_restart_rollback'
+        self.assertEqual(gate.CARGO_TARGETS[name], ('open-compute-service', 'p21_python_main', True))
+        self.assertEqual(gate.TIMING[name], (case,))
+        self.assertFalse(gate.ONCE.get(name, ()))
+        self.assertEqual(gate.GROUPS['all'].count(name), 1)
+        self.assertEqual(gate.P3_PRODUCT_TARGETS.count(name), 1)
+        metadata = {'workspace_members': ['service'], 'packages': [{
+            'id': 'service', 'name': 'open-compute-service', 'manifest_path': '/repo/crates/service/Cargo.toml',
+            'targets': [{'name': 'p21_python_main', 'kind': ['test'], 'test': True}],
+        }]}
+        with patch.object(gate.subprocess, 'check_output', return_value=json.dumps(metadata)), \
+             patch.object(gate, 'CARGO_TARGETS', {name: gate.CARGO_TARGETS[name]}):
+            targets = gate.resolve_targets([name], False)
+            workspace = gate.resolve_targets([], True)
+        self.assertEqual(targets[name].name, 'p21_python_main')
+        self.assertTrue(targets[name].exclusive)
+        self.assertEqual(targets[name].cases, (case,))
+        self.assertIn(name, workspace)
+        self.assertEqual(workspace[name].name, 'p21_python_main')
+
     @staticmethod
     def targets(names):
         return {name: gate.Target('package', gate.TARGETS[name][1], 'test', str(gate.ROOT),
                                   gate.TARGETS[name][2]) for name in names}
+
+    def test_python_frameworks_require_three_cases_in_one_exclusive_native_inventory(self):
+        name = 'p21-python-frameworks'
+        cases = tuple(sorted(
+            f'frameworks::p21_python_{framework}_framework_deploy_restart_rollback'
+            for framework in ('django', 'flask', 'fastapi')
+        ))
+        self.assertEqual(gate.CARGO_TARGETS[name], ('open-compute-service', 'p21_python_frameworks', True))
+        self.assertEqual(tuple(sorted(gate.TIMING[name])), cases)
+        self.assertFalse(gate.ONCE.get(name, ()))
+        self.assertEqual(gate.GROUPS['all'].count(name), 1)
+        self.assertEqual(gate.P3_PRODUCT_TARGETS.count(name), 1)
+        catalog = json.loads((gate.ROOT / 'test/conformance/catalog.json').read_text())
+        references = {f'{name}::{case}' for case in cases}
+        for contract in catalog['contracts']:
+            for polarity in ('positiveCases', 'negativeCases'):
+                owned = references.intersection(contract[polarity])
+                expected = references if contract['id'] in (
+                    'workers.runtime.common', 'deployments.immutable.lifecycle',
+                ) else set()
+                self.assertEqual(owned, expected, contract['id'])
+        gate.validate_contract_case_mapping()
+        metadata = {'workspace_members': ['service'], 'packages': [{
+            'id': 'service', 'name': 'open-compute-service', 'manifest_path': '/repo/crates/service/Cargo.toml',
+            'targets': [{'name': 'p21_python_frameworks', 'kind': ['test'], 'test': True}],
+        }]}
+        with patch.object(gate.subprocess, 'check_output', return_value=json.dumps(metadata)), \
+             patch.object(gate, 'CARGO_TARGETS', {name: gate.CARGO_TARGETS[name]}):
+            targets = gate.resolve_targets([name], False)
+            workspace = gate.resolve_targets([], True)
+        self.assertEqual(targets[name].cases, cases)
+        self.assertTrue(targets[name].exclusive)
+        self.assertIn(name, workspace)
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'list.log'
+            log.write_text('\n'.join(f'{case}: test' for case in cases) + '\n\n3 tests, 0 benchmarks\n')
+            gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+            log.write_text(f'{cases[0]}: test\n\n1 test, 0 benchmarks\n')
+            with self.assertRaisesRegex(ValueError, 'case registry mismatch'):
+                gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+
+    def test_python_services_owns_native_case_and_matching_contract_evidence(self):
+        name = 'p21-python-services'
+        case = 'services::p21_python_services_fetch_named_rpc_callback_restart_rollback'
+        self.assertEqual(gate.CARGO_TARGETS[name], ('open-compute-service', 'p21_python_services', True))
+        self.assertEqual(gate.TIMING[name], (case,))
+        self.assertFalse(gate.ONCE.get(name, ()))
+        self.assertEqual(gate.GROUPS['all'].count(name), 1)
+        self.assertEqual(gate.P3_PRODUCT_TARGETS.count(name), 1)
+        metadata = {'workspace_members': ['service'], 'packages': [{
+            'id': 'service', 'name': 'open-compute-service', 'manifest_path': '/repo/crates/service/Cargo.toml',
+            'targets': [{'name': 'p21_python_services', 'kind': ['test'], 'test': True}],
+        }]}
+        with patch.object(gate.subprocess, 'check_output', return_value=json.dumps(metadata)), \
+             patch.object(gate, 'CARGO_TARGETS', {name: gate.CARGO_TARGETS[name]}):
+            targets = gate.resolve_targets([name], False)
+            workspace = gate.resolve_targets([], True)
+        self.assertEqual(targets[name].cases, (case,))
+        self.assertTrue(targets[name].exclusive)
+        self.assertIn(name, workspace)
+        catalog = json.loads((gate.ROOT / 'test/conformance/catalog.json').read_text())
+        for contract in catalog['contracts']:
+            owned = f'{name}::{case}'
+            expected = contract['id'] in (
+                'workers.runtime.common', 'deployments.immutable.lifecycle', 'services.fetch.rpc',
+            )
+            for polarity in ('positiveCases', 'negativeCases'):
+                self.assertEqual(owned in contract[polarity], expected, contract['id'])
+        gate.validate_contract_case_mapping()
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'list.log'
+            log.write_text(f'{case}: test\n\n1 test, 0 benchmarks\n')
+            gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+            log.write_text('0 tests, 0 benchmarks\n')
+            with self.assertRaisesRegex(ValueError, 'case registry mismatch'):
+                gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+
+    def test_python_queues_owns_native_case_and_matching_contract_evidence(self):
+        name = 'p21-python-queues'
+        case = 'queues::p21_python_queues_produce_consume_retry_dlq_restart_rollback'
+        self.assertEqual(gate.CARGO_TARGETS[name], ('open-compute-service', 'p21_python_queues', True))
+        self.assertEqual(gate.TIMING[name], (case,))
+        self.assertFalse(gate.ONCE.get(name, ()))
+        self.assertEqual(gate.GROUPS['all'].count(name), 1)
+        self.assertEqual(gate.P3_PRODUCT_TARGETS.count(name), 1)
+        metadata = {'workspace_members': ['service'], 'packages': [{
+            'id': 'service', 'name': 'open-compute-service', 'manifest_path': '/repo/crates/service/Cargo.toml',
+            'targets': [{'name': 'p21_python_queues', 'kind': ['test'], 'test': True}],
+        }]}
+        with patch.object(gate.subprocess, 'check_output', return_value=json.dumps(metadata)), \
+             patch.object(gate, 'CARGO_TARGETS', {name: gate.CARGO_TARGETS[name]}):
+            targets = gate.resolve_targets([name], False)
+            workspace = gate.resolve_targets([], True)
+        self.assertEqual(targets[name].cases, (case,))
+        self.assertTrue(targets[name].exclusive)
+        self.assertIn(name, workspace)
+        catalog = json.loads((gate.ROOT / 'test/conformance/catalog.json').read_text())
+        for contract in catalog['contracts']:
+            owned = f'{name}::{case}'
+            expected = contract['id'] in (
+                'workers.runtime.common', 'deployments.immutable.lifecycle', 'queues.push.methods',
+            )
+            for polarity in ('positiveCases', 'negativeCases'):
+                self.assertEqual(owned in contract[polarity], expected, contract['id'])
+        gate.validate_contract_case_mapping()
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'list.log'
+            log.write_text(f'{case}: test\n\n1 test, 0 benchmarks\n')
+            gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+            log.write_text('0 tests, 0 benchmarks\n')
+            with self.assertRaisesRegex(ValueError, 'case registry mismatch'):
+                gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+
+    def test_python_workflows_owns_native_case_and_matching_contract_evidence(self):
+        name = 'p21-python-workflows'
+        case = 'workflows::p21_python_workflows_steps_events_retry_pause_restart_rollback'
+        self.assertEqual(gate.CARGO_TARGETS[name], ('open-compute-service', 'p21_python_workflows', True))
+        self.assertEqual(gate.TIMING[name], (case,))
+        self.assertFalse(gate.ONCE.get(name, ()))
+        self.assertEqual(gate.GROUPS['all'].count(name), 1)
+        self.assertEqual(gate.P3_PRODUCT_TARGETS.count(name), 1)
+        metadata = {'workspace_members': ['service'], 'packages': [{
+            'id': 'service', 'name': 'open-compute-service', 'manifest_path': '/repo/crates/service/Cargo.toml',
+            'targets': [{'name': 'p21_python_workflows', 'kind': ['test'], 'test': True}],
+        }]}
+        with patch.object(gate.subprocess, 'check_output', return_value=json.dumps(metadata)), \
+             patch.object(gate, 'CARGO_TARGETS', {name: gate.CARGO_TARGETS[name]}):
+            targets = gate.resolve_targets([name], False)
+            workspace = gate.resolve_targets([], True)
+        self.assertEqual(targets[name].cases, (case,))
+        self.assertTrue(targets[name].exclusive)
+        self.assertIn(name, workspace)
+        catalog = json.loads((gate.ROOT / 'test/conformance/catalog.json').read_text())
+        for contract in catalog['contracts']:
+            owned = f'{name}::{case}'
+            expected = contract['id'] in (
+                'workers.runtime.common', 'deployments.immutable.lifecycle', 'workflows.binding.lifecycle',
+            )
+            for polarity in ('positiveCases', 'negativeCases'):
+                self.assertEqual(owned in contract[polarity], expected, contract['id'])
+        gate.validate_contract_case_mapping()
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'list.log'
+            log.write_text(f'{case}: test\n\n1 test, 0 benchmarks\n')
+            gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+            log.write_text('0 tests, 0 benchmarks\n')
+            with self.assertRaisesRegex(ValueError, 'case registry mismatch'):
+                gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+
+    def test_python_runtime_owns_native_case_and_matching_contract_evidence(self):
+        name = 'p21-python-runtime'
+        case = 'runtime::p21_python_runtime_ffi_stdlib_wait_until_network_restart_rollback'
+        self.assertEqual(gate.CARGO_TARGETS[name], ('open-compute-service', 'p21_python_runtime', True))
+        self.assertEqual(gate.TIMING[name], (case,))
+        self.assertFalse(gate.ONCE.get(name, ()))
+        self.assertEqual(gate.GROUPS['all'].count(name), 1)
+        self.assertEqual(gate.P3_PRODUCT_TARGETS.count(name), 1)
+        metadata = {'workspace_members': ['service'], 'packages': [{
+            'id': 'service', 'name': 'open-compute-service', 'manifest_path': '/repo/crates/service/Cargo.toml',
+            'targets': [{'name': 'p21_python_runtime', 'kind': ['test'], 'test': True}],
+        }]}
+        with patch.object(gate.subprocess, 'check_output', return_value=json.dumps(metadata)), \
+             patch.object(gate, 'CARGO_TARGETS', {name: gate.CARGO_TARGETS[name]}):
+            targets = gate.resolve_targets([name], False)
+            workspace = gate.resolve_targets([], True)
+        self.assertEqual(targets[name].cases, (case,))
+        self.assertTrue(targets[name].exclusive)
+        self.assertIn(name, workspace)
+        catalog = json.loads((gate.ROOT / 'test/conformance/catalog.json').read_text())
+        for contract in catalog['contracts']:
+            owned = f'{name}::{case}'
+            expected = contract['id'] in (
+                'workers.runtime.common', 'deployments.immutable.lifecycle', 'kv.namespace.methods', 'd1.binding.methods', 'r2.bucket.methods',
+            )
+            for polarity in ('positiveCases', 'negativeCases'):
+                self.assertEqual(owned in contract[polarity], expected, contract['id'])
+        gate.validate_contract_case_mapping()
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'list.log'
+            log.write_text(f'{case}: test\n\n1 test, 0 benchmarks\n')
+            gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+            log.write_text('0 tests, 0 benchmarks\n')
+            with self.assertRaisesRegex(ValueError, 'case registry mismatch'):
+                gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+
+    def test_python_durable_objects_owns_native_case_and_matching_contract_evidence(self):
+        name = 'p21-python-durable-objects'
+        case = 'durable_objects::p21_python_durable_objects_fetch_rpc_storage_alarm_restart_rollback'
+        self.assertEqual(gate.CARGO_TARGETS[name], ('open-compute-service', 'p21_python_durable_objects', True))
+        self.assertEqual(gate.TIMING[name], (case,))
+        self.assertFalse(gate.ONCE.get(name, ()))
+        self.assertEqual(gate.GROUPS['all'].count(name), 1)
+        self.assertEqual(gate.P3_PRODUCT_TARGETS.count(name), 1)
+        metadata = {'workspace_members': ['service'], 'packages': [{
+            'id': 'service', 'name': 'open-compute-service', 'manifest_path': '/repo/crates/service/Cargo.toml',
+            'targets': [{'name': 'p21_python_durable_objects', 'kind': ['test'], 'test': True}],
+        }]}
+        with patch.object(gate.subprocess, 'check_output', return_value=json.dumps(metadata)), \
+             patch.object(gate, 'CARGO_TARGETS', {name: gate.CARGO_TARGETS[name]}):
+            targets = gate.resolve_targets([name], False)
+            workspace = gate.resolve_targets([], True)
+        self.assertEqual(targets[name].cases, (case,))
+        self.assertTrue(targets[name].exclusive)
+        self.assertIn(name, workspace)
+        catalog = json.loads((gate.ROOT / 'test/conformance/catalog.json').read_text())
+        for contract in catalog['contracts']:
+            owned = f'{name}::{case}'
+            expected = contract['id'] in (
+                'workers.runtime.common', 'deployments.immutable.lifecycle', 'durable-objects.namespace.storage', 'durable-objects.alarms',
+            )
+            for polarity in ('positiveCases', 'negativeCases'):
+                self.assertEqual(owned in contract[polarity], expected, contract['id'])
+        gate.validate_contract_case_mapping()
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / 'list.log'
+            log.write_text(f'{case}: test\n\n1 test, 0 benchmarks\n')
+            gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
+            log.write_text('0 tests, 0 benchmarks\n')
+            with self.assertRaisesRegex(ValueError, 'case registry mismatch'):
+                gate.verify_case_inventory(targets, [{'target': name, 'log': str(log)}])
 
     def test_runtime_inputs_use_only_the_pinned_bundled_archive_or_explicit_copy(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -194,7 +437,9 @@ class GateTests(unittest.TestCase):
     def test_harness_preparation_only_lists_tests_in_a_separate_process(self):
         with tempfile.TemporaryDirectory() as temp, \
              patch.object(gate.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run, \
-             patch.dict(os.environ, OPEN_COMPUTE_GATE_ROUNDS='3'):
+             patch.dict(os.environ, OPEN_COMPUTE_GATE_ROUNDS='3',
+                        BUN_RUNTIME_TRANSPILER_CACHE_PATH='unowned-cache',
+                        NODE_DISABLE_COMPILE_CACHE='0'):
             target = self.targets(['p0-2'])['p0-2']
             result = gate.execute_target('p0-2', '/compiled/test', Path(temp)/'prepare', target,
                                          list_only=True)
@@ -202,6 +447,8 @@ class GateTests(unittest.TestCase):
             self.assertEqual(run.call_args.args[0], ['/compiled/test', '--list'])
             self.assertEqual(run.call_args.kwargs['timeout'], 600)
             self.assertNotIn('OPEN_COMPUTE_GATE_ROUNDS', run.call_args.kwargs['env'])
+            self.assertEqual(run.call_args.kwargs['env']['BUN_RUNTIME_TRANSPILER_CACHE_PATH'], '0')
+            self.assertEqual(run.call_args.kwargs['env']['NODE_DISABLE_COMPILE_CACHE'], '1')
 
     def test_p5_search_defaults_fixture_embedding_key(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(gate, 'ROOT', Path(temp)):
@@ -573,7 +820,7 @@ class GateTests(unittest.TestCase):
     def test_coverage_rejects_extra_rounds_before_tool_checks_or_cleanup(self):
         source = (gate.ROOT/'test/coverage.sh').read_text()
         self.assertIn(
-            '/src/bin/(s3_fixture|s3_provider_qualification|supervisor_fixture)\\.rs$', source)
+            '/src/bin/(s3_fixture|s3_provider_qualification|supervisor_fixture|install_upgrade_fixture)\\.rs$', source)
         result = subprocess.run([str(gate.ROOT/'test/coverage.sh')], capture_output=True,
                                 env={'OPEN_COMPUTE_GATE_ROUNDS': '3', 'PATH': '/usr/bin:/bin'},
                                 timeout=10)
@@ -587,6 +834,79 @@ class GateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn('OPEN_COMPUTE_COVERAGE_HTML must be 0 or 1',
                       result.stderr.decode())
+
+    def test_coverage_run_keeps_old_profiles_and_reports_out_of_current_inputs(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'test').mkdir()
+            script = root / 'test/coverage.sh'
+            shutil.copy2(gate.ROOT / 'test/coverage.sh', script)
+            cache = root / 'target/llvm-cov-target'
+            cache.mkdir(parents=True)
+            old_profile = cache / 'old.profraw'
+            old_profile.write_text('old profile')
+            reports = root / 'target/llvm-cov'
+            reports.mkdir()
+            (reports / 'summary.json').write_text('old report')
+            workerd = root / 'workerd'
+            workerd.write_text('verified runtime input belongs to the real Gate')
+            tools = {}
+            sources = {
+                'cargo': """import sys
+if sys.argv[1:3] == ['llvm-cov', 'show-env']:
+    print('export CARGO_LLVM_COV=1')
+elif sys.argv[1:] not in (['llvm-cov', '--version'], ['fetch', '--locked']):
+    sys.exit(9)
+""",
+                'rustc': """import sys
+print('host: fixture' if sys.argv[1:] == ['-vV'] else '/unused')
+""",
+                'llvm-profdata': """import sys
+from pathlib import Path
+args=sys.argv[1:]
+Path(args[args.index('-o')+1]).write_text('merged current profiles')
+""",
+                'llvm-cov': """import os,sys,json
+print('TN:current' if '--format=lcov' in sys.argv else json.dumps({'data':[{'totals':{'lines':{'percent':float(os.environ['FIXTURE_COVERAGE'])}}}]}))
+""",
+                'gate': """import os,sys
+from pathlib import Path
+if '--list' not in sys.argv:
+    run=Path(os.environ['OPEN_COMPUTE_COVERAGE_RUN_DIR'])
+    (run/'objects').mkdir()
+    (run/'objects/current-binary').write_text('exact current object')
+    (run/'profiles/current.profraw').write_text('current profile')
+""",
+            }
+            for name, source in sources.items():
+                path = root / name
+                path.write_text(f'#!{sys.executable}\n' + source)
+                path.chmod(0o700)
+                tools[name] = str(path)
+            shutil.copy2(tools['gate'], root / 'test/gate.py')
+            environment = {'PATH': os.environ['PATH'], 'CARGO': tools['cargo'],
+                           'RUSTC': tools['rustc'], 'LLVM_COV': tools['llvm-cov'],
+                           'LLVM_PROFDATA': tools['llvm-profdata'],
+                           'OPEN_COMPUTE_TEST_WORKERD': str(workerd),
+                           'OPEN_COMPUTE_COVERAGE_HTML': '0', 'FIXTURE_COVERAGE': '100'}
+            result = subprocess.run([str(script)], capture_output=True, env=environment, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            runs = list((root / '.temp/coverage').iterdir())
+            self.assertEqual(len(runs), 1)
+            run = runs[0]
+            self.assertEqual((run / 'profraw-list').read_text().splitlines(),
+                             [str(run / 'profiles/current.profraw')])
+            self.assertEqual((run / 'previous-reports/summary.json').read_text(), 'old report')
+            successful_report = (reports / 'summary.json').read_bytes()
+            self.assertEqual((run / 'reports/summary.json').read_bytes(), successful_report)
+            self.assertEqual(old_profile.read_text(), 'old profile')
+            environment['FIXTURE_COVERAGE'] = '89'
+            result = subprocess.run([str(script)], capture_output=True, env=environment, timeout=10)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('below 90.00%', result.stderr.decode())
+            self.assertEqual((reports / 'summary.json').read_bytes(), successful_report)
+            self.assertEqual(old_profile.read_text(), 'old profile')
+            self.assertEqual(len(list((root / '.temp/coverage').iterdir())), 2)
 
     def test_source_freeze_ignores_designs_and_python_caches_but_includes_runtime_inputs(self):
         names = ['crates/service/src/resources.rs', 'docs/references/runbooks/install.md',
@@ -668,6 +988,61 @@ class GateTests(unittest.TestCase):
                     True,
                 )
             run.assert_not_called()
+
+    def test_coverage_build_keeps_prior_objects_and_refuses_overwrite(self):
+        self.assert_coverage_build_preservation()
+
+    def test_coverage_build_preserves_objects_when_apfs_cloning_is_unavailable(self):
+        with patch.object(gate.sys, 'platform', 'darwin'), \
+             patch.object(gate.subprocess, 'check_call',
+                          side_effect=subprocess.CalledProcessError(1, ['/bin/cp', '-c'])):
+            self.assert_coverage_build_preservation()
+
+    def assert_coverage_build_preservation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            binary = root / 'test-binary'
+            binary.write_bytes(b'compiled instrumented test')
+            prior = root / 'prior-objects'
+            prior.mkdir()
+            retained = prior / 'earlier-binary'
+            retained.write_bytes(b'retained failure evidence')
+            package = f'path+file://{gate.ROOT}/crates/service#open-compute-service@0.2.3'
+            targets = {'one': gate.Target(package, 'test', 'test', temp, False)}
+            messages = [{'reason': 'compiler-artifact', 'package_id': package,
+                         'target': {'name': 'test', 'kind': ['test'], 'test': True},
+                         'profile': {'test': True}, 'executable': str(binary)}]
+            result = SimpleNamespace(returncode=0, stdout='\n'.join(map(json.dumps, messages)))
+            fresh = root / 'fresh'
+            fresh.mkdir()
+            environment = {'CARGO_LLVM_COV': '1', 'OPEN_COMPUTE_COVERAGE_RUN_DIR': str(fresh)}
+            with patch.object(gate.subprocess, 'run', return_value=result), \
+                 patch.dict(os.environ, environment):
+                gate.build_targets(targets, fresh, True)
+                objects = list((fresh / 'objects').iterdir())
+                self.assertEqual(len(objects), 1)
+                self.assertEqual(objects[0].read_bytes(), binary.read_bytes())
+                self.assertNotEqual(objects[0].stat().st_ino, binary.stat().st_ino)
+                binary.write_bytes(b'rebuilt cache binary')
+                self.assertEqual(objects[0].read_bytes(), b'compiled instrumented test')
+                self.assertEqual(retained.read_bytes(), b'retained failure evidence')
+                second = root / 'second'
+                second.mkdir()
+                with self.assertRaisesRegex(RuntimeError, 'refusing to overwrite coverage objects'):
+                    gate.build_targets(targets, second, True)
+                self.assertEqual(objects[0].read_bytes(), b'compiled instrumented test')
+                link = root / 'linked-run'
+                link.symlink_to(fresh, target_is_directory=True)
+                third = root / 'third'
+                third.mkdir()
+                with patch.dict(os.environ, {'OPEN_COMPUTE_COVERAGE_RUN_DIR': str(link)}), \
+                     self.assertRaisesRegex(RuntimeError, 'not an owned directory'):
+                    gate.build_targets(targets, third, True)
+                fourth = root / 'fourth'
+                fourth.mkdir()
+                with patch.dict(os.environ, {'OPEN_COMPUTE_COVERAGE_RUN_DIR': 'relative'}), \
+                     self.assertRaisesRegex(RuntimeError, 'not an owned directory'):
+                    gate.build_targets(targets, fourth, True)
 
     def test_typed_discovery_and_exact_execution_use_strict_json_and_environment(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(gate, 'ROOT', Path(temp)):

@@ -2,15 +2,14 @@ import {
   AggregateErrorCtor,
   ArrayBufferCtor,
   ArrayCtor,
-  assertProfile,
   createObject,
   DataViewCtor,
   DateCtor,
   defineData,
   DOMExceptionCtor,
+  DURABLE_VALUE_KIND,
   DURABLE_VALUE_LIMITS,
   DURABLE_VALUE_MAGIC,
-  DURABLE_VALUE_PROFILE_ID,
   DURABLE_VALUE_SCHEMA,
   ERROR_CAUSE,
   ERROR_CODE,
@@ -28,27 +27,24 @@ import {
   TYPED_ARRAYS,
   wtf8Decode,
 } from "./format.js";
-import type { DurableValueProfile } from "./protocol.js";
 
 class Decoder {
-  profile: DurableValueProfile;
   maxNodes: number;
   maxDepth: number;
   reader: Reader;
   nodes: unknown[] = [];
-  constructor(bytes: Uint8Array, profile: DurableValueProfile) {
-    this.profile = profile;
-    const limits = DURABLE_VALUE_LIMITS[profile];
+  constructor(bytes: Uint8Array) {
+    const limits = DURABLE_VALUE_LIMITS;
     this.maxNodes = limits.maxNodes;
     this.maxDepth = limits.maxDepth;
-    if (bytes.byteLength > limits.maxBytes) fail(profile, "tooLarge");
+    if (bytes.byteLength > limits.maxBytes) fail("tooLarge");
     this.reader = new Reader(bytes);
   }
   malformed(): never {
-    return fail(this.profile, "malformed");
+    return fail("malformed");
   }
   tooLarge(): never {
-    return fail(this.profile, "tooLarge");
+    return fail("tooLarge");
   }
   u8(): number {
     return this.reader.u8(() => this.malformed());
@@ -298,18 +294,14 @@ class Decoder {
 
 const HOLE = Symbol("durable-hole");
 
-export function decodeDurableValue(
-  bytes: unknown,
-  profile: DurableValueProfile,
-): unknown {
-  const expected = assertProfile(profile);
-  if (!(bytes instanceof Uint8Array)) fail(expected, "malformed");
-  const decoder = new Decoder(bytes, expected);
+export function decodeDurableValue(bytes: unknown): unknown {
+  if (!(bytes instanceof Uint8Array)) fail("malformed");
+  const decoder = new Decoder(bytes);
   for (const byte of DURABLE_VALUE_MAGIC) {
     if (decoder.u8() !== byte) decoder.malformed();
   }
   if (decoder.u8() !== DURABLE_VALUE_SCHEMA) decoder.malformed();
-  if (decoder.u8() !== DURABLE_VALUE_PROFILE_ID[expected]) decoder.malformed();
+  if (decoder.u8() !== DURABLE_VALUE_KIND) decoder.malformed();
   const value = decoder.value(0);
   decoder.reader.end(() => decoder.malformed());
   return value;

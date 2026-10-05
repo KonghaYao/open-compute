@@ -4,15 +4,27 @@ title: "Workers Cache"
 
 部署配置驱动的 HTTP 响应缓存，以及租户 Cache API。
 
-```json
-{
-  "name": "cached",
-  "main": "src/index.ts",
-  "cache": { "enabled": true, "cross_version_cache": false },
-  "exports": {
-    "Admin": { "type": "worker", "cache": { "enabled": false } }
-  }
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "cached",
+    entrypoint: "src/index.ts",
+    cache: {
+      enabled: true,
+      cross_version_cache: false,
+    },
+    exports: {
+      Admin: {
+        type: "worker",
+        cache: {
+          enabled: false,
+        },
+      },
+    },
+  },
+});
 ```
 
 `cache.enabled` 打开默认 HTTP cache。`cross_version_cache` 允许跨部署版本共享；默认隔离。`exports.<name>` 只能覆盖具名 Worker entrypoint 的缓存策略。自动缓存需要显式 `s-maxage` 或 `max-age`。

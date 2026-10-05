@@ -3,7 +3,7 @@ title: "Rust"
 description: "Build a workers-rs project to WebAssembly and deploy it to open-compute."
 ---
 
-Cloudflare supports Rust Workers through the `workers-rs` crate. `worker-build` compiles Rust to WebAssembly and emits an ES module shim; project-local Wrangler uploads both as a standard module Worker. This output shape is supported by open-compute.
+Cloudflare supports Rust Workers through the `workers-rs` crate. `worker-build` compiles Rust to WebAssembly and emits an ES module shim; project-local cf uploads both as a standard module Worker. This output shape is supported by open-compute.
 
 ## Create the project
 
@@ -15,7 +15,7 @@ cargo install cargo-generate
 cargo generate cloudflare/workers-rs
 ```
 
-Keep Wrangler installed in the generated project. The open-compute launcher deliberately resolves the nearest project-local Wrangler rather than a global executable.
+Keep cf installed in the generated project. The open-compute launcher deliberately resolves the nearest project-local cf rather than a global executable.
 
 ## Write the Worker
 
@@ -36,32 +36,35 @@ async fn main(_request: Request, env: Env, _ctx: Context) -> Result<Response> {
 }
 ```
 
-The Wrangler configuration points at the generated shim and runs `worker-build` before upload:
+The cf configuration points at the generated shim. Run `worker-build` explicitly before the official Vite build:
 
-```json
-{
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "hello-rust",
-  "main": "build/worker/shim.mjs",
-  "compatibility_date": "2026-09-08",
-  "build": {
-    "command": "worker-build --release"
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "hello-rust",
+    entrypoint: "build/worker/shim.mjs",
+    compatibilityDate: "2026-09-08",
+    env: {
+      CACHE: bindings.kv({ id: "<namespace-id>" }),
+    },
   },
-  "kv_namespaces": [{ "binding": "CACHE", "id": "<namespace-id>" }]
-}
+});
 ```
 
 All dependencies must compile for `wasm32-unknown-unknown`. Install `worker-build` explicitly or keep the build command produced by the official template.
 
 ## Develop and deploy
 
-Use Wrangler for the local loop, then use open-compute to select and authenticate the real target:
+Use cf for the local loop, then use open-compute to select and authenticate the real target:
 
 ```sh
-npx wrangler dev
-ocd wrangler deploy
+worker-build --release
+npm run build
+ocd cf deploy --prebuilt --mode production
 ```
 
-`ocd wrangler deploy` runs the same custom build command, then uploads the generated JavaScript shim and `.wasm` module. No Rust toolchain is needed on the production host after the immutable deployment has been created.
+Configure the official Vite plugin to bundle the generated shim and WASM. `ocd cf deploy --prebuilt` uploads that Build Output; it does not run `worker-build`. No Rust toolchain is needed on the production host after the immutable deployment has been created.
 
 Cloudflare reference: [Rust language support](https://developers.cloudflare.com/workers/languages/rust/).

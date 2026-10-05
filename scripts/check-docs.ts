@@ -278,18 +278,18 @@ if (!llms.includes("https://open-compute.dev/docs/extension/")) {
 
 const rootPackage = JSON.parse(
   readFileSync(join(repositoryRoot, "package.json"), "utf8"),
-) as { catalog?: { wrangler?: string } };
-const wranglerVersion = rootPackage.catalog?.wrangler;
-if (!wranglerVersion) {
-  fail("package.json does not declare catalog.wrangler");
+) as { catalog?: { cf?: string } };
+const cfVersion = rootPackage.catalog?.cf;
+if (!cfVersion) {
+  fail("package.json does not declare catalog.cf");
 } else {
   for (const path of [
     join(englishDocsRoot, "get-started.mdx"),
     join(chineseDocsRoot, "get-started.mdx"),
   ]) {
-    if (!readFileSync(path, "utf8").includes(`wrangler@${wranglerVersion}`)) {
+    if (!readFileSync(path, "utf8").includes(`cf@${cfVersion}`)) {
       fail(
-        `${relative(repositoryRoot, path)} does not use Wrangler ${wranglerVersion}`,
+        `${relative(repositoryRoot, path)} does not use Cloudflare CLI ${cfVersion}`,
       );
     }
   }

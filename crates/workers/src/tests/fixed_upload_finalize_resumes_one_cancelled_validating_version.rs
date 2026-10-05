@@ -56,14 +56,20 @@ async fn fixed_upload_finalize_resumes_one_cancelled_validating_version() {
         .get_version(account, worker.id, version_id)
         .unwrap();
     assert_eq!(stranded.state, VersionState::Validating);
-    let probe = RuntimeSource::new(storage.clone(), artifacts.clone(), BundleLimits::default())
-        .resolve(
-            &loader_key(account, worker.id, version_id),
-            &hex::encode(stranded.worker_code_sha256),
-            RuntimeScope::Probe,
-        )
-        .await
-        .unwrap();
+    let probe = RuntimeSource::new(
+        storage.clone(),
+        artifacts.clone(),
+        BundleLimits::default(),
+        python_runtime_pin(),
+    )
+    .unwrap()
+    .resolve(
+        &loader_key(account, worker.id, version_id),
+        &hex::encode(stranded.worker_code_sha256),
+        RuntimeScope::Probe,
+    )
+    .await
+    .unwrap();
     assert!(probe.secrets.is_empty());
 
     let recovered = VersionController::new(

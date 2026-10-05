@@ -1,7 +1,11 @@
+import {
+  nativeBinding,
+  type NativeBinding,
+} from "../bindings/native-construction.js";
+import { PRIVATE_POLICY, type WorkerPolicy } from "./policy.js";
 import type { RuntimeBinding, RuntimeServiceBinding } from "./protocol.js";
-import type { generateBindingWrapper as WrapperGenerator } from "./wrappers/generator.js";
 
-/** One root facade minted by the generated wrapper from a verified binding. */
+/** One root capability registered by the INTERNAL host policy from a verified binding. */
 export type ForwardingRoot =
   | {
       kind: "binding";
@@ -23,20 +27,20 @@ export type ForwardingRoot =
 
 type PrivateCode = WorkerLoaderWorkerCode & {
   openComputePrivateEnv: Record<string, unknown>;
+  openComputeBindings: Record<string, NativeBinding>;
+  openComputeHostPolicy: true;
 };
 
 // This module is evaluated before tenant modules. Capture operations that tenant
 // code may replace on global prototypes before the forwarding callback runs.
 const NativeWeakMap = WeakMap;
-const NativeMap = Map;
 const apply = Reflect.apply;
 const weakGet = WeakMap.prototype.get;
 const weakSet = WeakMap.prototype.set;
-const mapGet = Map.prototype.get;
-const mapSet = Map.prototype.set;
 const entries = Object.entries;
 const descriptors = Object.getOwnPropertyDescriptors;
 const define = Object.defineProperty;
+const setPrototype = Object.setPrototypeOf;
 const create = Object.create;
 const isArray = Array.isArray;
 const normalize = String.prototype.normalize;
@@ -46,18 +50,18 @@ const includes = String.prototype.includes;
 const split = String.prototype.split;
 const test = RegExp.prototype.test;
 
-export function newWeakRegistry<V>(): WeakMap<object, V> {
+function newWeakRegistry<V>(): WeakMap<object, V> {
   return new NativeWeakMap<object, V>();
 }
 
-export function registryGet<V>(
+function registryGet<V>(
   registry: WeakMap<object, V>,
   key: object,
 ): V | undefined {
   return apply(weakGet, registry, [key]);
 }
 
-export function registrySet<V>(
+function registrySet<V>(
   registry: WeakMap<object, V>,
   key: object,
   value: V,
@@ -65,26 +69,7 @@ export function registrySet<V>(
   apply(weakSet, registry, [key, value]);
 }
 
-export function newDescriptorRegistry<V>(): Map<string, V> {
-  return new NativeMap<string, V>();
-}
-
-export function descriptorGet<V>(
-  registry: Map<string, V>,
-  key: string,
-): V | undefined {
-  return apply(mapGet, registry, [key]);
-}
-
-export function descriptorSet<V>(
-  registry: Map<string, V>,
-  key: string,
-  value: V,
-): void {
-  apply(mapSet, registry, [key, value]);
-}
-
-export function captureNativeLoader(loader: WorkerLoader): {
+function captureNativeLoader(loader: WorkerLoader): {
   get: WorkerLoader["get"];
   load: WorkerLoader["load"];
 } {
@@ -103,13 +88,12 @@ function denied(): never {
   throw new TypeError("WORKER_LOADER_FORWARDING_DENIED");
 }
 
-/** Build one wrapper-local forwarding path using the native Loader methods. */
-export const createForwarding = (
-  generateBindingWrapper: typeof WrapperGenerator,
-  INTERNAL_MODULE_PREFIX: string,
-  LOADED_ISOLATE_WRAPPER_MODULE: string,
-  nativeLoader: { get: WorkerLoader["get"]; load: WorkerLoader["load"] },
-) => {
+/** Forward explicitly selected roots through a native private Loader grant. */
+export const createForwarding = (nativeLoader: {
+  get: WorkerLoader["get"];
+  load: WorkerLoader["load"];
+}) => {
+  const INTERNAL_MODULE_PREFIX = "cloudflare-internal:";
   const BINDING_NAME = /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/;
 
   function validModuleName(name: string): boolean {
@@ -134,15 +118,25 @@ export const createForwarding = (
   function forwardedCode(
     code: WorkerLoaderWorkerCode,
     roots: WeakMap<object, ForwardingRoot>,
-    sources: Readonly<Record<string, string>>,
     owner: object,
   ): PrivateCode {
-    const mainModule = code?.mainModule;
-    const inputModules = code?.modules;
-    const inputEnv: unknown = code?.env;
+    if (code === null || typeof code !== "object") denied();
+    // Read tenant getters/proxies once. Never spread the mutable input again after granting host fields.
+    const codeSnapshot = { ...code };
+    const privateProperties = entries(descriptors(code));
+    const snapshotProperties = entries(descriptors(codeSnapshot));
+    for (let index = 0; index < privateProperties.length; index++) {
+      if (apply(startsWith, privateProperties[index]![0], ["openCompute"]))
+        denied();
+    }
+    for (let index = 0; index < snapshotProperties.length; index++) {
+      if (apply(startsWith, snapshotProperties[index]![0], ["openCompute"]))
+        denied();
+    }
+    const mainModule = codeSnapshot.mainModule;
+    const inputModules = codeSnapshot.modules;
+    const inputEnv: unknown = codeSnapshot.env;
     if (
-      code === null ||
-      typeof code !== "object" ||
       typeof mainModule !== "string" ||
       !validModuleName(mainModule) ||
       inputModules === null ||
@@ -158,11 +152,9 @@ export const createForwarding = (
     // null-prototype objects as unsupported class instances.
     const publicEnv: Record<string, unknown> = {};
     const privateEnv: Record<string, unknown> = {};
+    const nativeBindings: Record<string, NativeBinding> = {};
     const bindings: RuntimeBinding[] = [];
     const services: RuntimeServiceBinding[] = [];
-    let assetBindingName: string | undefined;
-    let imagesBindingName: string | undefined;
-    let aiBindingName: string | undefined;
     const properties = entries(descriptors(inputEnv ?? {}));
     for (let index = 0; index < properties.length; index++) {
       const entry = properties[index]!;
@@ -208,22 +200,28 @@ export const createForwarding = (
               denied();
           }
           bindings[bindings.length] = { ...root.descriptor, name };
+          const native = nativeBinding(root.descriptor.kind, root.transport);
+          if (native) {
+            define(nativeBindings, name, { value: native, enumerable: true });
+            if (native.kind !== "queue") continue;
+          }
           break;
         case "service":
           services[services.length] = { ...root.descriptor, name };
-          break;
+          const service = nativeBinding("service", root.transport);
+          if (!service) denied();
+          define(nativeBindings, name, { value: service, enumerable: true });
+          continue;
         case "assets":
-          if (assetBindingName !== undefined) denied();
-          assetBindingName = name;
-          break;
         case "images":
-          if (imagesBindingName !== undefined) denied();
-          imagesBindingName = name;
-          break;
         case "ai":
-          if (aiBindingName !== undefined) denied();
-          aiBindingName = name;
-          break;
+          const nativeProduct = nativeBinding(root.kind, root.transport);
+          if (!nativeProduct) denied();
+          define(nativeBindings, name, {
+            value: nativeProduct,
+            enumerable: true,
+          });
+          continue;
         default:
           denied();
       }
@@ -241,41 +239,31 @@ export const createForwarding = (
       if (!validModuleName(name)) denied();
       define(modules, name, { value, enumerable: true });
     }
-    const sourceEntries = entries(sources);
-    for (let index = 0; index < sourceEntries.length; index++) {
-      const entry = sourceEntries[index]!;
-      const name = entry[0]!;
-      const source = entry[1]!;
-      define(modules, name, {
-        value: { js: source },
-        enumerable: true,
-      });
-    }
-    define(modules, LOADED_ISOLATE_WRAPPER_MODULE, {
-      value: {
-        js: generateBindingWrapper({
-          mainModule,
-          bindings,
-          services,
-          durableObject: false,
-          automaticCacheEnabled: false,
-          cacheFailOpen: false,
-          cacheTransportAvailable: false,
-          forwardedChild: true,
-          assetBindingName,
-          imagesBindingName,
-          aiBindingName,
-        }),
-      },
-      enumerable: true,
-    });
-    return {
-      ...code,
-      mainModule: LOADED_ISOLATE_WRAPPER_MODULE,
+    const policy: WorkerPolicy = {
+      validation: false,
+      durableObject: false,
+      workflow: false,
+      bindings,
+      services,
+      scheduledTargets: [],
+      automaticCacheEnabled: false,
+      cacheFailOpen: false,
+      automaticCacheEntrypoints: [],
+      workerLoaderNames: [],
+    };
+    define(privateEnv, PRIVATE_POLICY, { value: policy, enumerable: true });
+    const result = {
+      ...codeSnapshot,
+      mainModule,
       modules,
       env: publicEnv,
       openComputePrivateEnv: privateEnv,
+      openComputeBindings: nativeBindings,
+      openComputeHostPolicy: true as const,
     };
+    // JSG reads inherited struct fields too. Host-issued code has no tenant-controlled prototype.
+    setPrototype(result, null);
+    return result;
   }
 
   /** Preserve native get() laziness while fencing every source-version change.
@@ -287,7 +275,6 @@ export const createForwarding = (
     id: string,
     callback: () => WorkerLoaderWorkerCode | Promise<WorkerLoaderWorkerCode>,
     roots: WeakMap<object, ForwardingRoot>,
-    sources: Readonly<Record<string, string>>,
     sourceIdentity: string,
     owner: object,
   ): WorkerStub {
@@ -300,7 +287,7 @@ export const createForwarding = (
       denied();
     return apply(nativeLoader.get, loader, [
       `${sourceIdentity}/${id}`,
-      async () => forwardedCode(await callback(), roots, sources, owner),
+      async () => forwardedCode(await callback(), roots, owner),
     ]);
   }
 
@@ -309,13 +296,118 @@ export const createForwarding = (
     loader: WorkerLoader,
     code: WorkerLoaderWorkerCode,
     roots: WeakMap<object, ForwardingRoot>,
-    sources: Readonly<Record<string, string>>,
     owner: object,
   ): WorkerStub {
     return apply(nativeLoader.load, loader, [
-      forwardedCode(code, roots, sources, owner),
+      forwardedCode(code, roots, owner),
     ]);
   }
 
   return { getWorker, loadWorker };
 };
+
+type RootDescriptor =
+  | { kind: "binding"; descriptor: RuntimeBinding }
+  | { kind: "service"; descriptor: RuntimeServiceBinding }
+  | { kind: "assets" | "images" | "ai" };
+interface LoaderGrant {
+  readonly loader: WorkerLoader;
+  readonly owner: object;
+  readonly roots: WeakMap<object, ForwardingRoot>;
+  readonly sourceIdentity: string;
+  readonly forward: ReturnType<typeof createForwarding>;
+}
+const loaderGrants = newWeakRegistry<LoaderGrant>();
+
+/** Register capabilities before user initialization; no registry escapes the INTERNAL module. */
+export function registerForwarding(
+  publicEnv: Record<string, unknown>,
+  privateEnv: Record<string, unknown>,
+  policy: WorkerPolicy,
+): void {
+  if (policy.sourceIdentity === undefined) return;
+  const owner = privateEnv.__OPEN_COMPUTE_PRIVATE_FORWARDING_LOADERS;
+  if (
+    owner === null ||
+    typeof owner !== "object" ||
+    policy.workerLoaderNames.length === 0
+  )
+    denied();
+  const roots = newWeakRegistry<ForwardingRoot>();
+  const nativeBindings = privateEnv.__OPEN_COMPUTE_PRIVATE_NATIVE_BINDINGS;
+  const root = (name: string, descriptor: RootDescriptor) => {
+    const value = Reflect.get(publicEnv, name);
+    if (value === null || typeof value !== "object") denied();
+    const native =
+      nativeBindings !== null && typeof nativeBindings === "object"
+        ? Reflect.get(nativeBindings, name)
+        : undefined;
+    const transport: unknown =
+      native !== null && typeof native === "object"
+        ? Reflect.get(native, "fetcher")
+        : Reflect.get(privateEnv, name);
+    registrySet(roots, value, {
+      ...descriptor,
+      transport,
+      owner,
+    } as ForwardingRoot);
+  };
+  for (const binding of policy.bindings)
+    root(binding.name, { kind: "binding", descriptor: binding });
+  for (const service of policy.services)
+    root(service.name, { kind: "service", descriptor: service });
+  if (policy.assetBindingName !== undefined)
+    root(policy.assetBindingName, { kind: "assets" });
+  if (policy.imagesBindingName !== undefined)
+    root(policy.imagesBindingName, { kind: "images" });
+  if (policy.aiBindingName !== undefined)
+    root(policy.aiBindingName, { kind: "ai" });
+  for (const name of policy.workerLoaderNames) {
+    const loader: unknown = Reflect.get(publicEnv, name);
+    const privateLoader: unknown = Reflect.get(owner, name);
+    if (
+      loader === null ||
+      typeof loader !== "object" ||
+      privateLoader === null ||
+      typeof privateLoader !== "object"
+    )
+      denied();
+    const nativeLoader = captureNativeLoader(privateLoader as WorkerLoader);
+    registrySet(loaderGrants, loader, {
+      loader: privateLoader as WorkerLoader,
+      owner,
+      roots,
+      sourceIdentity: policy.sourceIdentity,
+      forward: createForwarding(nativeLoader),
+    });
+  }
+}
+function grantFor(loader: WorkerLoader): LoaderGrant {
+  const grant = registryGet(loaderGrants, loader);
+  if (grant === undefined) denied();
+  return grant;
+}
+/** Public helper accepts only the native Loader identity registered by the host policy. */
+export function forwardGetWorker(
+  loader: WorkerLoader,
+  id: string,
+  callback: () => WorkerLoaderWorkerCode | Promise<WorkerLoaderWorkerCode>,
+): WorkerStub {
+  const grant = grantFor(loader);
+  return grant.forward.getWorker(
+    grant.loader,
+    id,
+    callback,
+    grant.roots,
+    grant.sourceIdentity,
+    grant.owner,
+  );
+}
+/** Load a child without inheriting private policy, transports, or cache authority. */
+export function forwardLoadWorker(
+  loader: WorkerLoader,
+  code: WorkerLoaderWorkerCode,
+): WorkerStub {
+  const grant = grantFor(loader);
+  return grant.forward.loadWorker(grant.loader, code, grant.roots, grant.owner);
+}

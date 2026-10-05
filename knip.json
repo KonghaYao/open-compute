@@ -14,7 +14,8 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/*.ts"],
-      "project": ["scripts/**/*.ts"]
+      "project": ["scripts/**/*.ts"],
+      "ignoreDependencies": ["@cloudflare/vite-plugin", "vite"]
     },
     "apps/website": {
       "entry": [
@@ -24,12 +25,17 @@
         "src/starlight-route.ts",
         "src/components/docs-sidebar.astro",
         "src/components/docs-site-title.astro",
-        "functions/**/*.ts"
+        "functions/**/*.ts",
+        "src/worker.ts",
+        "cloudflare.config.ts",
+        "vite.config.ts"
       ],
       "project": [
         "src/**/*.{astro,ts,tsx}",
         "functions/**/*.ts",
-        "astro.config.ts"
+        "astro.config.ts",
+        "cloudflare.config.ts",
+        "vite.config.ts"
       ],
       "ignoreDependencies": ["@iconify-json/tabler", "cookie", "satteri"]
     },
@@ -50,19 +56,15 @@
     "packages/runtime": {
       "entry": ["build.ts", "src/**/*.ts", "src/**/*.d.ts"],
       "project": ["build.ts", "src/**/*.ts", "src/**/*.d.ts"],
-      "ignoreDependencies": ["cloudflare", "-source$"]
-    },
-    "packages/toolchain": {
-      "entry": ["src/bin.ts", "build.ts"],
-      "project": ["src/**/*.ts", "build.ts"]
+      "ignoreDependencies": ["cloudflare", "cloudflare-internal"]
     },
     "packages/workers-types": {
       "entry": ["index.d.ts"],
       "project": ["index.d.ts"]
     },
     "examples/hello-worker": {
-      "entry": ["src/index.ts"],
-      "project": ["src/**/*.ts", "worker-configuration.d.ts"]
+      "entry": ["src/index.ts", "*.config.ts"],
+      "project": ["src/**/*.ts", "*.config.ts"]
     }
   }
 }

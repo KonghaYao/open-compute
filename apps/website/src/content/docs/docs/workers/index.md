@@ -6,7 +6,7 @@ Workers is a serverless execution environment that runs Cloudflare module Worker
 
 With Workers you can:
 
-- Deploy a module Worker (`export default { fetch }`) with project-local Wrangler
+- Deploy a module Worker (`export default { fetch }`) with project-local cf
 - Bind KV, R2, D1, Durable Objects, Queues, Workflows, and other Workers
 - Schedule `scheduled()` with UTC cron expressions
 - Serve Static Assets from the same immutable deployment
@@ -26,7 +26,7 @@ The sample in this repository is `examples/hello-worker/`. Deploy it against a r
 
 ```sh
 cd examples/hello-worker
-ocd wrangler deploy --env dev
+ocd cf deploy --mode dev
 ```
 
 ## Compatibility
@@ -37,7 +37,7 @@ ocd wrangler deploy --env dev
 | Isolates, `env` bindings, `fetch` / `scheduled` / `queue`               | Yes                      | Yes                                                                                        |
 | Cache API, WebSocket hibernation, `cloudflare:sockets`, `node:` imports | Yes                      | Yes — same [Workers runtime APIs](https://developers.cloudflare.com/workers/runtime-apis/) |
 | Global Anycast / workers.dev / Cloudflare Custom Domains API            | Yes                      | Not provided; public HTTPS origins use the operator [Gateway](/docs/gateway/)              |
-| Project file                                                            | `wrangler.jsonc`         | Same pinned Wrangler schema                                                                |
+| Project file                                                            | `cloudflare.config.ts`   | Same pinned cf schema                                                                      |
 | `compatibility_date`                                                    | Yes                      | Required and persisted per immutable Version                                               |
 | Deploy authority                                                        | Cloudflare control plane | Per-instance SQLite and supervised runtime generation                                      |
 

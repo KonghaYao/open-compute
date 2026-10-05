@@ -17,7 +17,15 @@ pub fn inspect_ai_search_instance(
         crate::schema_migrations::DatabaseKind::AiSearch,
     )
     .map_err(|_| invariant_error())?;
-    quick_check(&connection)?;
+    inspect_authority(&connection, resource_id, expected_model_sha256)
+}
+
+fn inspect_authority(
+    connection: &Connection,
+    resource_id: &str,
+    expected_model_sha256: [u8; 32],
+) -> Result<AiSearchInstanceAuthority, PlatformError> {
+    quick_check(connection)?;
     let row = connection
         .query_row(
             "SELECT resource_id, model_contract_sha256,
@@ -170,6 +178,59 @@ pub fn inspect_ai_search_object_references(
 }
 
 impl AiSearchStore {
+    /// Open an existing authority and freeze its validated configuration and
+    /// store dimensions in one SQLite snapshot, without creating a database.
+    pub fn open_existing(
+        path: &Path,
+        resource_id: &str,
+        expected_model_sha256: [u8; 32],
+        busy_timeout_ms: u64,
+    ) -> Result<(Self, AiSearchInstanceAuthority), PlatformError> {
+        validate_identity(resource_id)?;
+        crate::fs::validate_owned_file(path, false)?;
+        let path = crate::control_db::leaf_nofollow_path(path)?;
+        let mut connection = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE
+                | OpenFlags::SQLITE_OPEN_NOFOLLOW
+                | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(sql_error)?;
+        connection
+            .busy_timeout(std::time::Duration::from_millis(busy_timeout_ms))
+            .map_err(sql_error)?;
+        connection
+            .execute_batch(
+                "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;",
+            )
+            .map_err(sql_error)?;
+        crate::schema_migrations::inspect(
+            &mut connection,
+            crate::schema_migrations::DatabaseKind::AiSearch,
+        )
+        .map_err(|_| invariant_error())?;
+        let transaction = connection.transaction().map_err(sql_error)?;
+        let authority = inspect_authority(&transaction, resource_id, expected_model_sha256)?;
+        let active: (i64, bool) = transaction
+            .query_row(
+                "SELECT COALESCE(previous_dimensions, dimensions),
+                        COALESCE(previous_vector_enabled, vector_enabled)
+                   FROM instance_meta WHERE singleton=1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(sql_error)?;
+        transaction.commit().map_err(sql_error)?;
+        let store = Self {
+            connection: Mutex::new(connection),
+            dimensions: usize::try_from(authority.dimensions).map_err(|_| invariant_error())?,
+            vector_enabled: authority.vector_enabled,
+            active_dimensions: usize::try_from(active.0).map_err(|_| invariant_error())?,
+            active_vector_enabled: active.1,
+        };
+        Ok((store, authority))
+    }
+
     /// Read bounded secret-free instance counts and frozen contracts in one SQLite snapshot.
     pub fn inspect(&self) -> Result<AiSearchInstanceInspection, PlatformError> {
         let connection = self.lock()?;

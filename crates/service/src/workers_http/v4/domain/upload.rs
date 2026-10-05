@@ -89,7 +89,7 @@ impl UploadInput {
             if explicit_inheritance {
                 return Err(invalid("binding inheritance has no prior Version"));
             }
-            // Fixed Wrangler supplies keep_bindings for explicitly uploaded
+            // The client supplies keep_bindings for explicitly uploaded
             // secrets even on the first deploy. There is nothing to inherit.
             return Ok(());
         };
@@ -320,6 +320,7 @@ impl UploadInput {
         account_authority: &V4InstanceContext,
         account: InstanceId,
         worker: WorkerId,
+        owner_script: &str,
         migration_tag: Option<&str>,
         allow_declared_do: bool,
         reserve_workflows: bool,
@@ -447,7 +448,10 @@ impl UploadInput {
                     script_name,
                     ..
                 } => {
-                    if script_name.is_some() {
+                    if script_name
+                        .as_deref()
+                        .is_some_and(|script| script != owner_script)
+                    {
                         return Err(unsupported(
                             "cross-Script Durable Object bindings are unsupported",
                         ));
@@ -512,7 +516,10 @@ impl UploadInput {
                     script_name,
                     ..
                 } => {
-                    if script_name.is_some() {
+                    if script_name
+                        .as_deref()
+                        .is_some_and(|script| script != owner_script)
+                    {
                         return Err(unsupported(
                             "cross-Script Workflow bindings are unsupported",
                         ));

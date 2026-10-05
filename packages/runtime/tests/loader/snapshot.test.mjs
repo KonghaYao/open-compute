@@ -44,10 +44,44 @@ function snapshot(props) {
 test("accepts bounded arbitrary JSON Service props", () => {
   const value = snapshot(
     JSON.parse(
-      '{"constructor":{"enabled":true},"nested":[1,{"__proto__":"ordinary JSON data"}]}',
+      '{"constructor":{"enabled":true},"pythonSnapshot":"ordinary JSON data","pythonPreparedSha256":123,"nested":[1,{"__proto__":"ordinary JSON data"}]}',
     ),
   );
   assert.doesNotThrow(() => assertSnapshot(value));
+});
+
+test("Python source wire uses the single current module representation", () => {
+  const value = snapshot({});
+  value.mainModule = "entry.py";
+  value.modules = [
+    { name: "entry.py", type: "python", bytesBase64: "cGFzcw==" },
+  ];
+  assert.doesNotThrow(() => assertSnapshot(value));
+  for (const type of ["py", "pythonModule", "python-requirement"]) {
+    value.modules[0].type = type;
+    assert.throws(() => assertSnapshot(value), /VERSION_INVARIANT_VIOLATION/);
+  }
+});
+
+test("private source JSON accepts only Python artifact identity, never snapshot bytes", () => {
+  const value = {
+    ...snapshot({}),
+    mainModule: "main.py",
+    pythonPreparedSha256: "a".repeat(64),
+  };
+  assert.doesNotThrow(() => assertSnapshot(value));
+  for (const invalid of [
+    { pythonPreparedSha256: "A".repeat(64) },
+    { pythonPreparedSha256: 123 },
+    { mainModule: "main.js" },
+    { contentKind: "assetsOnly" },
+    { pythonSnapshot: "c2VjcmV0" },
+    { pythonSnapshot: null },
+  ])
+    assert.throws(
+      () => assertSnapshot({ ...value, ...invalid }),
+      /VERSION_INVARIANT_VIOLATION/,
+    );
 });
 
 test("observability snapshot requires the instance identity field", () => {
@@ -134,5 +168,22 @@ test("tenant modules cannot occupy the platform module namespace", () => {
       ...snapshot({}),
       modules: [{ ...runtimeModule, name: "app/worker-loader.js" }],
     }),
+  );
+});
+
+test("tenant modules cannot replace a private config-owned extension", () => {
+  assert.throws(
+    () =>
+      assertSnapshot({
+        ...snapshot({}),
+        modules: [
+          {
+            name: "cloudflare-internal:open-compute-host-policy",
+            type: "esModule",
+            bytesBase64: "",
+          },
+        ],
+      }),
+    /VERSION_INVARIANT_VIOLATION/,
   );
 });

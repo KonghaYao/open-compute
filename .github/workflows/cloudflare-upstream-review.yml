@@ -146,7 +146,7 @@ jobs:
             echo '```'
             echo
             echo "Qualification order: pin identity → subset/capability drift →"
-            echo "three-way closure → Wrangler evidence → real-process Gates."
+            echo "three-way closure → cf CLI evidence → real-process Gates."
             echo "This PR must not be auto-merged, tagged, or published."
           } > "$body"
           existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \

@@ -90,7 +90,7 @@ pub fn show_target(
     Ok(())
 }
 
-/// Probe authentication, account discovery, and the certified Wrangler pin.
+/// Probe authentication, account discovery, and the certified Cf pin.
 pub async fn test_target(
     registry: &TargetRegistry,
     http: &dyn TargetHttp,
@@ -109,17 +109,17 @@ pub async fn test_target(
             "target": record.name,
             "origin": record.api_base_url.origin(),
             "instance_id": record.instance_id,
-            "wrangler_version": capabilities.wrangler_version,
+            "cf_version": capabilities.cf_version,
         });
         writeln!(out, "{payload}").map_err(|_| io_failed())?;
     } else {
         writeln!(
             out,
-            "TARGET_OK {} {} {} wrangler={}",
+            "TARGET_OK {} {} {} cf={}",
             record.name,
             record.api_base_url.origin(),
             record.instance_id,
-            capabilities.wrangler_version
+            capabilities.cf_version
         )
         .map_err(|_| io_failed())?;
     }

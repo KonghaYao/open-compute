@@ -232,7 +232,7 @@ pub struct WorkersConfig {
 impl Default for WorkersConfig {
     fn default() -> Self {
         Self {
-            max_bundle_bytes: 17 * 1024 * 1024,
+            max_bundle_bytes: 34 * 1024 * 1024,
             delete_drain_timeout_ms: 5_000,
             artifact_gc_grace_ms: 24 * 60 * 60 * 1_000,
             artifact_gc_interval_ms: 60_000,

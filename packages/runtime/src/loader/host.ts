@@ -7,6 +7,7 @@ import {
 } from "./dispatch.js";
 import { revokeWorkerLoaders } from "./namespaces.js";
 import type { LoaderEnv } from "./protocol.js";
+import { preparePython } from "./python-prepare.js";
 
 export { KVNamespace } from "../kv/transport.js";
 
@@ -39,7 +40,7 @@ export {
   ServiceTransport,
   ServiceFetchCompletion,
 } from "../services/transport.js";
-export { CacheTransport } from "../cache/host.js";
+export { CacheTransport, CacheWriteTransport } from "../cache/host.js";
 export { ImageTransport } from "../images/host.js";
 export { AiTransport } from "../ai/host.js";
 export { VectorizeTransport } from "../vectorize/host.js";
@@ -51,6 +52,8 @@ export default {
     ctx: ExecutionContext,
   ): Promise<Response> {
     const path = new URL(request.url).pathname;
+    if (request.method === "POST" && path === "/internal/prepare-python")
+      return preparePython(request, env, ctx);
     if (
       request.method === "POST" &&
       path === "/internal/worker-loaders/revoke"

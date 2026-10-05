@@ -26,6 +26,7 @@ use std::sync::Arc;
 use zeroize::Zeroize;
 
 mod model;
+mod python;
 mod resolution;
 
 pub use model::*;
@@ -38,6 +39,7 @@ pub struct RuntimeSource {
     cache: Option<Arc<ArtifactCache>>,
     cache_fail_open: bool,
     limits: BundleLimits,
+    python_runtime_pin: crate::python_artifact::PythonRuntimePin,
 }
 
 impl std::fmt::Debug for RuntimeSource {
@@ -52,19 +54,21 @@ impl std::fmt::Debug for RuntimeSource {
 
 impl RuntimeSource {
     /// Bind immutable authorities. No raw database path or object key is exposed.
-    #[must_use]
     pub fn new(
         storage: Arc<PlatformStorage>,
         artifacts: ArtifactStore,
         limits: BundleLimits,
-    ) -> Self {
-        Self {
+        python_runtime_pin: crate::python_artifact::PythonRuntimePin,
+    ) -> Result<Self, PlatformError> {
+        python_runtime_pin.validate()?;
+        Ok(Self {
             storage,
             artifacts,
             cache: None,
             cache_fail_open: true,
             limits,
-        }
+            python_runtime_pin,
+        })
     }
 
     /// Resolve verified artifacts through the platform's bounded local cache.
@@ -96,7 +100,10 @@ impl RuntimeSource {
             instance_id,
             worker_id,
             version_id,
-            matches!(scope, RuntimeScope::Validation | RuntimeScope::Probe),
+            matches!(
+                scope,
+                RuntimeScope::Validation | RuntimeScope::Preparation | RuntimeScope::Probe
+            ),
         )?;
         resolution::validate_scope(&snapshot, scope)?;
 
@@ -180,6 +187,19 @@ impl RuntimeSource {
         }
 
         let modules = resolution::runtime_modules(bundle.as_ref())?;
+        let python_prepared_sha256 = python::prepared_identity(self, &snapshot)?
+            .map(|identity| {
+                if identity.runtime
+                    != crate::python_artifact::PythonRuntimeIdentity::from_modules(
+                        self.python_runtime_pin.clone(),
+                        &modules,
+                    )?
+                {
+                    return Err(invariant());
+                }
+                identity.sha256().map(hex::encode)
+            })
+            .transpose()?;
         let secrets =
             resolution::decrypt_secrets(self, &snapshot, scope, identity, &environment.vars)?;
         let asset_binding = assets
@@ -194,6 +214,7 @@ impl RuntimeSource {
             compatibility_date: snapshot.version.compatibility_date,
             compatibility_flags: snapshot.version.compatibility_flags,
             limits: snapshot.version.resource_limits,
+            python_prepared_sha256,
             content_kind: snapshot.version.content_kind,
             main_module: bundle
                 .as_ref()
@@ -244,6 +265,8 @@ impl RuntimeSource {
             compatibility_date: &'a str,
             compatibility_flags: &'a [String],
             limits: &'a EffectiveResourceLimits,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            python_prepared_sha256: Option<&'a str>,
             content_kind: VersionContentKind,
             #[serde(skip_serializing_if = "Option::is_none")]
             main_module: Option<&'a str>,
@@ -359,6 +382,7 @@ impl RuntimeSource {
             compatibility_date: &snapshot.compatibility_date,
             compatibility_flags: &snapshot.compatibility_flags,
             limits: &snapshot.limits,
+            python_prepared_sha256: snapshot.python_prepared_sha256.as_deref(),
             content_kind: snapshot.content_kind,
             main_module: snapshot.main_module.as_deref(),
             modules,

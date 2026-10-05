@@ -16,6 +16,7 @@ use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::net::UnixStream as StdUnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt as _, Interest};
 use tokio::net::UnixStream;
@@ -60,6 +61,7 @@ pub(crate) struct HostExtensionBroker {
     work_dirs: HashMap<String, PathBuf>,
     providers: Mutex<HashMap<String, ProviderSlot>>,
     redactor: Redactor,
+    stopped: AtomicBool,
 }
 
 impl std::fmt::Debug for HostExtensionBroker {
@@ -104,6 +106,7 @@ impl HostExtensionBroker {
             work_dirs,
             providers: Mutex::new(HashMap::new()),
             redactor,
+            stopped: AtomicBool::new(false),
         })
     }
 
@@ -134,11 +137,15 @@ impl HostExtensionBroker {
                 break Err(error);
             }
         };
+        self.stopped.store(true, Ordering::Release);
         self.shutdown_providers().await;
         result
     }
 
-    async fn serve_generation(&self, mut socket: UnixStream) -> Result<(), PlatformError> {
+    pub(crate) async fn serve_generation(
+        &self,
+        mut socket: UnixStream,
+    ) -> Result<(), PlatformError> {
         loop {
             let identity = match read_request(&mut socket).await {
                 Ok(Some(identity)) => identity,
@@ -170,6 +177,9 @@ impl HostExtensionBroker {
         // ponytail: one global attach lock; split per provider if extension startup throughput
         // becomes material for the single-machine deployment profile.
         let mut providers = self.providers.lock().await;
+        if self.stopped.load(Ordering::Acquire) {
+            return Err(unavailable());
+        }
         let slot = providers.entry(name.to_owned()).or_default();
         if slot
             .live
@@ -691,6 +701,15 @@ mod tests {
 
         let (_shutdown, receiver) = watch::channel(true);
         broker.run(receiver).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn shutdown_rejects_preparation_peer_provider_attach_before_creating_a_slot() {
+        let (_root, broker) = empty_broker();
+        let (_shutdown, receiver) = watch::channel(true);
+        broker.run(receiver).await.unwrap();
+        assert!(broker.open_session("session", "local-files").await.is_err());
+        assert!(broker.providers.lock().await.is_empty());
     }
 
     #[tokio::test]

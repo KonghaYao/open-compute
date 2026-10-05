@@ -1,5 +1,7 @@
 # W2：Workers Standard Resource Limits
 
+此文保留当时 pin 的历史验收；当前普通 Python 已有部署准备 snapshot，Dynamic child 仍不继承它。2026-10-05 正式 R4 pin 的 fresh/cached-key/restart 基线由 [P21](p21-python-workers.md) 记录；剩余 Dynamic 实现见 [#126](https://github.com/elliothux/open-compute/issues/126)。历史 cold-boot 结论不代替当前正式 pin 的执行证据。
+
 状态：**implemented and verified，2026-09-14**。W2 直接建立当前 Day1 合同，删除旧的
 `OC-WKR-LIMIT-001` 功能缺口，不保留曾经拒绝 `limits` 的配置分支、旧类型名、双 wire schema 或运行时
 fallback。正式源码、四平台二进制和 digest 以
@@ -15,8 +17,9 @@ fallback。正式源码、四平台二进制和 digest 以
 | startup CPU                       |                              1,000 ms | 固定 Standard profile；workerd startup enforcer |
 | simultaneous outbound connections |                        6 / invocation | workerd request accounting；只计到响应头到达    |
 
-Wrangler JSONC/TOML 与 framework output 使用官方 snake-case `limits.cpu_ms` / `limits.subrequests`。
-边界拒绝未知字段、camelCase、`null` 维度、非整数、零、负数和超上限值；省略整个对象、`null` 配置或
+当前 [P20](p20-cf-cli-migration.md) 配置使用 `worker.limits.cpuMs` / `worker.limits.subrequests`，由官方 cf/Build Output
+归一化为 v4 wire 的 snake-case `limits.cpu_ms` / `limits.subrequests`。配置与 wire 是不同边界，
+v4 decoder 拒绝未知字段、wire camelCase、`null` 维度、非整数、零、负数和超上限值；省略整个对象、`null` 配置或
 空对象都在 Version 创建时一次性物化 Standard 默认值。仓库内部只保留
 `EffectiveResourceLimits`，持久化 Version、signed runtime-source snapshot、Loader 与 workerd 沿一条链传递，
 读取非 canonical 或越界的持久化值会 fail closed。
@@ -46,11 +49,11 @@ camelCase `cpuMs` / `subRequests`。Version、WorkerCode、entrypoint 及继续�
 - 若 workerd 退出或仍存活但 generation-scoped `/internal/live` 不推进，supervisor 经过同 generation 确认后
   撤销 credential、bounded teardown/reap 并按既有 budget 重启。普通 tenant 超限不会消耗 restart budget。
 
-## 测试与资格
+## 历史测试与当前资格边界
 
 workerd 单元/WD tests 覆盖 CPU clock、budget/min composition、subrequest side-effect 顺序、响应头阶段 6-slot
 排队、memory/startup condemnation、isolate rebuild、邻居隔离和 delegated Loader ceiling。产品真实进程用例
-覆盖 Wrangler deploy → v4 upload → immutable Version → snapshot → Loader → workerd、Settings 全量/部分
+当时覆盖 Wrangler deploy → v4 upload → immutable Version → snapshot → Loader → workerd、Settings 全量/部分
 PATCH、历史 Version 不变、restart 后 limits 保留、CPU/subrequest 公开错误和 startup validation。
 
 最终验收在冻结的正式 pin 上执行 Rust format/Clippy/no-default-features/MSRV/metadata/boundaries、TypeScript 与

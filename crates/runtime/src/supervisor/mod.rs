@@ -6,6 +6,7 @@ mod host_extensions;
 pub(crate) mod logs;
 pub(crate) mod owner;
 mod probe;
+mod python_preparation;
 mod rotation;
 mod spawn;
 mod state;
@@ -43,6 +44,7 @@ pub use logs::set_reader_fail_point;
 #[cfg(any(test, feature = "test-support"))]
 pub use owner::{take_owner_wait_count, take_reader_join_errors};
 pub use probe::{READY_PATH, TOKEN_HEADER, probe_ready_with_raw_token};
+pub use python_preparation::{PythonPreparationOptions, PythonPreparationProcess};
 pub use spawn::serve_argv;
 #[cfg(any(test, feature = "test-support"))]
 pub use spawn::{
@@ -58,9 +60,9 @@ pub use watchdog::{LIVE_PATH, RuntimeFailureEvidence, WatchdogConfig};
 /// Bounded redacted child diagnostics. Not part of ordinary snapshot/status/Debug.
 #[derive(Clone, Debug, Default)]
 pub struct ProcessDiagnostics {
-    /// Redacted stdout tail.
+    /// Redacted stdout tail for trusted helpers; empty for workerd tenant output.
     pub stdout_tail: String,
-    /// Redacted stderr tail.
+    /// Redacted stderr tail for trusted helpers; empty for workerd native tracebacks.
     pub stderr_tail: String,
     /// Child exit code if it exited.
     pub exit_code: Option<i32>,
@@ -260,6 +262,7 @@ impl ConfigCompiler for StaticConfigCompiler {
             redactor.register_secret_string(&binding_token);
             redactor.register_secret_string(&observability_token);
             let compiled = compile_static_config(CompileRequest {
+                role: crate::ConfigRole::Runtime,
                 runtime: &self.runtime,
                 lock_path: &self.lock_path,
                 assets_dir: &self.assets_dir,
@@ -375,8 +378,6 @@ pub struct WorkerdSupervisorOptions<C, K, J> {
     pub clock: Arc<K>,
     /// Jitter source for backoff.
     pub jitter: Arc<J>,
-    /// Redactor that will also receive each generation token.
-    pub redactor: Redactor,
     /// Optional absolute path for the secret-free child lease.
     pub lease_path: Option<PathBuf>,
 }
@@ -491,7 +492,6 @@ impl WorkerdSupervisor {
             config: opts.config,
             clock,
             jitter,
-            redactor: opts.redactor,
             cmd_rx,
             watch_tx,
             snap,
@@ -664,7 +664,7 @@ mod actor;
 mod attempt;
 
 use actor::Actor;
-use attempt::{AttemptArgs, run_attempt};
+use attempt::{ChildStartOptions, run_attempt};
 
 impl WorkerdSupervisor {
     /// Construct with the system clock and OS jitter.
@@ -672,7 +672,6 @@ impl WorkerdSupervisor {
         runtime: VerifiedRuntime,
         compiler: C,
         config: RuntimeConfig,
-        redactor: Redactor,
     ) -> Self {
         Self::new(
             WorkerdSupervisorOptions {
@@ -681,7 +680,6 @@ impl WorkerdSupervisor {
                 config,
                 clock: Arc::new(SystemClock),
                 jitter: Arc::new(OsJitter),
-                redactor,
                 lease_path: None,
             },
             Vec::new(),

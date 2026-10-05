@@ -406,7 +406,11 @@ test("release qualification and local Docker diagnostic keep their exact boundar
     workflow,
     /if ! npm publish "\$tarball"[\s\S]*?npm view "@open-compute\/sdk@\$RELEASE_VERSION" dist\.shasum/,
   );
-  for (const source of [workflow, recovery]) {
+  // Publication is never retried. OS fixtures may wait for real service readiness.
+  for (const source of [
+    workflow.slice(workflow.indexOf("\n  publish:")),
+    recovery,
+  ]) {
     assert.doesNotMatch(source, /for attempt in|sleep 5/);
   }
   assert.match(workflow, /--draft=false/);
@@ -810,4 +814,38 @@ test("default non-root install owns one user prefix and configures PATH", async 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("installation qualification is a mandatory publication dependency", async () => {
+  const workflow = await readFile(releaseWorkflowPath, "utf8");
+  const ci = await readFile(ciWorkflowPath, "utf8");
+  assert.match(workflow, /  publish:\n    needs: \[[^\n]*install-lifecycle\]/);
+  assert.match(
+    workflow,
+    /  install-lifecycle:\n    needs: \[failfast, package\]/,
+  );
+  for (const name of [
+    "ubuntu-24-x64",
+    "ubuntu-24-arm64",
+    "debian-13-x64",
+    "debian-13-arm64",
+    "macos-arm64",
+  ]) {
+    assert.match(workflow, new RegExp(`- name: ${name}\\n`));
+  }
+  assert.match(workflow, /for scope in user system/);
+  assert.match(
+    ci,
+    /cargo test --locked -p open-compute-service --lib service_manager::tests/,
+  );
+  const recovery = await readFile(recoveryWorkflowPath, "utf8");
+  assert.match(recovery, /startswith\("install-lifecycle \("\)/);
+  assert.match(recovery, /length == 13 and all\(\.conclusion == "success"\)/);
+  await execFileAsync(
+    "python3",
+    ["-B", "-m", "unittest", "discover", "-s", "test/install-lifecycle"],
+    {
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
+    },
+  );
 });

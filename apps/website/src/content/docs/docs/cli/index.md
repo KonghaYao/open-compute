@@ -25,13 +25,12 @@ For example, `ocd restart` restarts the scoped daemon and all of its instances, 
 ## Develop and deploy
 
 - `target add|list|show|test|remove`
-- `wrangler [--target <name>] [--project <dir>] <wrangler-command> ...`
-- `worker bundle`
+- `cf [--target <name>] [--project <dir>] <cf-command> ...`
 
-`ocd wrangler` resolves the project-local Wrangler and passes every argument from the Wrangler command onward unchanged. It never downloads, repairs, or silently replaces the dependency. A different Wrangler major produces a warning but does not block execution.
+`ocd cf` resolves the project-local cf and passes every argument from the cf command onward unchanged. It never downloads, repairs, or silently replaces the dependency. Versions outside `1.0.x` warn but still execute; internal CI pins `1.0.0-beta.12`.
 
 The target registry is stored at `<OCD_DIR>/targets.toml` for the selected user or explicit system scope. Update-check metadata is a disposable cache at `<OCD_DIR>/cache/update-check.json`.
-`ocd target add <name> --api-base-url <url> --instance-id <id> --token-file <path>` records the remote open-compute InstanceId. The same value appears as `account_id` only on Cloudflare-compatible API and Wrangler surfaces.
+`ocd target add <name> --api-base-url <url> --instance-id <id> --token-file <path>` records the remote open-compute InstanceId. The same value appears as `account_id` only on Cloudflare-compatible API and cf surfaces.
 
 ## Inspect and diagnose
 
@@ -58,4 +57,4 @@ Backup and scheduler recovery commands require the offline or exclusive conditio
 
 `ocd instance setup --name dev --yes` creates a fresh instance through the running daemon. `--config` and `--data-dir` independently choose its configuration and explicit `[data].path`; `--autostart=false` and `--start=false` disable the two default startup choices. Without `--yes`, an interactive confirmation is required. Existing configuration or nonempty unknown data is never overwritten.
 
-Successful `ocd wrangler` execution replaces the launcher process, so Wrangler owns the final stdout, stderr, signals, and exit status.
+Successful `ocd cf` execution replaces the launcher process, so cf owns the final stdout, stderr, signals, and exit status.

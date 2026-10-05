@@ -66,8 +66,13 @@ async fn p0_4_real_kv_matrix() {
     let (shutdown_tx, mut source_shutdown) = tokio::sync::watch::channel(false);
     let mut binding_shutdown = shutdown_tx.subscribe();
     let source_task = tokio::spawn({
-        let source =
-            RuntimeSource::new(storage.clone(), artifacts.clone(), BundleLimits::default());
+        let source = RuntimeSource::new(
+            storage.clone(),
+            artifacts.clone(),
+            BundleLimits::default(),
+            open_compute_service::runtime_bridge::python_runtime_pin(&runtime),
+        )
+        .unwrap();
         let auth = source_auth.clone();
         async move {
             serve_runtime_source(source_listener, source, auth, async move {
@@ -136,7 +141,6 @@ async fn p0_4_real_kv_matrix() {
             config: runtime_config(),
             clock: Arc::new(SystemClock),
             jitter: Arc::new(OsJitter),
-            redactor: Redactor::new(),
             lease_path: Some(storage.data_dir().runtime_dir().join("p0-4-gate.lease")),
         },
         vec![
@@ -428,9 +432,9 @@ async fn p0_4_real_kv_matrix() {
 
 fn assert_failure_matrix(failures: &serde_json::Value) {
     let assert_error = |field: &str, name: &str, message: &str| {
-        assert_eq!(failures[field]["synchronous"], false, "{field}");
-        assert_eq!(failures[field]["name"], name, "{field}");
-        assert_eq!(failures[field]["message"], message, "{field}");
+        assert_eq!(failures[field]["synchronous"], false, "{field}: {failures}");
+        assert_eq!(failures[field]["name"], name, "{field}: {failures}");
+        assert_eq!(failures[field]["message"], message, "{field}: {failures}");
     };
     assert_error("emptyKey", "TypeError", "Key name cannot be empty.");
     assert_error("dot", "TypeError", "\".\" is not allowed as a key name.");
@@ -504,7 +508,8 @@ fn assert_failure_matrix(failures: &serde_json::Value) {
     );
     let invalid_value = "KV put() accepts only strings, ArrayBuffers, ArrayBufferViews, and ReadableStreams as values.";
     assert_error("objectValue", "TypeError", invalid_value);
-    assert_error("detached", "TypeError", invalid_value);
+    assert_eq!(failures["detached"], serde_json::Value::Null);
+    assert_eq!(failures["detachedBytes"], serde_json::json!([]));
     assert_eq!(failures["extraList"], serde_json::Value::Null);
     assert_eq!(failures["zeroList"], serde_json::Value::Null);
     assert_error(
@@ -519,7 +524,11 @@ fn assert_failure_matrix(failures: &serde_json::Value) {
     if !failures["sab"].is_null() {
         assert_eq!(failures["sab"], serde_json::json!([1, 2, 3]));
     }
-    assert_error("readOnlyPut", "Error", "BINDING_PERMISSION_DENIED");
+    assert_error(
+        "readOnlyPut",
+        "Error",
+        "KV PUT failed: 403 BINDING_PERMISSION_DENIED",
+    );
     assert_eq!(failures["readOnlyGet"], serde_json::Value::Null);
 }
 

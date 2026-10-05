@@ -2,11 +2,11 @@ import { randomBytes } from "node:crypto";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { command } from "../adapters/command.ts";
-import { WRANGLER_VERSION } from "../adapters/runtime-contract.ts";
+import { CF_VERSION } from "../adapters/runtime-contract.ts";
 import type { JsonRecord, PortableFixture } from "../adapters/types.ts";
 import {
+  verifyCfAccount,
   verifyOpenComputeAccount,
-  verifyWranglerAccount,
 } from "./cloudflare-resources.ts";
 import { processEnv } from "./environment.ts";
 import { sourceIdentity } from "./evidence.ts";
@@ -17,7 +17,7 @@ export interface DifferentialContext {
   readonly accountId: string;
   readonly accountAlias: string;
   readonly token?: string;
-  readonly wrangler: string;
+  readonly cf: string;
   readonly endpoint: URL;
   readonly openComputeInternalAccount: string;
   readonly adminToken: string;
@@ -105,7 +105,7 @@ export async function prepareRun(
     throw new Error("Cloudflare account ID is invalid");
   const accountAlias = safeAlias(required("OPEN_COMPUTE_CF_ACCOUNT_ALIAS"));
   const token = process.env.CLOUDFLARE_API_TOKEN;
-  const wrangler = await executable("OPEN_COMPUTE_CF_WRANGLER");
+  const cf = await executable("OPEN_COMPUTE_CF_CLI");
   const endpoint = validatedEndpoint();
   const openComputeInternalAccount = uuid(
     required("OPEN_COMPUTE_ACCOUNT_ID"),
@@ -126,21 +126,21 @@ export async function prepareRun(
     CLOUDFLARE_API_BASE_URL: openComputeApiBase.href,
     CLOUDFLARE_API_TOKEN: adminToken,
   });
-  const version = await command(wrangler, ["--version"], {
+  const version = await command(cf, ["--version"], {
     cwd: root,
     env: cloudflareEnv,
     timeout: 20_000,
   });
-  const escapedWranglerVersion = WRANGLER_VERSION.replaceAll(".", "\\.");
+  const escapedCfVersion = CF_VERSION.replaceAll(".", "\\.");
   if (
-    !new RegExp(`(?:^|\\s)${escapedWranglerVersion}(?:\\s|$)`).test(
+    !new RegExp(`(?:^|\\s)${escapedCfVersion}(?:\\s|$)`).test(
       `${version.stdout}\n${version.stderr}`,
     )
   ) {
-    throw new Error("Wrangler version differs from baseline");
+    throw new Error("Cf version differs from baseline");
   }
-  await verifyWranglerAccount(wrangler, accountId, cloudflareEnv);
-  await verifyWranglerAccount(wrangler, openComputeAccount, openComputeEnv);
+  await verifyCfAccount(cf, accountId, cloudflareEnv);
+  await verifyCfAccount(cf, openComputeAccount, openComputeEnv);
   const prefix = `oc-p34-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   const revision = (
     await command("git", ["rev-parse", "HEAD"], {
@@ -161,7 +161,7 @@ export async function prepareRun(
     fixtures: selected.length,
     mutationScope: `one uniquely named Worker per selected fixture and provider, ${counts.kv} uniquely named KV namespaces, ${counts.d1} uniquely named D1 databases, ${counts.r2} uniquely named R2 buckets, ${counts.queues} uniquely named Queues, ${counts.durableObjects} Worker-owned Durable Object namespaces, and ${counts.workflows} uniquely named Workflows per provider`,
     cleanup: [
-      "fixed Wrangler delete --name of each exact Worker without dependency override",
+      "fixed cf workers delete <name> --force of each exact Worker without dependency override",
       "exact owned KV namespace, D1 database, R2 bucket, Queue, Worker-owned Durable Object namespace, and Workflow deletion through the official v4 API followed by provider inventory absence verification",
     ],
   };
@@ -180,7 +180,7 @@ export async function prepareRun(
     accountId,
     accountAlias,
     ...(token === undefined ? {} : { token }),
-    wrangler,
+    cf,
     endpoint,
     openComputeInternalAccount,
     adminToken,

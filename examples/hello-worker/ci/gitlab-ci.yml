@@ -1,15 +1,16 @@
 deploy-production:
-  image: oven/bun:1.3.14
+  image: node:26.8.1-bookworm
   variables:
     CLOUDFLARE_API_BASE_URL: $OPEN_COMPUTE_API_BASE_URL
     CLOUDFLARE_ACCOUNT_ID: $OPEN_COMPUTE_ACCOUNT_ID
     CLOUDFLARE_API_TOKEN: $OPEN_COMPUTE_DEPLOYER_TOKEN
-    WRANGLER_LOG_SANITIZE: "true"
-    WRANGLER_SEND_METRICS: "false"
-    WRANGLER_SEND_ERROR_REPORTS: "false"
+    CF_SEND_TELEMETRY: "false"
+    DO_NOT_TRACK: "1"
   script:
+    - npm install --global bun@1.3.14
     - bun install --frozen-lockfile
-    - printf 'origin=%s account=%s wrangler=' "$CLOUDFLARE_API_BASE_URL" "$CLOUDFLARE_ACCOUNT_ID" && bunx --bun wrangler --version
+    - printf 'origin=%s account=%s cf=' "$CLOUDFLARE_API_BASE_URL" "$CLOUDFLARE_ACCOUNT_ID" && node node_modules/cf/bin/cf --version
+    - bun run --cwd examples/hello-worker build
     - bun run --cwd examples/hello-worker deploy:ci
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

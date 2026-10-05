@@ -17,7 +17,7 @@ use open_compute_storage::worker_repository::WorkerRepository;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
-const WRANGLER_VERSION: &str = "4.143.0";
+const CF_VERSION: &str = "1.0.0-beta.12";
 
 mod backups;
 mod d1_resources;
@@ -172,7 +172,7 @@ async fn capabilities(State(state): State<HttpState>, request: Request) -> Respo
         context,
         Capabilities {
             release: env!("CARGO_PKG_VERSION"),
-            wrangler_version: WRANGLER_VERSION,
+            cf_version: CF_VERSION,
             compatibility,
             system_workers,
             endpoints,
@@ -665,7 +665,7 @@ fn platform_error(error: &PlatformError, context: V4RequestContext) -> Response 
 #[derive(Serialize)]
 struct Capabilities<'a> {
     release: &'a str,
-    wrangler_version: &'a str,
+    cf_version: &'a str,
     compatibility: open_compute_core::RuntimeCompatibilityV1,
     system_workers: open_compute_core::SystemWorkerCompatibilityV1,
     endpoints: BTreeMap<&'a str, &'static str>,

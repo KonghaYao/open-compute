@@ -80,9 +80,17 @@ CARGO_TARGETS = {
     # Coverage instrumentation makes this real-workerd/search/provider matrix
     # contend with other process-heavy Gates and produce spurious backend failures.
     'p5-search': ('open-compute-service', 'p5_search_gate', True),
-    'p6-wrangler-resources': ('open-compute-service', 'p6_wrangler_resource_gate', False),
+    'p6-cf-resources': ('open-compute-service', 'p6_cf_resource_gate', False),
     'p6-cloudflare-sdk': ('open-compute-service', 'cloudflare_sdk_gate', False),
-    'p12-wrangler': ('open-compute-service', 'p12_wrangler_workflow', False),
+    'p20-cf-cli': ('open-compute-service', 'p20_cf_cli', False),
+    # Python snapshots and several fresh daemon generations own one serial scenario.
+    'p21-python-main': ('open-compute-service', 'p21_python_main', True),
+    'p21-python-frameworks': ('open-compute-service', 'p21_python_frameworks', True),
+    'p21-python-services': ('open-compute-service', 'p21_python_services', True),
+    'p21-python-queues': ('open-compute-service', 'p21_python_queues', True),
+    'p21-python-durable-objects': ('open-compute-service', 'p21_python_durable_objects', True),
+    'p21-python-workflows': ('open-compute-service', 'p21_python_workflows', True),
+    'p21-python-runtime': ('open-compute-service', 'p21_python_runtime', True),
     # Finish independent work together before the remaining exclusive barriers.
     'workflow-product': ('open-compute-service', 'workflow_product_gate', True),
     'runtime': ('open-compute-runtime', 'supervisor', True),
@@ -98,6 +106,10 @@ TARGETS = {**CARGO_TARGETS, **TYPED_TARGETS}
 P3_PRODUCT_TARGETS = [
     'p3-assets', 'p3-services-hard', 'p3-services-product', 'p3-services-events',
     'p3-services-recovery', 'p3-cache-images', 'dashboard',
+    'p21-python-main', 'p21-python-frameworks', 'p21-python-services', 'p21-python-queues',
+    'p21-python-durable-objects',
+    'p21-python-workflows',
+    'p21-python-runtime',
 ]
 GROUPS = {
     'p0': [name for name in CARGO_TARGETS if name.startswith('p0-')],
@@ -334,7 +346,7 @@ def resolve_targets(selected, workspace):
                 (
                     'PATH', 'HOME', 'OPEN_COMPUTE_CF_MUTATION_ACK',
                     'OPEN_COMPUTE_CF_ACCOUNT_ID', 'OPEN_COMPUTE_CF_ACCOUNT_ALIAS',
-                    'OPEN_COMPUTE_CF_WRANGLER', 'CLOUDFLARE_API_TOKEN',
+                    'OPEN_COMPUTE_CF_CLI', 'CLOUDFLARE_API_TOKEN',
                     'OPEN_COMPUTE_ENDPOINT', 'OPEN_COMPUTE_ACCOUNT_ID',
                     'OPEN_COMPUTE_ADMIN_TOKEN',
                 ),
@@ -554,18 +566,28 @@ def build_targets(targets, directory, workspace):
     if missing:
         raise RuntimeError(f'Cargo did not produce selected Gate executables: {missing}')
     if os.environ.get('CARGO_LLVM_COV'):
-        target_dir = Path(os.environ['CARGO_LLVM_COV_TARGET_DIR']).resolve()
-        object_dir = target_dir / 'current-objects'
-        if object_dir.is_symlink() or object_dir.exists() and not object_dir.is_dir():
-            raise RuntimeError(f'coverage object path is not an owned directory: {object_dir}')
-        object_dir.mkdir(mode=0o700, exist_ok=True)
-        for entry in object_dir.iterdir():
-            if entry.is_symlink() or not entry.is_file():
-                raise RuntimeError(f'unexpected coverage object entry: {entry}')
-            entry.unlink()
+        run_dir = Path(os.environ.get('OPEN_COMPUTE_COVERAGE_RUN_DIR', str(directory)))
+        if not run_dir.is_absolute() or run_dir.is_symlink() or not run_dir.is_dir():
+            raise RuntimeError(f'coverage run path is not an owned directory: {run_dir}')
+        object_dir = run_dir / 'objects'
+        # Every run owns a fresh object set. Never unlink retained earlier evidence.
+        if object_dir.exists() or object_dir.is_symlink():
+            raise RuntimeError(f'refusing to overwrite coverage objects: {object_dir}')
+        object_dir.mkdir(mode=0o700)
         for index, executable in enumerate(sorted(set(coverage_executables))):
             destination = object_dir / f'{index:03d}-{executable.name}'
-            os.link(executable, destination)
+            # APFS clones own separate inodes and preserve bytes when Cargo replaces
+            # its cache, without allocating another full object set for each run.
+            if sys.platform == 'darwin':
+                try:
+                    subprocess.check_call(
+                        ['/bin/cp', '-c', '-p', str(executable), str(destination)],
+                        stderr=subprocess.DEVNULL,
+                    )
+                    continue
+                except (OSError, subprocess.CalledProcessError):
+                    pass  # Other macOS filesystems still require independent copies.
+            shutil.copy2(executable, destination)
     return artifacts, {'invocations': 1, 'seconds': time.monotonic() - start,
                        'executables': {name: digest(Path(artifacts[name])) for name in cargo_targets},
                        'typed_targets': typed_inputs}
@@ -585,12 +607,11 @@ def execute_target(name, executable, directory, target, *, list_only=False):
     if isinstance(target, TypedTarget):
         env = {key: os.environ[key] for key in target.env_allowlist if key in os.environ}
         env.update(TMPDIR=str(temporary), TMP=str(temporary), TEMP=str(temporary))
-        # Bun and Node otherwise materialize caches under the isolated TMPDIR,
-        # which is a harness leak even for read-only discovery and contract checks.
-        env['BUN_RUNTIME_TRANSPILER_CACHE_PATH'] = '0'
-        env['NODE_DISABLE_COMPILE_CACHE'] = '1'
     else:
         env = dict(os.environ, TMPDIR=str(temporary), TMP=str(temporary), TEMP=str(temporary))
+    # Native tests also spawn cf/Bun. Their compile caches must not leak into TMPDIR.
+    env['BUN_RUNTIME_TRANSPILER_CACHE_PATH'] = '0'
+    env['NODE_DISABLE_COMPILE_CACHE'] = '1'
     if name == 'p5-search':
         env.setdefault('OPEN_COMPUTE_TEST_EMBEDDING_API_KEY', 'fixture-secret')
     # Repetition belongs only to this runner, including when a test spawns its own fixture.

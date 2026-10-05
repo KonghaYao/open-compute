@@ -192,7 +192,27 @@ fn unsupported_binding_options_are_rejected_by_every_affected_variant() {
 }
 
 #[test]
-fn resource_limits_use_the_wrangler_snake_case_wire_schema() {
+fn unsupported_binding_products_are_rejected_at_the_upload_boundary() {
+    for product in [
+        "analytics_engine",
+        "browser",
+        "hyperdrive",
+        "mtls_certificate",
+        "ratelimit",
+    ] {
+        assert!(
+            serde_json::from_value::<WorkerUploadMetadata>(serde_json::json!({
+                "main_module": "index.js",
+                "bindings": [{"type": product, "name": "UNSUPPORTED", "id": "resource"}]
+            }))
+            .is_err(),
+            "{product}"
+        );
+    }
+}
+
+#[test]
+fn resource_limits_use_the_official_snake_case_wire_schema() {
     let metadata: WorkerUploadMetadata = serde_json::from_value(serde_json::json!({
         "main_module":"index.js",
         "compatibility_date":"2026-09-08",

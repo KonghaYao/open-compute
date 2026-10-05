@@ -343,6 +343,14 @@ fn near_limit_sdk_body(boundary: &str) -> Vec<u8> {
             &vec![b' '; BundleLimits::DEFAULT.max_module_bytes],
         );
     }
+    for index in 4..BundleLimits::DEFAULT.max_modules {
+        append_module(
+            &mut body,
+            boundary,
+            &format!("packages/part{index}.js"),
+            b"",
+        );
+    }
     body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
     body
 }
@@ -376,9 +384,9 @@ async fn explicit_worker_limit_accepts_more_than_axum_default() {
 async fn derived_worker_wire_limit_accepts_the_bounded_sdk_shape() {
     let boundary = "open-compute-near-limit-sdk";
     let body = near_limit_sdk_body(boundary);
-    assert!(body.len() > 23 * 1024 * 1024);
+    assert!(body.len() > 39 * 1024 * 1024);
     assert!(body.len() <= MAX_BODY_BYTES);
-    assert!(MAX_BODY_BYTES - body.len() < 4 * 1024 * 1024);
+    const { assert!(MAX_BODY_BYTES < 64 * 1024 * 1024) };
     let app = Router::new()
         .route("/", post(bounded_upload))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES));

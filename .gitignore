@@ -14,9 +14,11 @@ node_modules/
 /packages/*/dist/
 /packages/*/test-results/
 /test/applications/*/.next/
-/test/applications/*/.wrangler/
 /test/applications/*/dist/
 *.tsbuildinfo
+
+**/.cloudflare/
+/examples/*/dist/
 
 # Repository-local temporary/cache output and persistent development state.
 /.temp/
@@ -31,7 +33,6 @@ node_modules/
 # Website deployment secrets.
 /apps/website/.env
 /apps/website/.env.local
-/apps/website/.wrangler/
 !/apps/website/.env.example
 
 /CR.md

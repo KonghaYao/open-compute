@@ -67,6 +67,10 @@ test("Artifacts facade exposes the pinned namespace and repository methods", asy
 
   assert.deepEqual(await binding.create("source"), created);
   const repository = await binding.get("source");
+  assert.deepEqual(Object.keys(binding), []);
+  assert.deepEqual(Object.getOwnPropertySymbols(binding), []);
+  assert.deepEqual(Object.keys(repository).sort(), Object.keys(info).sort());
+  assert.deepEqual(Object.getOwnPropertySymbols(repository), []);
   assert.equal(repository.remote, info.remote);
   assert.equal((await repository.createToken("read", 60)).scope, "read");
   assert.equal((await repository.listTokens()).total, 1);
@@ -100,6 +104,45 @@ test("Artifacts facade exposes the pinned namespace and repository methods", asy
       "delete",
     ],
   );
+});
+
+test("Artifacts calls keep the transport private under tenant prototype edits", async () => {
+  const raw = {
+    call: async (operation) => (operation === "get" ? info : true),
+  };
+  const original = Reflect.apply;
+  const originalGet = Reflect.get;
+  const originalIsArray = Array.isArray;
+  Reflect.apply = (fn, receiver, args) => {
+    assert.notEqual(receiver, raw, "transport leaked through a patched global");
+    return original(fn, receiver, args);
+  };
+  Reflect.get = (target, ...args) => {
+    assert.notEqual(
+      target,
+      raw,
+      "transport leaked through patched Reflect.get",
+    );
+    return originalGet(target, ...args);
+  };
+  Array.isArray = (value) => {
+    assert.notEqual(
+      value,
+      raw,
+      "transport leaked through patched Array.isArray",
+    );
+    return originalIsArray(value);
+  };
+  try {
+    const binding = new ArtifactsBinding(raw);
+    const repository = await binding.get("source");
+    assert.equal(repository.raw, undefined);
+    assert.equal(await repository.revokeToken("token-id"), true);
+  } finally {
+    Reflect.apply = original;
+    Reflect.get = originalGet;
+    Array.isArray = originalIsArray;
+  }
 });
 
 test("Artifacts facade preserves stable errors and rejects malformed success", async () => {

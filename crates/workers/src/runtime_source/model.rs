@@ -8,6 +8,8 @@ pub enum RuntimeScope {
     Runtime,
     /// Only a currently validating version; secrets are omitted.
     Validation,
+    /// A validating Python Version whose actual env is used only by host preparation.
+    Preparation,
     /// A validating or ready version used for deployment admission; secrets are omitted.
     Probe,
 }
@@ -255,6 +257,8 @@ pub struct RuntimeSnapshot {
     pub compatibility_flags: Vec<String>,
     /// Immutable Standard resource limits enforced natively for this Version.
     pub limits: EffectiveResourceLimits,
+    /// Immutable prepared identity used by the separate private binary snapshot transfer.
+    pub python_prepared_sha256: Option<String>,
     /// Executable or assets-only content discriminator.
     pub content_kind: VersionContentKind,
     /// Main module for executable Workers.

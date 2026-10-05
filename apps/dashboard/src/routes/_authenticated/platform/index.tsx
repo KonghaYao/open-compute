@@ -140,8 +140,8 @@ function PlatformPage() {
                       capabilities?.release ?? system?.version ?? "Unknown",
                   },
                   {
-                    label: "Wrangler contract",
-                    value: capabilities?.wrangler_version ?? "Unknown",
+                    label: "Cloudflare CLI contract",
+                    value: capabilities?.cf_version ?? "Unknown",
                   },
                   {
                     label: "Compatibility maximum",

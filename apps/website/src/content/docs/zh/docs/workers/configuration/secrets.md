@@ -2,17 +2,30 @@
 title: "Secrets"
 ---
 
-使用项目内精确固定版本的 Wrangler 管理 Worker secret。secret value 由 Wrangler 从 stdin 读取，不能出现在 `wrangler.jsonc`、package script、命令参数、target record 或日志中。
+使用项目内 cf。将 secret 文件保存在仓库外并限制为 owner-only，值不能出现在 argv、package scripts、日志、target 记录或应用配置中。bulk 使用 JSON Merge Patch：字符串设置/覆盖值，`null` 删除，未提及的值保持不变。
 
 ```sh
-ocd wrangler --target staging secret put API_TOKEN --env staging
-ocd wrangler --target staging secret list --env staging
-ocd wrangler --target staging secret delete API_TOKEN --env staging
-ocd wrangler --target staging secret bulk ./secrets.json --env staging
+ocd cf --target staging workers secrets bulk --worker app-staging --body @/secure/secrets.json
+ocd cf --target staging workers secrets list --worker app-staging
+ocd cf --target staging workers secrets delete API_TOKEN --worker app-staging --force
+ocd cf --target staging deploy --mode staging --secrets-file /secure/deploy-secrets.json
 ```
 
-请选择 deployer target。target 的 deployer token 只授权管理请求，不会暴露给 Worker。`ocd` 从 owner-only 的外部 token file 读取该凭据，并且只把它放入短命 Wrangler child environment。
+目标 deployer token 只用于管理请求。项目和构建脚本可以读取其进程环境，因此 CI 应先无部署凭据构建，再 prebuilt 部署。CLI 参数以固定版本 help/schema 为准，不承诺未验证的 stdin 输入。
 
-secret mutation 遵守 immutable Version 模型：open-compute 加密 value，并在官方语义要求时创建新 Version 和 100% Deployment。list/get response 只暴露 name 与 type，永不返回 plaintext。rollback 只改变 active Version pointer，因此恢复该 Version 的 secret binding，不改写它。
+secret mutation 继续遵循 immutable Version 模型。平台加密持久化 secret，读取接口只公开名称和类型；rollback 恢复该 Version 的绑定。
 
-不提供 Cloudflare Secrets Store 和 Dashboard secret 管理。target 设置、CI 处理与失败恢复见[开发应用](/zh/docs/develop/)。
+```json
+{
+  "secrets": {
+    "API_TOKEN": {
+      "name": "API_TOKEN",
+      "type": "secret_text",
+      "text": "<value>"
+    },
+    "OLD_SECRET": null
+  }
+}
+```
+
+bulk 文件使用上面的 API 对象；`deploy --secrets-file` 使用名称到字符串值的平面映射。

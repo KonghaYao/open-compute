@@ -1,3 +1,4 @@
+import wrappedBinding from "cloudflare-internal:wrapped-binding";
 import {
   chatResponse,
   eventStream,
@@ -61,10 +62,10 @@ function isTransport(value: unknown): value is AiSearchTransport {
   return (
     value !== null &&
     typeof value === "object" &&
-    typeof Reflect.get(value, "call") === "function" &&
-    typeof Reflect.get(value, "stream") === "function" &&
-    typeof Reflect.get(value, "upload") === "function" &&
-    typeof Reflect.get(value, "download") === "function"
+    typeof (value as Partial<AiSearchTransport>).call === "function" &&
+    typeof (value as Partial<AiSearchTransport>).stream === "function" &&
+    typeof (value as Partial<AiSearchTransport>).upload === "function" &&
+    typeof (value as Partial<AiSearchTransport>).download === "function"
   );
 }
 
@@ -392,14 +393,15 @@ class JobsBinding {
 }
 
 /** Complete instance-level AI Search facade from the pinned declaration. */
-export class AiSearchInstanceBinding {
+export class AiSearchInstanceBinding extends wrappedBinding.WrappedBinding {
   readonly #transport: AiSearchTransport;
   readonly #instance: string | undefined;
-  constructor(raw: unknown, instance?: string | boolean) {
+  constructor(raw: unknown, instance?: string) {
+    super(raw);
     if (!isTransport(raw)) fail("AI_SEARCH_UNAVAILABLE");
     this.#transport = raw;
     this.#instance =
-      typeof instance === "string" ? instanceName(instance) : undefined;
+      instance === undefined ? undefined : instanceName(instance);
   }
   async search(params: AiSearchSearchRequest): Promise<AiSearchSearchResponse> {
     return searchResponse(
@@ -464,9 +466,10 @@ export class AiSearchInstanceBinding {
 }
 
 /** Complete namespace-level AI Search facade from the pinned declaration. */
-export class AiSearchNamespaceBinding {
+export class AiSearchNamespaceBinding extends wrappedBinding.WrappedBinding {
   readonly #transport: AiSearchTransport;
   constructor(raw: unknown) {
+    super(raw);
     if (!isTransport(raw)) fail("AI_SEARCH_UNAVAILABLE");
     this.#transport = raw;
   }

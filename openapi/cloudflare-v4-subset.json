@@ -1349,6 +1349,33 @@
       "status": "supported",
       "source": "cloudflare-openapi",
       "operationSha256": "26afa53cf88d87e9ced524a2a018c150e1424b9b116472c8724a63fb22fb95a1"
+    },
+    {
+      "id": "DELETE /accounts/{account_id}/workers/workers/{worker_id}",
+      "method": "DELETE",
+      "path": "/accounts/{account_id}/workers/workers/{worker_id}",
+      "operationId": "deleteWorker",
+      "status": "supported",
+      "source": "cloudflare-openapi",
+      "operationSha256": "55465f1dede51549995cd46be18a9dfa4ebb9ce080c555bf0780937a0c4c7245"
+    },
+    {
+      "id": "GET /accounts/{account_id}/workers/workers/{worker_id}/versions",
+      "method": "GET",
+      "path": "/accounts/{account_id}/workers/workers/{worker_id}/versions",
+      "operationId": "listWorkerVersions",
+      "status": "supported",
+      "source": "cloudflare-openapi",
+      "operationSha256": "89bb76b59bfec49458949f7cf933610ce3a35b1e8ac4f8dbaf5421549564c341"
+    },
+    {
+      "id": "GET /accounts/{account_id}/workers/workers/{worker_id}/versions/{version_id}",
+      "method": "GET",
+      "path": "/accounts/{account_id}/workers/workers/{worker_id}/versions/{version_id}",
+      "operationId": "getWorkerVersion",
+      "status": "supported",
+      "source": "cloudflare-openapi",
+      "operationSha256": "e210e42a96c685d7ecab9405c610b4a764c089a548cfa621bc6e038db1e1950c"
     }
   ],
   "paths": {
@@ -6441,6 +6468,112 @@
         "x-fern-availability": "generally-available",
         "x-fern-sdk-group-name": "workers",
         "x-fern-sdk-method-name": "get"
+      },
+      "delete": {
+        "operationId": "deleteWorker",
+        "summary": "Delete Worker",
+        "description": "Delete a Worker and all its associated resources (versions, deployments, etc.).",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/workers_identifier"
+            }
+          },
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identifier for the Worker, which can be ID or name.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "description": "If true, delete the Worker even when other Workers still reference it. Service bindings in those Workers may be left broken. Durable Object namespaces implemented by the deleted Worker are deleted even if other Workers reference them.",
+            "schema": {
+              "type": "boolean"
+            },
+            "x-fern-parameter-name": "delete-with-references"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delete Worker success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/workers_api-response-common"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Missing or invalid parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/workers_api-response-common-failure"
+                    },
+                    {
+                      "properties": {
+                        "errors": {
+                          "type": "array",
+                          "items": {
+                            "discriminator": {
+                              "mapping": {
+                                "10003": "#/components/schemas/workers_ErrorMissingParam"
+                              },
+                              "propertyName": "code"
+                            },
+                            "oneOf": [
+                              {
+                                "$ref": "#/components/schemas/workers_ErrorMissingParam"
+                              }
+                            ],
+                            "type": "object"
+                          }
+                        }
+                      },
+                      "required": ["errors"],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/workers_ErrorAuth"
+          },
+          "404": {
+            "$ref": "#/components/responses/workers_ErrorWorkerNotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/workers_ErrorInternalServer"
+          }
+        },
+        "security": [
+          {
+            "api_token": []
+          },
+          {
+            "api_email": [],
+            "api_key": []
+          }
+        ],
+        "tags": ["Workers"],
+        "x-api-token-group": ["Workers Scripts Write"],
+        "x-fern-availability": "generally-available",
+        "x-fern-sdk-group-name": "workers",
+        "x-fern-sdk-method-name": "delete",
+        "x-forge-require-confirmation": "This will permanently delete the Worker and its associated versions and deployments."
       }
     },
     "/accounts/{account_id}/workers/workers/{worker_id}/versions/{version_id}": {
@@ -6512,6 +6645,101 @@
         "x-fern-sdk-group-name": "workers.versions",
         "x-fern-sdk-method-name": "delete",
         "x-forge-require-confirmation": "This will permanently delete the Worker version."
+      },
+      "get": {
+        "operationId": "getWorkerVersion",
+        "summary": "Get Worker Version",
+        "description": "Get details about a specific Worker version.",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/workers_identifier"
+            }
+          },
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identifier for the Worker, which can be ID or name.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identifier for the version, which can be a UUID, a UUID prefix (minimum length 8), or the literal \"latest\" to operate on the most recently created version.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "schema": {
+              "description": "Whether to include the `modules` property of the version in the response, which contains code and sourcemap content and may add several megabytes to the response size.",
+              "type": "string",
+              "enum": ["modules"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get version success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/workers_api-response-common"
+                    },
+                    {
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/workers_Version"
+                        }
+                      },
+                      "required": ["result"],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Get version failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/workers_api-response-common-failure"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_token": []
+          },
+          {
+            "api_email": [],
+            "api_key": []
+          }
+        ],
+        "tags": ["Versions"],
+        "x-api-token-group": [
+          "Workers Tail Read",
+          "Workers Scripts Write",
+          "Workers Scripts Read"
+        ],
+        "x-fern-availability": "generally-available",
+        "x-fern-sdk-group-name": "workers.versions",
+        "x-fern-sdk-method-name": "get"
       }
     },
     "/accounts/{account_id}/workers/scripts/{script_name}/assets-upload-session": {
@@ -31434,6 +31662,109 @@
         "x-fern-sdk-group-name": "workflows.instances.events",
         "x-fern-sdk-method-name": "send"
       }
+    },
+    "/accounts/{account_id}/workers/workers/{worker_id}/versions": {
+      "get": {
+        "operationId": "listWorkerVersions",
+        "summary": "List Worker Versions",
+        "description": "List all versions for a Worker.",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/workers_identifier"
+            }
+          },
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identifier for the Worker, which can be ID or name.",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Current page.",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Items per-page.",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List versions success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/workers_api-response-collection"
+                    },
+                    {
+                      "properties": {
+                        "result": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/workers_Version"
+                          }
+                        }
+                      },
+                      "required": ["result"],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "List versions failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/workers_api-response-common-failure"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_token": []
+          },
+          {
+            "api_email": [],
+            "api_key": []
+          }
+        ],
+        "tags": ["Versions"],
+        "x-api-token-group": [
+          "Workers Tail Read",
+          "Workers Scripts Write",
+          "Workers Scripts Read"
+        ],
+        "x-fern-availability": "generally-available",
+        "x-fern-sdk-group-name": "workers.versions",
+        "x-fern-sdk-method-name": "list"
+      }
     }
   },
   "components": {
@@ -35370,6 +35701,299 @@
           }
         }
       },
+      "workers_Version": {
+        "type": "object",
+        "properties": {
+          "annotations": {
+            "description": "Metadata about the version.",
+            "type": "object",
+            "properties": {
+              "workers/message": {
+                "description": "Human-readable message about the version. Truncated to 1000 bytes if longer.",
+                "type": "string",
+                "example": "Fixed bug.",
+                "maxLength": 1000,
+                "x-auditable": true
+              },
+              "workers/tag": {
+                "description": "User-provided identifier for the version. Maximum 100 bytes.",
+                "type": "string",
+                "example": "v1.0.1",
+                "maxLength": 100,
+                "x-auditable": true
+              },
+              "workers/triggered_by": {
+                "description": "Operation that triggered the creation of the version.",
+                "type": "string",
+                "example": "upload",
+                "readOnly": true,
+                "x-auditable": true
+              }
+            }
+          },
+          "assets": {
+            "description": "Configuration for assets within a Worker.\n\n[`_headers`](https://developers.cloudflare.com/workers/static-assets/headers/#custom-headers) and\n[`_redirects`](https://developers.cloudflare.com/workers/static-assets/redirects/) files should be\nincluded as modules named `_headers` and `_redirects` with content type `text/plain`.\n",
+            "type": "object",
+            "properties": {
+              "config": {
+                "description": "Configuration for assets within a Worker.",
+                "type": "object",
+                "properties": {
+                  "base_path": {
+                    "description": "The public URL path prefix under which assets are served. A null request value resets it to `/`; responses represent the root as `/`. All versions in a gradual deployment must use the same canonical value. To change it, first deploy the version containing the change at 100%.",
+                    "type": "string",
+                    "example": "/docs/",
+                    "default": "/",
+                    "nullable": true,
+                    "x-auditable": true,
+                    "x-stainless-terraform-configurability": "computed_optional"
+                  },
+                  "html_handling": {
+                    "description": "Determines the redirects and rewrites of requests for HTML content.",
+                    "type": "string",
+                    "example": "auto-trailing-slash",
+                    "default": "auto-trailing-slash",
+                    "enum": [
+                      "auto-trailing-slash",
+                      "force-trailing-slash",
+                      "drop-trailing-slash",
+                      "none"
+                    ],
+                    "x-auditable": true
+                  },
+                  "not_found_handling": {
+                    "description": "Determines the response when a request does not match a static asset, and there is no Worker script.",
+                    "type": "string",
+                    "example": "404-page",
+                    "default": "none",
+                    "enum": ["none", "404-page", "single-page-application"],
+                    "x-auditable": true
+                  },
+                  "run_worker_first": {
+                    "default": false,
+                    "oneOf": [
+                      {
+                        "description": "Contains a list path rules to control routing to either the Worker or assets. Glob (*) and negative (!) rules are supported. Rules must start with either '/' or '!/'. At least one non-negative rule must be provided, and negative rules have higher precedence than non-negative rules.",
+                        "example": "[\"/api/*\", \"/oauth/callback\", \"!/api/assets/*\"]",
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "description": "Enables routing to always invoke the Worker script ahead of all requests. When true, this is equivalent to `[\"/*\"]` in the string array version of this field.",
+                        "example": true,
+                        "type": "boolean"
+                      }
+                    ]
+                  }
+                }
+              },
+              "jwt": {
+                "description": "Token provided upon successful upload of all files from a registered manifest.",
+                "type": "string",
+                "x-sensitive": true
+              }
+            }
+          },
+          "author_email": {
+            "description": "Email of the user who created the version.",
+            "type": "string",
+            "format": "email",
+            "example": "user@example.com",
+            "readOnly": true,
+            "x-auditable": true
+          },
+          "author_id": {
+            "description": "Identifier of the user who created the version.",
+            "type": "string",
+            "example": "408cbcdfd4dda4617efef40b04d168a1",
+            "readOnly": true,
+            "x-auditable": true
+          },
+          "bindings": {
+            "$ref": "#/components/schemas/workers_bindings"
+          },
+          "cache_options": {
+            "$ref": "#/components/schemas/workers_cache_options"
+          },
+          "compatibility_date": {
+            "$ref": "#/components/schemas/workers_compatibility_date"
+          },
+          "compatibility_flags": {
+            "$ref": "#/components/schemas/workers_compatibility_flags"
+          },
+          "containers": {
+            "$ref": "#/components/schemas/workers_containers"
+          },
+          "created_on": {
+            "description": "When the version was created.",
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true,
+            "x-auditable": true
+          },
+          "exports": {
+            "description": "Declarative exports for the version, including Durable Object\nclasses (with their `storage` backend) and named Worker\nentrypoints. On reads, tombstoned lifecycle entries are\nomitted, so only live exports (`created` and\n`expecting-transfer`) are returned. `exports` and `migrations`\nare mutually exclusive on upload.\n",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/workers_exports_config_map"
+              }
+            ]
+          },
+          "exports_reconciliation": {
+            "description": "Summary of the declarative exports reconciliation that ran on\nthis upload. Populated only when the uploaded metadata included\nan `exports` block. Durable Object entries drive reconciliation;\n`type: worker` entries do not contribute to this summary.\n",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/workers_exports_reconciliation_result"
+              }
+            ]
+          },
+          "id": {
+            "description": "Version identifier.",
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true,
+            "x-auditable": true
+          },
+          "limits": {
+            "description": "Resource limits enforced at runtime.",
+            "type": "object",
+            "properties": {
+              "cpu_ms": {
+                "description": "CPU time limit in milliseconds.",
+                "type": "integer",
+                "example": 50
+              },
+              "subrequests": {
+                "description": "Subrequest limit per request.",
+                "type": "integer",
+                "example": 1000
+              }
+            },
+            "x-stainless-terraform-configurability": "computed_optional"
+          },
+          "main_module": {
+            "description": "The name of the main module in the `modules` array (e.g. the name of the module that exports a `fetch` handler).",
+            "type": "string",
+            "example": "index.js",
+            "x-auditable": true
+          },
+          "migration_tag": {
+            "description": "Durable Object migration tag. Set when the version is deployed. Omitted if the version has not been deployed or the Worker does not use Durable Objects.",
+            "type": "string",
+            "example": "v1",
+            "readOnly": true
+          },
+          "migrations": {
+            "description": "Migrations for Durable Objects associated with the version. Migrations are applied when the version is deployed.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/workers_single_step_migrations"
+              },
+              {
+                "$ref": "#/components/schemas/workers_multiple_step_migrations"
+              }
+            ]
+          },
+          "modules": {
+            "description": "Code, sourcemaps, and other content used at runtime.\n\nThis includes [`_headers`](https://developers.cloudflare.com/workers/static-assets/headers/#custom-headers) and\n[`_redirects`](https://developers.cloudflare.com/workers/static-assets/redirects/) files used to configure\n[Static Assets](https://developers.cloudflare.com/workers/static-assets/). `_headers` and `_redirects` files should be\nincluded as modules named `_headers` and `_redirects` with content type `text/plain`.\n",
+            "type": "array",
+            "items": {
+              "properties": {
+                "content_base64": {
+                  "description": "The base64-encoded module content.",
+                  "type": "string",
+                  "format": "byte",
+                  "example": "ZXhwb3J0IGRlZmF1bHQgewogIGFzeW5jIGZldGNoKHJlcXVlc3QsIGVudiwgY3R4KSB7CiAgICByZXR1cm4gbmV3IFJlc3BvbnNlKCdIZWxsbyBXb3JsZCEnKQogIH0KfQ=="
+                },
+                "content_type": {
+                  "description": "The content type of the module.",
+                  "type": "string",
+                  "example": "application/javascript+module"
+                },
+                "name": {
+                  "description": "The name of the module.",
+                  "type": "string",
+                  "example": "index.js"
+                }
+              },
+              "required": ["name", "content_type", "content_base64"],
+              "type": "object"
+            },
+            "x-stainless-collection-type": "set"
+          },
+          "number": {
+            "description": "The integer version number, starting from one.",
+            "type": "integer",
+            "readOnly": true,
+            "x-auditable": true
+          },
+          "package_dependencies": {
+            "description": "The list of npm packages that were installed and used when this Worker\nversion was built.\n",
+            "type": "array",
+            "items": {
+              "properties": {
+                "installedVersion": {
+                  "description": "The exact version that was resolved and installed by the package manager.",
+                  "type": "string",
+                  "example": "4.17.22"
+                },
+                "name": {
+                  "description": "The npm package name.",
+                  "type": "string",
+                  "example": "lodash"
+                },
+                "packageJsonVersion": {
+                  "description": "The version constraint as written in package.json.",
+                  "type": "string",
+                  "example": "^4.17.21"
+                }
+              },
+              "required": ["name", "packageJsonVersion", "installedVersion"],
+              "type": "object"
+            },
+            "x-auditable": true
+          },
+          "placement": {
+            "$ref": "#/components/schemas/workers_placement_info_no_status"
+          },
+          "source": {
+            "description": "The client used to create the version.",
+            "type": "string",
+            "example": "wrangler",
+            "readOnly": true,
+            "x-auditable": true
+          },
+          "startup_time_ms": {
+            "description": "Time in milliseconds spent on [Worker startup](https://developers.cloudflare.com/workers/platform/limits/#worker-startup-time).",
+            "type": "integer",
+            "example": 10,
+            "readOnly": true,
+            "x-auditable": true
+          },
+          "urls": {
+            "description": "All routable URLs that always point to this version. Does not include alias URLs, since aliases can be updated to point to a different version.",
+            "type": "array",
+            "items": {
+              "format": "uri",
+              "type": "string"
+            },
+            "example": ["https://9387e76d-my-worker.my-subdomain.workers.dev"],
+            "readOnly": true
+          },
+          "usage_model": {
+            "description": "Usage model for the version.",
+            "type": "string",
+            "example": "standard",
+            "default": "standard",
+            "enum": ["standard", "bundled", "unbound"],
+            "deprecated": true,
+            "x-auditable": true
+          }
+        },
+        "required": ["id", "number", "urls", "created_on"]
+      },
       "iam_api-response-single": {
         "type": "object",
         "allOf": [
@@ -38438,6 +39062,34 @@
           }
         }
       },
+      "workers_ErrorAuth": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Code indicating that the user is not authorized to perform this action.",
+            "type": "integer",
+            "enum": [10023]
+          },
+          "message": {
+            "description": "Message explaining that the user lacks access to this feature.",
+            "type": "string"
+          }
+        },
+        "required": ["code", "message"]
+      },
+      "workers_containers": {
+        "description": "List of containers attached to a Worker. Containers can only be attached to Durable Object classes of this Worker script.",
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/workers_container_item"
+        },
+        "example": [
+          {
+            "class_name": "MyDurableObject"
+          }
+        ],
+        "x-stainless-collection-type": "set"
+      },
       "iam_api-response-common": {
         "type": "object",
         "properties": {
@@ -40582,6 +41234,18 @@
         "example": 6000,
         "x-auditable": true
       },
+      "workers_container_item": {
+        "description": "Container configuration for a Worker.",
+        "type": "object",
+        "properties": {
+          "class_name": {
+            "description": "Select which Durable Object class should get this container attached.",
+            "type": "string",
+            "x-auditable": true
+          }
+        },
+        "required": ["class_name"]
+      },
       "iam_grants": {
         "type": "object",
         "properties": {
@@ -41259,6 +41923,32 @@
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/workers_ErrorInternalServer"
+                      }
+                    }
+                  },
+                  "required": ["errors"],
+                  "type": "object"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "workers_ErrorAuth": {
+        "description": "Authentication required or insufficient permissions.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/workers_api-response-common-failure"
+                },
+                {
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/workers_ErrorAuth"
                       }
                     }
                   },

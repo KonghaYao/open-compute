@@ -1,14 +1,9 @@
 import { onRequestGet as getGitHubStars } from "../functions/api/github-stars";
 import { onRequestGet as getGitHubReleases } from "../functions/api/releases";
 
-interface AssetsBinding {
-  fetch(request: Request): Promise<Response>;
-}
-
-interface WorkerEnvironment {
-  ASSETS: AssetsBinding;
+type WorkerEnvironment = Cloudflare.Env & {
   VITE_GITHUB_PERSONAL_ACCESS_TOKEN?: string;
-}
+};
 
 type ApiHandler = (context: { env: WorkerEnvironment }) => Promise<Response>;
 

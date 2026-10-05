@@ -1,4 +1,4 @@
-//! Bounded authenticated probes for remote Wrangler targets.
+//! Bounded authenticated probes for remote Cf targets.
 
 use crate::target_registry::TargetRecord;
 use hyper::StatusCode;
@@ -74,11 +74,11 @@ impl TargetHttp for LiveTargetHttp {
     }
 }
 
-/// Verified target facts required by the Wrangler launcher.
+/// Verified target facts required by the Cf launcher.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TargetCapabilities {
-    /// Exact Wrangler version certified by the selected target.
-    pub wrangler_version: String,
+    /// Exact Cf version certified by the selected target.
+    pub cf_version: String,
 }
 
 /// Verify account discovery and capabilities for an explicit target test.
@@ -121,13 +121,13 @@ pub async fn fetch_capabilities_at(
         .await?;
     let capabilities: Envelope<CapabilitiesResult> = serde_json::from_slice(&body)
         .map_err(|_| target_unavailable("target capabilities response is invalid"))?;
-    if !capabilities.success || !valid_version(&capabilities.result.wrangler_version) {
+    if !capabilities.success || !valid_version(&capabilities.result.cf_version) {
         return Err(target_unavailable(
-            "target capabilities do not contain a valid Wrangler pin",
+            "target capabilities do not contain a valid Cf pin",
         ));
     }
     Ok(TargetCapabilities {
-        wrangler_version: capabilities.result.wrangler_version,
+        cf_version: capabilities.result.cf_version,
     })
 }
 
@@ -144,18 +144,11 @@ struct AccountResult {
 
 #[derive(Deserialize)]
 struct CapabilitiesResult {
-    wrangler_version: String,
+    cf_version: String,
 }
 
 fn valid_version(value: &str) -> bool {
-    let mut parts = value.split('.');
-    value.len() <= 32
-        && (0..3).all(|_| {
-            parts.next().is_some_and(|part| {
-                !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
-            })
-        })
-        && parts.next().is_none()
+    value.len() <= 128 && semver::Version::parse(value).is_ok()
 }
 
 async fn collect_body(mut response: reqwest::Response) -> Result<Vec<u8>, PlatformError> {

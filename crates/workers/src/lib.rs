@@ -12,6 +12,7 @@ pub mod environment;
 pub mod kv;
 pub mod pins;
 pub mod pipeline;
+pub mod python_artifact;
 pub mod queue_lifecycle;
 mod r2;
 pub mod resource_lifecycle;

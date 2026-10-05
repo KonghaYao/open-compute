@@ -1,5 +1,6 @@
 //! Deterministic static-config input digest.
 
+use crate::compile::ConfigRole;
 use crate::fsutil::{
     MAX_ASSETS_TOTAL_BYTES, hex_sha256, list_files_sorted, open_dir_nofollow,
     read_regular_nofollow, reject_symlink_escape,
@@ -11,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 const DIGEST_TAG: &[u8] = b"open-compute-static-config-v1\0";
 pub(crate) const TOKEN_PLACEHOLDER: &str = "__OPEN_COMPUTE_INTERNAL_TOKEN__";
+pub(crate) const DO_RPC_HOST_PLACEHOLDER: &str = "__OPEN_COMPUTE_DO_RPC_HOST__";
 pub(crate) const BINDING_TOKEN_PLACEHOLDER: &str = "__OPEN_COMPUTE_BINDING_TOKEN__";
 pub(crate) const OBSERVABILITY_TOKEN_PLACEHOLDER: &str = "__OPEN_COMPUTE_OBSERVABILITY_TOKEN__";
 pub(crate) const SYSTEM_COMPATIBILITY_DATE_PLACEHOLDER: &str =
@@ -49,6 +51,8 @@ pub struct PlatformReleaseMeta {
 /// Inputs hashed into the compiled-config cache key.
 #[derive(Debug)]
 pub(crate) struct DigestInputs<'a> {
+    /// Checked-in config constant selected for this process.
+    pub role: ConfigRole,
     /// Packaged Cap'n Proto template.
     pub config_template: &'a [u8],
     /// Sorted (relative path, bytes) system workers.
@@ -68,6 +72,7 @@ pub(crate) struct DigestInputs<'a> {
 pub(crate) fn config_input_digest(inputs: &DigestInputs<'_>) -> String {
     let mut hasher = Sha256::new();
     hasher.update(DIGEST_TAG);
+    put_bytes(&mut hasher, inputs.role.constant().as_bytes());
     put_bytes(&mut hasher, inputs.config_template);
     put_u64(&mut hasher, inputs.workers.len() as u64);
     for (name, bytes) in inputs.workers {
@@ -176,16 +181,21 @@ pub(crate) fn render_config_with_tokens(
             "internal service tokens must be distinct",
         ));
     }
-    if template.matches(TOKEN_PLACEHOLDER).count() != 1
+    if template.matches(DO_RPC_HOST_PLACEHOLDER).count() != 1
+        || template.matches(TOKEN_PLACEHOLDER).count() != 1
         || template.matches(BINDING_TOKEN_PLACEHOLDER).count() != 1
         || template.matches(OBSERVABILITY_TOKEN_PLACEHOLDER).count() != 1
     {
         return Err(PlatformError::new(
             ErrorCode::ConfigCompileFailed,
-            "config template must contain each internal token placeholder exactly once",
+            "config template must contain each private credential placeholder exactly once",
         ));
     }
     Ok(template
+        .replace(
+            DO_RPC_HOST_PLACEHOLDER,
+            &format!("{}.do-router.invalid:1", token.expose()),
+        )
         .replace(TOKEN_PLACEHOLDER, token.expose())
         .replace(BINDING_TOKEN_PLACEHOLDER, binding_token.expose())
         .replace(
@@ -230,6 +240,7 @@ pub(crate) fn digest_for(
         binding_token,
         observability_token,
         &DurableObjectsConfig::default(),
+        ConfigRole::Runtime,
     )
 }
 
@@ -246,6 +257,7 @@ pub(crate) fn digest_for_with_tokens_and_policy(
     binding_token: &SecretString,
     observability_token: &SecretString,
     durable_objects: &DurableObjectsConfig,
+    role: ConfigRole,
 ) -> Result<(String, String, WorkerFiles), PlatformError> {
     let (template, workers, _) = load_assets(assets_dir)?;
     if let Some(expected) = runtime.expected_assets_sha256
@@ -267,6 +279,7 @@ pub(crate) fn digest_for_with_tokens_and_policy(
     let rendered = render_do_policy(rendered, durable_objects)?;
     let rendered = render_lock_compatibility(rendered, runtime.lock())?;
     let digest = config_input_digest(&DigestInputs {
+        role,
         config_template: &template,
         workers: &workers,
         lock_bytes,
@@ -416,7 +429,7 @@ mod tests {
             },
             workers_sdk: WorkersSdkPin {
                 revision: "f8085545bcaa2c639f171c25e4424685036a0e10".to_owned(),
-                wrangler_version: "4.143.0".to_owned(),
+                cf_version: "1.0.0-beta.12".to_owned(),
                 vite_plugin_version: "1.54.2".to_owned(),
             },
             targets: BTreeMap::from([(

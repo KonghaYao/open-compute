@@ -1,22 +1,22 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2024",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
+    "skipLibCheck": false,
     "noEmit": true,
-    "types": ["vinext/types", "@cloudflare/workers-types"]
+    "types": ["node"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
   },
   "include": [
     "app/**/*.ts",
     "app/**/*.tsx",
     "pages/**/*.ts",
     "pages/**/*.tsx",
-    "tests/**/*.ts",
-    "worker/**/*.ts",
-    "*.ts"
-  ]
+    "tests/**/*.ts"
+  ],
+  "exclude": ["app/api/env/route.ts"]
 }

@@ -1,7 +1,4 @@
-/** Current durable-value profiles. Admitted value sets match; limits and error codes do not. */
-export type DurableValueProfile = "queue-v8" | "workflow";
-
-/** Encoder/decoder bounds for one profile. */
+/** Bounds for persisted Workflow values. */
 export interface DurableValueLimits {
   readonly maxBytes: number;
   readonly maxNodes: number;
@@ -23,7 +20,7 @@ export type DurableTypedArray =
   | BigUint64Array;
 
 /**
- * Durable structured-clone subset for Queue `v8` bodies and Workflow payloads.
+ * Durable structured-clone subset for Workflow payloads and results.
  * Capabilities, streams, HTTP messages, and other host objects are not admitted.
  */
 export type DurableValue =

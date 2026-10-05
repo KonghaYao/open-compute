@@ -5,7 +5,7 @@ use open_compute_core::Redactor;
 fn redacts_token_and_headers_and_bounds_lines() {
     let mut r = Redactor::new();
     r.register_str("sekrit-token");
-    let c = LogCollector::new(r);
+    let c = LogCollector::new(Some(r));
     c.ingest(b"token=sekrit-token\n");
     c.ingest(b"Authorization: Bearer abc\n");
     c.ingest(&vec![b'a'; MAX_LINE + 8]);
@@ -39,7 +39,7 @@ fn pipe_reader_handles_interrupts_errors_and_pending_line_bounds() {
             Err(io::Error::other("failed"))
         }
     }
-    let collector = LogCollector::new(Redactor::new());
+    let collector = LogCollector::new(Some(Redactor::new()));
     read_pipe_into(InterruptedThenData { state: 0 }, &collector).unwrap();
     assert!(collector.snapshot().as_lossy_str().contains("line"));
     assert!(read_pipe_into(AlwaysFails, &collector).is_err());
@@ -55,4 +55,16 @@ fn pipe_reader_handles_interrupts_errors_and_pending_line_bounds() {
             .as_lossy_str()
             .contains("<truncated-line>")
     );
+}
+
+#[test]
+fn suppressed_capture_drains_without_retaining_source_or_private_values() {
+    let collector = LogCollector::new(None);
+    let clone = collector.clone();
+    collector.ingest(b"private native traceback with tenant source and credentials\n");
+    let bytes = vec![b'x'; MAX_TAIL * 4];
+    read_pipe_into(bytes.as_slice(), &clone).unwrap();
+    read_pipe_into(b"unterminated tenant source".as_slice(), &clone).unwrap();
+    assert!(collector.snapshot().bytes.is_empty());
+    assert!(clone.snapshot().as_lossy_str().is_empty());
 }

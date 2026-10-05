@@ -1,8 +1,8 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["@open-compute/workers-types"],
+    "types": [],
     "lib": ["ES2024", "ESNext.Disposable"]
   },
-  "include": ["worker-configuration.d.ts", "src/**/*.ts"]
+  "include": [".cloudflare/types/**/*.d.ts", "src/**/*.ts"]
 }

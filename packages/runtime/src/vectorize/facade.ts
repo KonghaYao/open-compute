@@ -1,3 +1,5 @@
+import wrappedBinding from "cloudflare-internal:wrapped-binding";
+
 interface VectorizeTransport {
   call(operation: string, payload: unknown): Promise<unknown>;
   mutate(
@@ -9,8 +11,8 @@ function isTransport(value: unknown): value is VectorizeTransport {
   return (
     value !== null &&
     typeof value === "object" &&
-    typeof Reflect.get(value, "call") === "function" &&
-    typeof Reflect.get(value, "mutate") === "function"
+    typeof (value as Partial<VectorizeTransport>).call === "function" &&
+    typeof (value as Partial<VectorizeTransport>).mutate === "function"
   );
 }
 
@@ -359,10 +361,13 @@ function matches(value: unknown): VectorizeMatches {
   return { matches: parsed, count: result.count as number };
 }
 
-/** Latest stable Vectorize API over an immutable resource transport. */
-export class VectorizeBinding {
+/** Latest stable Vectorize API over an immutable resource transport.
+ * The upstream class name enables Python SDK argument conversion.
+ */
+export class VectorizeIndexImpl extends wrappedBinding.WrappedBinding {
   readonly #transport: VectorizeTransport;
   constructor(raw: unknown) {
+    super(raw);
     if (!isTransport(raw)) fail("VECTORIZE_UNAVAILABLE");
     this.#transport = raw;
   }
@@ -413,4 +418,11 @@ export class VectorizeBinding {
     if (!Array.isArray(result)) fail("VECTORIZE_PROTOCOL_ERROR");
     return result.map(vector);
   }
+}
+
+/** Materialize this config-owned binding from its scoped native Fetcher. */
+export default function vectorizeBinding(env: {
+  fetcher: unknown;
+}): VectorizeIndexImpl {
+  return new VectorizeIndexImpl(env.fetcher);
 }

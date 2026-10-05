@@ -22,7 +22,7 @@ The pinned open-compute `workerd` fork enforces these request/isolate limits nat
 | Startup CPU                                       |                                              1,000 ms |
 | Outbound connections waiting for response headers |                                      6 per invocation |
 
-Set the configurable dimensions with the normal Wrangler schema:
+Set the configurable dimensions with the normal cf schema:
 
 ```jsonc
 {

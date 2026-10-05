@@ -23,7 +23,7 @@ pub(super) struct BoundPlatform {
     pub(super) observability_backend_addr: SocketAddr,
     pub(super) compiler: StaticConfigCompiler,
     pub(super) store: ArtifactStore,
-    pub(super) redactor: Redactor,
+    pub(super) package: open_compute_runtime::RuntimePackage,
     pub(super) runtime: open_compute_runtime::VerifiedRuntime,
     pub(super) runtime_lease_path: std::path::PathBuf,
     pub(super) durable_object_storage: std::path::PathBuf,
@@ -78,7 +78,7 @@ pub(super) async fn run(platform: BoundPlatform) -> Result<(), PlatformError> {
         observability_backend_addr,
         compiler,
         store,
-        redactor,
+        package,
         runtime,
         runtime_lease_path,
         durable_object_storage,
@@ -119,9 +119,43 @@ pub(super) async fn run(platform: BoundPlatform) -> Result<(), PlatformError> {
             .map(|config| config.base_domain.as_str()),
     )?;
 
-    let runtime_source = RuntimeSource::new(storage.clone(), store.clone(), bundle_limits)
-        .with_cache(cache.clone())
-        .with_cache_fail_open(loaded.config.response_cache.fail_open);
+    let runtime_source = RuntimeSource::new(
+        storage.clone(),
+        store.clone(),
+        bundle_limits,
+        crate::runtime_bridge::python_runtime_pin(&runtime),
+    )?
+    .with_cache(cache.clone())
+    .with_cache_fail_open(loaded.config.response_cache.fail_open);
+    transport.configure_python_preparation(
+        crate::runtime_bridge::python_preparation::PythonPreparation {
+            storage: storage.clone(),
+            artifacts: store.clone(),
+            source: runtime_source.clone(),
+            package,
+            runtime_config: loaded.config.runtime.clone(),
+            durable_objects: loaded.config.durable_objects.clone(),
+            services: [
+                (
+                    generation_auth.clone(),
+                    ExternalServiceAddress::loopback("runtime-source", runtime_source_addr)?,
+                ),
+                (
+                    binding_generation_auth.clone(),
+                    ExternalServiceAddress::loopback("binding-backend", binding_backend_addr)?,
+                ),
+                (
+                    observability_generation_auth.clone(),
+                    ExternalServiceAddress::loopback(
+                        "observability-backend",
+                        observability_backend_addr,
+                    )?,
+                ),
+            ],
+            broker: host_extension_broker.clone(),
+            serial: tokio::sync::Mutex::new(()),
+        },
+    )?;
     let mut shutdown_source = shutdown_rx.clone();
     let source_auth = generation_auth.clone();
     let runtime_source_task = tokio::spawn(async move {
@@ -210,7 +244,6 @@ pub(super) async fn run(platform: BoundPlatform) -> Result<(), PlatformError> {
             config: loaded.config.runtime.clone(),
             clock: Arc::new(SystemClock),
             jitter: Arc::new(OsJitter),
-            redactor,
             lease_path: Some(runtime_lease_path),
         },
         vec![

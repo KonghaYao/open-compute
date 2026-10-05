@@ -42,6 +42,7 @@ mod workflow;
 pub use workflow::{WorkflowDispatchResult, WorkflowOutcome, WorkflowRunRequest};
 mod custom_events;
 mod dispatch;
+pub(crate) mod python_preparation;
 mod websocket;
 #[path = "runtime_bridge/worker_loaders.rs"]
 mod worker_loaders;
@@ -56,6 +57,19 @@ pub const MAX_TENANT_BODY_BYTES: usize = 100_000_000;
 const RESPONSE_HEADER_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_CUSTOM_EVENT_RESPONSE: usize = 64 * 1024;
 const MAX_QUEUE_CUSTOM_EVENT_REQUEST: usize = 18 * 1024 * 1024;
+
+/// Bind Python snapshot admission to the verified executable and embedded system assets.
+pub fn python_runtime_pin(
+    runtime: &open_compute_runtime::VerifiedRuntime,
+) -> open_compute_workers::python_artifact::PythonRuntimePin {
+    open_compute_workers::python_artifact::PythonRuntimePin {
+        workerd_revision: runtime.lock().revision.clone(),
+        workerd_binary_sha256: runtime.binary_sha256().to_owned(),
+        process_flags: runtime.lock().process_flags.clone(),
+        pyodide_bundle_sha256: runtime.lock().pyodide_bundle.bundle_sha256.clone(),
+        runtime_assets_sha256: open_compute_runtime::embedded_runtime_assets_sha256().to_owned(),
+    }
+}
 
 /// Internal-only observation of the native `WorkerLoader` cache path.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

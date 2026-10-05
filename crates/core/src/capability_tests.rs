@@ -89,23 +89,23 @@ fn management_api() -> ManagementApiCapabilitiesV1 {
     }
 }
 
-fn wrangler() -> WranglerCapabilitiesV1 {
-    let item = WranglerCapabilityItemV1 {
+fn cf() -> CfCapabilitiesV1 {
+    let item = CfCapabilityItemV1 {
         id: "name".to_owned(),
         status: InterfaceCapabilityStatus::Planned,
-        source: "wrangler-config-schema".to_owned(),
+        source: "cf-config-schema".to_owned(),
         stage: None,
         constraint: None,
     };
-    WranglerCapabilitiesV1 {
-        version: "4.143.0".to_owned(),
+    CfCapabilitiesV1 {
+        version: "1.0.0-beta.12".to_owned(),
         config_schema_sha256: "e".repeat(64),
         fields: vec![item.clone()],
-        bindings: vec![WranglerCapabilityItemV1 {
+        bindings: vec![CfCapabilityItemV1 {
             id: "plain_text".to_owned(),
             ..item.clone()
         }],
-        commands: vec![WranglerCapabilityItemV1 {
+        commands: vec![CfCapabilityItemV1 {
             id: "deploy".to_owned(),
             ..item
         }],
@@ -246,7 +246,7 @@ fn capability_status_serialization_and_contract_are_strict() {
         products,
         management_api: management_api(),
         workers_observability: workers_observability(),
-        wrangler: wrangler(),
+        cf: cf(),
         limits: BTreeMap::new(),
     };
     assert!(capabilities.validate());

@@ -96,11 +96,10 @@ export function sourceIdentity(): string {
     regularNames.map((name, index) => [name, objectIds[index]!]),
   );
   const output = createHash("sha256");
-  for (const name of names) {
-    if (sourceIdentityExcluded(name)) continue;
+  for (const name of regularNames) {
     output.update(name);
     output.update("\0");
-    output.update(objects.get(name) ?? "deleted");
+    output.update(objects.get(name)!);
   }
   return output.digest("hex");
 }

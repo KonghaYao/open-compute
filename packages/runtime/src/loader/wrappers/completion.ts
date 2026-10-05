@@ -2,6 +2,7 @@ import {
   attachServiceWebSocketHandoffs,
   completeServiceScope,
 } from "../../services/facade.js";
+import type { ServiceFrame } from "../../services/scope.js";
 import type { Environment, TrackedContext } from "./types.js";
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -103,11 +104,7 @@ export function resultDrain(value: unknown): {
     const end = deferred();
     return {
       value: attachServiceWebSocketHandoffs(
-        new Response(wrapRootStream(value.body, end.resolve), {
-          status: value.status,
-          statusText: value.statusText,
-          headers: value.headers,
-        }),
+        new Response(wrapRootStream(value.body, end.resolve), value),
       ),
       drained: end.promise,
       handoffWebSocket: false,
@@ -146,13 +143,13 @@ export function resultDrain(value: unknown): {
 
 export function scheduleRootCompletion(
   env: Environment,
-  scopeId: string,
+  frame: ServiceFrame | null,
   tracked?: TrackedContext,
   drained: Promise<void> = Promise.resolve(),
 ): void {
-  const background = tracked ? drainTrackedTasks(tracked) : Promise.resolve();
-  const completion = Promise.all([background, drained])
-    .then(() => completeServiceScope(env, scopeId))
+  const completion = drained
+    .then(() => (tracked ? drainTrackedTasks(tracked) : undefined))
+    .then(() => (frame === null ? undefined : completeServiceScope(env, frame)))
     .catch(() => undefined);
   if (tracked) tracked.extendLifetime(completion);
 }
@@ -171,24 +168,24 @@ export async function drainTrackedTasks(
 export function rootResult(
   raw: unknown,
   env: Environment,
-  scopeId: string,
+  frame: ServiceFrame | null,
   tracked?: TrackedContext,
 ): unknown {
   if (raw instanceof Promise) {
     return raw.then(
       (value) => {
         const result = resultDrain(value);
-        scheduleRootCompletion(env, scopeId, tracked, result.drained);
+        scheduleRootCompletion(env, frame, tracked, result.drained);
         return result.value;
       },
       (error) => {
-        scheduleRootCompletion(env, scopeId, tracked);
+        scheduleRootCompletion(env, frame, tracked);
         throw error;
       },
     );
   }
   const result = resultDrain(raw);
-  scheduleRootCompletion(env, scopeId, tracked, result.drained);
+  scheduleRootCompletion(env, frame, tracked, result.drained);
   return result.value;
 }
 

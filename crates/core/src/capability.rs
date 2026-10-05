@@ -24,7 +24,7 @@ pub enum CapabilityStatus {
     Blocked,
 }
 
-/// Support verdict used by the Cloudflare management API and Wrangler inventory.
+/// Support verdict used by the Cloudflare management API and Cf inventory.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InterfaceCapabilityStatus {
@@ -207,10 +207,10 @@ impl ManagementApiCapabilitiesV1 {
     }
 }
 
-/// One Wrangler field, binding, or command support record.
+/// One Cf field, binding, or command support record.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct WranglerCapabilityItemV1 {
+pub struct CfCapabilityItemV1 {
     /// Stable field, binding, or command identity.
     pub id: String,
     /// Implementation status.
@@ -225,7 +225,7 @@ pub struct WranglerCapabilityItemV1 {
     pub constraint: Option<String>,
 }
 
-impl WranglerCapabilityItemV1 {
+impl CfCapabilityItemV1 {
     fn validate(&self) -> bool {
         !self.id.is_empty()
             && !self.source.is_empty()
@@ -234,30 +234,30 @@ impl WranglerCapabilityItemV1 {
     }
 }
 
-/// Frozen Wrangler CLI, configuration, and binding inventory served by `ocd`.
+/// Frozen Cf CLI, configuration, and binding inventory served by `ocd`.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct WranglerCapabilitiesV1 {
-    /// Exact Wrangler version traced for P6.
+pub struct CfCapabilitiesV1 {
+    /// Exact Cf version traced for P6.
     pub version: String,
-    /// Digest of the traced Wrangler configuration schema.
+    /// Digest of the traced Cf configuration schema.
     pub config_schema_sha256: String,
-    /// Wrangler configuration fields.
-    pub fields: Vec<WranglerCapabilityItemV1>,
-    /// Wrangler multipart binding kinds.
-    pub bindings: Vec<WranglerCapabilityItemV1>,
-    /// Wrangler commands.
-    pub commands: Vec<WranglerCapabilityItemV1>,
+    /// Cf configuration fields.
+    pub fields: Vec<CfCapabilityItemV1>,
+    /// Cf multipart binding kinds.
+    pub bindings: Vec<CfCapabilityItemV1>,
+    /// Cf commands.
+    pub commands: Vec<CfCapabilityItemV1>,
 }
 
-impl WranglerCapabilitiesV1 {
-    /// Validate the frozen Wrangler pin and unique item inventories.
+impl CfCapabilitiesV1 {
+    /// Validate the frozen Cf pin and unique item inventories.
     pub fn validate(&self) -> bool {
-        self.version == "4.143.0"
+        semver::Version::parse(&self.version).is_ok()
             && is_sha256(&self.config_schema_sha256)
-            && validate_wrangler_items(&self.fields)
-            && validate_wrangler_items(&self.bindings)
-            && validate_wrangler_items(&self.commands)
+            && validate_cf_items(&self.fields)
+            && validate_cf_items(&self.bindings)
+            && validate_cf_items(&self.commands)
     }
 }
 
@@ -298,7 +298,7 @@ impl ObservabilityCapabilityItemV1 {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkersObservabilityCapabilitiesV1 {
-    /// Accepted Wrangler observability setting fields.
+    /// Accepted Cf observability setting fields.
     pub settings_fields: Vec<ObservabilityCapabilityItemV1>,
     /// Logs, Telemetry, realtime-tail, and explicit unsupported feature inventory.
     pub features: Vec<ObservabilityCapabilityItemV1>,
@@ -552,8 +552,8 @@ pub struct CapabilityInventoryV1 {
     /// Frozen Workers Logs and realtime-tail capability inventory.
     #[serde(rename = "workersObservability")]
     pub workers_observability: WorkersObservabilityCapabilitiesV1,
-    /// Frozen Wrangler CLI, configuration, and binding inventory.
-    pub wrangler: WranglerCapabilitiesV1,
+    /// Frozen Cf CLI, configuration, and binding inventory.
+    pub cf: CfCapabilitiesV1,
 }
 
 impl CapabilityInventoryV1 {
@@ -566,7 +566,7 @@ impl CapabilityInventoryV1 {
             && unique_member_ids(&self.products)
             && self.management_api.validate()
             && self.workers_observability.validate()
-            && self.wrangler.validate()
+            && self.cf.validate()
     }
 }
 
@@ -623,8 +623,8 @@ pub struct PlatformCapabilitiesV1 {
     /// Frozen Workers Logs and realtime-tail capability authority.
     #[serde(rename = "workersObservability")]
     pub workers_observability: WorkersObservabilityCapabilitiesV1,
-    /// Frozen Wrangler CLI, configuration, and binding inventory.
-    pub wrangler: WranglerCapabilitiesV1,
+    /// Frozen Cf CLI, configuration, and binding inventory.
+    pub cf: CfCapabilitiesV1,
     /// Frozen configured limit names and values; never contains secret values.
     pub limits: BTreeMap<String, u64>,
 }
@@ -640,7 +640,7 @@ impl PlatformCapabilitiesV1 {
             && unique_member_ids(&self.products)
             && self.management_api.validate()
             && self.workers_observability.validate()
-            && self.wrangler.validate()
+            && self.cf.validate()
     }
 }
 
@@ -695,9 +695,9 @@ fn optional_nonempty(value: &Option<String>) -> bool {
     value.as_ref().is_none_or(|value| !value.is_empty())
 }
 
-fn validate_wrangler_items(items: &[WranglerCapabilityItemV1]) -> bool {
+fn validate_cf_items(items: &[CfCapabilityItemV1]) -> bool {
     !items.is_empty()
-        && items.iter().all(WranglerCapabilityItemV1::validate)
+        && items.iter().all(CfCapabilityItemV1::validate)
         && unique_nonempty(&items.iter().map(|item| item.id.clone()).collect::<Vec<_>>())
 }
 

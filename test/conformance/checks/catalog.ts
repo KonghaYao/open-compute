@@ -63,14 +63,21 @@ export function baselineIdentity(): void {
   const lockSdk = record(lock.workersSdk, "lock.workersSdk");
   if (
     sdk.revision !== lockSdk.revision ||
-    lockSdk.wranglerVersion !== record(value.wrangler, "wrangler").version ||
-    lockSdk.vitePluginVersion !==
-      record(value.vitePlugin, "vitePlugin").version ||
     !/^[0-9a-f]{40}$/.test(string(sdk.revision, "workersSdk.revision")) ||
     !/^[0-9a-f]{64}$/.test(string(sdk.lockSha256, "workersSdk.lockSha256"))
   ) {
     throw new Error("workers-sdk identity is not immutable");
   }
+  const dependencies = record(
+    record(json("package.json"), "root package").catalog,
+    "catalog",
+  );
+  if (
+    dependencies.cf !== record(value.cf, "cf").version ||
+    dependencies["@cloudflare/vite-plugin"] !==
+      record(value.vitePlugin, "vitePlugin").version
+  )
+    throw new Error("certified cf/Vite dependency identity drift");
   const docs = record(value.cloudflareDocs, "cloudflareDocs");
   if (
     !/^[0-9a-f]{40}$/.test(string(docs.revision, "cloudflareDocs.revision")) ||

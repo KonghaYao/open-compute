@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { importRuntime } from "../compiled-runtime.mjs";
 
-const { VectorizeBinding } = await importRuntime("vectorize/facade.ts");
+const { VectorizeIndexImpl } = await importRuntime("vectorize/facade.ts");
 
 test("latest Vectorize surface normalizes pinned options and emits the bounded mutation frame", async () => {
   const calls = [];
   let frame;
-  const binding = new VectorizeBinding({
+  const binding = new VectorizeIndexImpl({
     async call(operation, payload) {
       calls.push({ operation, payload });
       if (operation === "describe")
@@ -30,6 +30,7 @@ test("latest Vectorize surface normalizes pinned options and emits the bounded m
       return { mutationId: "mutation-1" };
     },
   });
+  assert.equal(binding.constructor.name, "VectorizeIndexImpl");
   assert.equal((await binding.describe()).dimensions, 2);
   assert.equal(
     (
@@ -72,7 +73,7 @@ test("latest Vectorize surface normalizes pinned options and emits the bounded m
 });
 
 test("Vectorize rejects unsupported options, invalid ranges, limits, and malformed backend success", async () => {
-  const malformed = new VectorizeBinding({
+  const malformed = new VectorizeIndexImpl({
     async call() {
       return { matches: [], count: 1 };
     },
@@ -84,7 +85,7 @@ test("Vectorize rejects unsupported options, invalid ranges, limits, and malform
     malformed.query([1]),
     /VECTORIZE_INPUT_INVALID|VECTORIZE_PROTOCOL_ERROR/,
   );
-  const binding = new VectorizeBinding({
+  const binding = new VectorizeIndexImpl({
     async call() {
       return { matches: [], count: 0 };
     },

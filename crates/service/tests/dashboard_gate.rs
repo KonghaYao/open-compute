@@ -77,8 +77,13 @@ async fn dashboard_real_runtime_serves_spa_assets_and_cloudflare_v4_api() {
     let (shutdown, mut source_shutdown) = tokio::sync::watch::channel(false);
     let mut binding_shutdown = shutdown.subscribe();
     let source_task = tokio::spawn({
-        let source =
-            RuntimeSource::new(storage.clone(), artifacts.clone(), BundleLimits::default());
+        let source = RuntimeSource::new(
+            storage.clone(),
+            artifacts.clone(),
+            BundleLimits::default(),
+            open_compute_service::runtime_bridge::python_runtime_pin(&runtime),
+        )
+        .unwrap();
         let auth = source_auth.clone();
         async move {
             serve_runtime_source(source_listener, source, auth, async move {
@@ -157,7 +162,6 @@ async fn dashboard_real_runtime_serves_spa_assets_and_cloudflare_v4_api() {
             config: runtime_config(),
             clock: Arc::new(SystemClock),
             jitter: Arc::new(OsJitter),
-            redactor: Redactor::new(),
             lease_path: Some(
                 storage
                     .data_dir()
@@ -424,7 +428,7 @@ async fn dashboard_real_runtime_serves_spa_assets_and_cloudflare_v4_api() {
     let meta_body = to_bytes(meta.into_body(), 64 * 1024).await.unwrap();
     let meta_json: serde_json::Value = serde_json::from_slice(&meta_body).unwrap();
     assert_eq!(meta_json["success"], true);
-    assert_eq!(meta_json["result"]["wrangler_version"], "4.143.0");
+    assert_eq!(meta_json["result"]["cf_version"], "1.0.0-beta.12");
     assert_dashboard_surface_excludes_admin_token(&meta_body, "dashboard-gate-admin");
 
     let unauthorized = router

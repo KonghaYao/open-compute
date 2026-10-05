@@ -354,6 +354,9 @@ fn verify_manifest(root: &Path, assets: &BTreeMap<String, Vec<u8>>) -> Result<()
     collect(root, "packages/runtime/src", &mut inputs)?;
     for name in [
         "bun.lock",
+        "third_party/workerd/src/cloudflare/workers.ts",
+        "third_party/workerd/src/cloudflare/workflows.ts",
+        "third_party/workerd/src/node/async_hooks.ts",
         "package.json",
         "tsconfig.json",
         "packages/runtime/build.ts",

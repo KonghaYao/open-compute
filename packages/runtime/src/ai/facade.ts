@@ -1,3 +1,5 @@
+import wrappedBinding from "cloudflare-internal:wrapped-binding";
+
 interface AiTransport {
   transform(
     files: WireDocument[],
@@ -63,6 +65,15 @@ const MAX_BATCH_BYTES = 256 * 1024 * 1024;
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isTransport(value: unknown): value is AiTransport {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    typeof (value as Partial<AiTransport>).transform === "function" &&
+    typeof (value as Partial<AiTransport>).supported === "function"
+  );
 }
 
 function exact(
@@ -346,18 +357,16 @@ class ToMarkdownService {
   }
 }
 
-/** Cloudflare Workers AI facade intentionally limited to Markdown Conversion. */
-export class AiBinding {
+/** Cloudflare Workers AI facade intentionally limited to Markdown Conversion.
+ * The upstream class name enables Python SDK argument conversion.
+ */
+export class Ai extends wrappedBinding.WrappedBinding {
   readonly #service: ToMarkdownService;
   readonly aiGatewayLogId = null;
   constructor(raw: unknown) {
-    if (
-      !record(raw) ||
-      typeof Reflect.get(raw, "transform") !== "function" ||
-      typeof Reflect.get(raw, "supported") !== "function"
-    )
-      throw new TypeError("AI_UNAVAILABLE");
-    this.#service = new ToMarkdownService(raw as unknown as AiTransport);
+    super(raw);
+    if (!isTransport(raw)) throw new TypeError("AI_UNAVAILABLE");
+    this.#service = new ToMarkdownService(raw);
   }
   toMarkdown(): ToMarkdownService;
   toMarkdown(
@@ -391,4 +400,9 @@ export class AiBinding {
   autorag(): never {
     throw new TypeError("AI_UNSUPPORTED");
   }
+}
+
+/** Construct the config-owned AI binding from its scoped native Fetcher. */
+export default function aiBinding(env: { fetcher: unknown }): Ai {
+  return new Ai(env.fetcher);
 }

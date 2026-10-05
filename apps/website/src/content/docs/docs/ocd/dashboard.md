@@ -3,7 +3,7 @@ title: "Dashboard"
 description: "Enable the operator Dashboard, open a one-time login, and switch between registered instances."
 ---
 
-The Dashboard is bundled with `ocd` and uses the same `/client/v4` API as Wrangler and the official SDK. Enable it in each instance that should serve the operator UI:
+The Dashboard is bundled with `ocd` and uses the same `/client/v4` API as cf and the official SDK. Enable it in each instance that should serve the operator UI:
 
 ```toml
 [dashboard]

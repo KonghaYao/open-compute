@@ -102,6 +102,13 @@ impl<'a> WorkerRepository<'a> {
             }
             let vars = read_vars(conn, version_id)?;
             let secrets = read_secrets(conn, version_id)?;
+            let python_prepared = python_prepared::read_python_prepared_conn(conn, version_id)?;
+            let python = version.main_module.as_deref().is_some_and(|name| name.ends_with(".py"));
+            if (!python && python_prepared.is_some())
+                || (python && version.state == VersionState::Ready && python_prepared.is_none())
+            {
+                return Err(invariant());
+            }
             let bindings = crate::bindings::read_version_bindings_conn(conn, version_id)?;
             let queue_bindings = crate::queues::read_version_bindings_conn(conn, version_id)?;
             Ok(VersionSnapshot {
@@ -109,6 +116,7 @@ impl<'a> WorkerRepository<'a> {
                 worker,
                 assets: crate::assets::read_assets_conn(conn, version_id)?,
                 version,
+                python_prepared,
                 annotations: read_version_annotations(conn, version_id)?,
                 vars,
                 secrets,

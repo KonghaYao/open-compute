@@ -129,31 +129,15 @@ export async function tunnelSockets(
   left: Socket,
   right: Socket,
 ): Promise<void> {
-  const directions = Promise.allSettled([
+  const directions = [
     left.readable.pipeTo(right.writable),
     right.readable.pipeTo(left.writable),
-  ]);
-  const disconnected = Promise.race([
-    left.closed.then(
-      () => undefined,
-      () => undefined,
-    ),
-    right.closed.then(
-      () => undefined,
-      () => undefined,
-    ),
-  ]);
-  const outcome = await Promise.race([
-    directions.then((results) => ({ results })),
-    disconnected.then(() => ({ results: undefined })),
-  ]);
-  if (!outcome.results) {
+  ];
+  try {
+    await Promise.all(directions);
+  } catch {
     await Promise.allSettled([left.close(), right.close()]);
-  }
-  const results = outcome.results ?? (await directions);
-  const failed = results.some((result) => result.status === "rejected");
-  if (failed) {
-    await Promise.allSettled([left.close(), right.close()]);
+    await Promise.allSettled(directions);
     throw failure("SOCKET_TUNNEL_FAILED");
   }
 }

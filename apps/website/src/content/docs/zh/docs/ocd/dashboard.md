@@ -3,7 +3,7 @@ title: "Dashboard"
 description: "启用 operator Dashboard，使用一次性登录，并在已登记实例之间切换。"
 ---
 
-Dashboard 随 `ocd` 一起交付，并使用与 Wrangler、官方 SDK 相同的 `/client/v4` API。在需要提供 operator UI 的每个实例配置中启用：
+Dashboard 随 `ocd` 一起交付，并使用与 cf、官方 SDK 相同的 `/client/v4` API。在需要提供 operator UI 的每个实例配置中启用：
 
 ```toml
 [dashboard]

@@ -2739,7 +2739,7 @@
         "additionalProperties": false,
         "required": [
           "release",
-          "wrangler_version",
+          "cf_version",
           "compatibility",
           "system_workers",
           "endpoints",
@@ -2752,9 +2752,9 @@
             "type": "string",
             "minLength": 1
           },
-          "wrangler_version": {
+          "cf_version": {
             "type": "string",
-            "const": "4.143.0"
+            "const": "1.0.0-beta.12"
           },
           "compatibility": {
             "type": "object",

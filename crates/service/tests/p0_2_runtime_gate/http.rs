@@ -29,14 +29,14 @@ pub(super) async fn api_matrix(
     }
     let metrics =
         Arc::new(MetricsRegistry::new(&MetricsConfig::default(), "gate", "gate").unwrap());
-    let secrets = storage.data_dir().root().join("wrangler-auth");
+    let secrets = storage.data_dir().root().join("cf-auth");
     std::fs::create_dir(&secrets).unwrap();
     let server = open_compute_core::DaemonServerConfig {
         admin_auth: token_reference(&secrets.join("admin.token"), ADMIN_TOKEN),
         ..open_compute_core::DaemonServerConfig::default()
     };
     let auth = InstanceAuthConfig {
-        deployer_auth: token_reference(&secrets.join("deployer.token"), WRANGLER_TOKEN),
+        deployer_auth: token_reference(&secrets.join("deployer.token"), CF_TOKEN),
         read_only_auth: token_reference(&secrets.join("read-only.token"), READ_ONLY_TOKEN),
     };
     let workflow_api = WorkflowApiState::new(
@@ -66,7 +66,7 @@ pub(super) async fn api_matrix(
         .with_workflow_api(Some(workflow_api));
     let (state, public_account) =
         open_compute_service::cloudflare_v4_for_test(state, storage.clone());
-    wrangler::exercise(state, storage, account, &public_account, WRANGLER_TOKEN).await;
+    cf::exercise(state, storage, account, &public_account, CF_TOKEN).await;
 }
 
 fn token_reference(path: &Path, value: &str) -> SecretReference {
@@ -77,7 +77,7 @@ fn token_reference(path: &Path, value: &str) -> SecretReference {
     }
 }
 
-const WRANGLER_TOKEN: &str = "p0-2-wrangler-deployer-secret";
+const CF_TOKEN: &str = "p0-2-cf-deployer-secret";
 const READ_ONLY_TOKEN: &str = "p0-2-read-only-secret";
 
 pub(super) async fn cron_generation_cycle(

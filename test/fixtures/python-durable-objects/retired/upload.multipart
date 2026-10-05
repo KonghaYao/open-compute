@@ -1,0 +1,3483 @@
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="metadata"
+
+{"main_module":"main.py","bindings":[{"name":"REVISION","type":"plain_text","text":"retired"},{"name":"TOKEN","type":"secret_text","text":"python-capture-fixture-token"}],"compatibility_date":"2026-09-08","compatibility_flags":["python_workers","enable_python_external_sdk","python_dedicated_snapshot"],"exports":{"default":{"type":"worker"},"Counter":{"type":"durable-object","state":"deleted"}},"keep_bindings":["secret_text","secret_key"],"annotations":{}}
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="main.py"; filename="main.py"
+Content-Type: text/x-python
+
+import json
+
+from workers import Response, WorkerEntrypoint
+
+
+class Default(WorkerEntrypoint):
+    async def fetch(self, request):
+        return Response(json.dumps({"retired": True, "revision": self.env.REVISION}),
+                        headers={"content-type": "application/json"})
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/.synced"; filename="./python_modules/.synced"
+Content-Type: application/octet-stream
+
+1.17.6
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/_cloudflare_compat_flags.pyi"; filename="./python_modules/_cloudflare_compat_flags.pyi"
+Content-Type: application/octet-stream
+
+python_workflows_implicit_dependencies: bool
+python_request_headers_preserve_commas: bool
+
+def __getattr__(name: str) -> bool: ...
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/_pyodide_entrypoint_helper.pyi"; filename="./python_modules/_pyodide_entrypoint_helper.pyi"
+Content-Type: application/octet-stream
+
+from collections.abc import Generator
+from typing import Any
+
+cloudflareWorkersModule: Any
+cloudflareSocketsModule: Any
+
+def doAnImport(module_name: str) -> Any: ...
+def patch_env_helper(kwds: Any) -> Generator[None]: ...
+def patchWaitUntil(ctx: Any) -> None: ...
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/_workers_sdk_entropy_import_context.py"; filename="./python_modules/_workers_sdk_entropy_import_context.py"
+Content-Type: application/octet-stream
+
+"""
+Top level entropy patches for packages
+"""
+
+import sys
+from contextlib import contextmanager
+from importlib.metadata import PackageNotFoundError, version
+
+from _cloudflare.allow_entropy import (
+    allow_bad_entropy_calls,
+)
+from _cloudflare.import_patch_manager import (
+    block_calls,
+    register_after_snapshot,
+    register_before_first_request,
+    register_create_patch,
+    register_exec_patch,
+)
+
+
+@contextmanager
+def allow_bad_entropy_calls_for_version(
+    package_name: str,
+    num_calls: int,
+    min_version: tuple[int, ...],
+    max_version: tuple[int, ...] | None = None,
+):
+    try:
+        package_version = tuple(map(int, version(package_name).split(".")))
+    except PackageNotFoundError:
+        yield
+        return
+
+    if package_version < min_version or (
+        max_version is not None and package_version > max_version
+    ):
+        yield
+        return
+
+    with allow_bad_entropy_calls(num_calls):
+        yield
+
+
+class STATE:
+    imported_rust_package = False
+    numpy_random = None
+
+
+@register_create_patch("tiktoken._tiktoken")
+@register_exec_patch("cryptography.exceptions")
+@register_exec_patch("jiter")
+@register_exec_patch("rpds")
+@register_exec_patch("uuid_utils._uuid_utils")
+@contextmanager
+def rust_package_context(module):
+    """Rust packages need one entropy call if they create a rust hash map at
+    init time.
+
+    For reasons I don't entirely understand, in Pyodide 0.28 only the first Rust package to be
+    imported makes the get_entropy call. See gen_rust_import_tests() which tests that importing
+    four rust packages in different permutations works correctly.
+    """
+    if STATE.imported_rust_package:
+        yield
+        return
+    STATE.imported_rust_package = True
+    with allow_bad_entropy_calls(1):
+        yield
+
+
+@register_exec_patch("numpy.random")
+@contextmanager
+def numpy_random_context(numpy_random):
+    """numpy.random doesn't call getentropy() itself, but we want to block calls
+    that might use the bad seed.
+
+    TODO: Maybe there are more calls we can whitelist?
+    TODO: Is it not enough to just block numpy.random.mtrand calls?
+    """
+    yield
+    # Calling default_rng() with a given seed is fine, calling it without a seed
+    # will call getentropy() and fail.
+    block_calls(numpy_random, allowlist=("default_rng", "RandomState"))
+
+
+@register_after_snapshot("numpy.random")
+def numpy_random_after_snapshot(numpy_random):
+    r1 = numpy_random.random()
+    numpy_random.set_state(STATE.numpy_random)
+    r2 = numpy_random.random()
+    if r1 != r2:
+        raise RuntimeError("random seed in bad state")
+
+
+@register_before_first_request("numpy.random")
+def numpy_random_before_first_request(numpy_random):
+    numpy_random.seed()
+
+
+@register_exec_patch("numpy.random.mtrand")
+@contextmanager
+def numpy_random_mtrand_context(module):
+    # numpy.random.mtrand calls secrets.randbits at top level to seed itself.
+    # This will fail if we don't let it through.
+    with allow_bad_entropy_calls(1):
+        yield
+    # Block calls until we get a chance to replace the bad random seed.
+    STATE.numpy_random = module.get_state()
+    block_calls(module, allowlist=("RandomState",))
+
+
+@register_exec_patch("pydantic_core")
+@contextmanager
+def pydantic_core_context(module):
+    try:
+        # Initial import needs one entropy call to initialize
+        # std::collections::HashMap hash seed
+        with allow_bad_entropy_calls(1):
+            yield
+    finally:
+        # Build a tiny validator instead so any lazy hash-map seeds are initialized
+        # before the snapshot is captured.
+        with allow_bad_entropy_calls(1):
+            module.SchemaValidator({"type": "any"})
+
+
+@register_exec_patch("aiohttp.http_websocket")
+@contextmanager
+def aiohttp_http_websocket_context(module):
+    import random
+
+    Random = random.Random
+
+    def patched_Random():
+        return random
+
+    random.Random = patched_Random
+    try:
+        yield
+    finally:
+        random.Random = Random
+
+
+class NoSslFinder:
+    def find_spec(self, fullname, path, target):
+        if fullname == "ssl":
+            raise ModuleNotFoundError(
+                f"No module named {fullname!r}", name=fullname
+            ) from None
+
+
+@contextmanager
+def no_ssl():
+    """
+    Various packages will call ssl.create_default_context() at top level which uses entropy if they
+    can import ssl. By temporarily making importing ssl raise an import error, we exercise the
+    workaround code and so avoid the entropy calls. After, we put the ssl module back to the normal
+    value.
+    """
+    try:
+        f = NoSslFinder()
+        ssl = sys.modules.pop("ssl", None)
+        sys.meta_path.insert(0, f)
+        yield
+    finally:
+        sys.meta_path.remove(f)
+        if ssl:
+            sys.modules["ssl"] = ssl
+
+
+@register_exec_patch("aiohttp.connector")
+@contextmanager
+def aiohttp_connector_context(module):
+    with no_ssl():
+        yield
+
+
+@register_exec_patch("requests.adapters")
+@contextmanager
+def requests_adapters_context(module):
+    with no_ssl():
+        yield
+
+
+@register_exec_patch("urllib3.util.ssl_")
+@contextmanager
+def urllib3_util_ssl__context(module):
+    with no_ssl():
+        yield
+
+
+@register_exec_patch("langsmith._internal._constants")
+@contextmanager
+def langsmith__internal__constants_context(module):
+    # Langsmith uses a UUID to communicate with a background thread. This obviously won't work so we
+    # might as well allow it to make a UUID.
+    with allow_bad_entropy_calls(1):
+        yield
+
+
+@register_exec_patch("langchain_openai.chat_models.base")
+@contextmanager
+def langchain_openai_chat_models_base_context(module):
+    with allow_bad_entropy_calls(1):
+        yield
+
+
+@register_exec_patch("opentelemetry.context")
+@contextmanager
+def opentelemetry_context(module):
+    # OpenTelemetry creates three UUID-backed keys.
+    with allow_bad_entropy_calls_for_version("opentelemetry-api", 3, (1, 40, 0)):
+        yield
+
+
+@register_exec_patch("opentelemetry.trace.propagation")
+@contextmanager
+def opentelemetry_trace_propagation_context(module):
+    # OpenTelemetry creates a UUID-backed key.
+    with allow_bad_entropy_calls(1):
+        yield
+
+
+@register_exec_patch("opentelemetry.baggage")
+@contextmanager
+def opentelemetry_baggage_context(module):
+    # OpenTelemetry creates a UUID-backed key.
+    with allow_bad_entropy_calls(1):
+        yield
+
+
+@register_exec_patch("fastapi.telemetry")
+@contextmanager
+def fastapi_telemetry_context(module):
+    # fastapi 0.142.0 added opentelemetry support
+    # which creates a UUID-backed key.
+    with allow_bad_entropy_calls_for_version("fastapi", 1, (0, 142, 0)):
+        yield
+
+
+@register_exec_patch("litestar.openapi.controller")
+@register_exec_patch("litestar.constants")
+@contextmanager
+def litestar_context(module):
+    # Uses os.urandom() to generate a OPENAPI_JSON_HANDLER_NAME
+    # https://github.com/litestar-org/litestar/blob/e3b6a1d103a9160a575dce01ae34839e6e9bf990/litestar/constants.py#L19
+    # https://github.com/litestar-org/litestar/blob/v2.24.0/litestar/openapi/controller.py#L27
+    with allow_bad_entropy_calls(1):
+        yield
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/_workers_sdk_package_patches.py"; filename="./python_modules/_workers_sdk_package_patches.py"
+Content-Type: application/octet-stream
+
+"""
+Top level runtime compatibility patches for packages.
+
+These patches adapt packages that assume capabilities the workers runtime does
+not provide. Unlike the entropy patches, they are not related to snapshotting.
+"""
+
+from contextlib import contextmanager
+
+from _cloudflare.import_patch_manager import (
+    register_exec_patch,
+)
+
+
+@register_exec_patch("anyio.to_thread")
+@contextmanager
+def anyio_to_thread_context(module):
+    """`anyio.to_thread.run_sync` dispatches blocking work to an OS thread, but the
+    workers runtime is single threaded, so starting a thread raises
+    `RuntimeError: can't start new thread`. Run the callable inline instead.
+
+    This function is the only caller of `run_sync_in_worker_thread`, which makes it
+    the single chokepoint for every blocking call anyio makes on behalf of a
+    framework. In starlette/fastapi that covers sync route handlers, sync
+    dependencies, `StaticFiles`, `FileResponse`, `UploadFile`, `BackgroundTask` and
+    `GZipMiddleware`, as well as `anyio.Path` and `anyio.open_file`.
+
+    Patching the module attribute is enough because every caller looks it up at
+    call time (e.g. `starlette.concurrency` and `anyio._core._fileio` both import
+    the module rather than the function).
+
+    We patch `anyio.to_thread` rather than the backend's
+    `run_sync_in_worker_thread` because `anyio._backends._asyncio` is imported
+    lazily by `get_async_backend()` during a request, by which point the import
+    patch manager is no longer installed.
+    """
+    yield
+
+    async def run_sync(func, *args, **kwargs):
+        # Callers pass the function's own arguments positionally and anyio's
+        # options (`limiter`, `abandon_on_cancel`, `cancellable`) as keywords.
+        # None of the options mean anything without threads, so drop them.
+        return func(*args)
+
+    module.run_sync = run_sync
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/_workers_sdk_patch_loader.pth"; filename="./python_modules/_workers_sdk_patch_loader.pth"
+Content-Type: application/octet-stream
+
+import _workers_sdk_patch_loader
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/_workers_sdk_patch_loader.py"; filename="./python_modules/_workers_sdk_patch_loader.py"
+Content-Type: application/octet-stream
+
+"""
+Loader shim for the top level package patches.
+
+This module is imported by the .pth file on every Python startup. The patches
+depend on the `_cloudflare` package, which only exists inside the workers
+runtime. When running outside of the workers runtime, `_cloudflare` is not
+available, so we silently skip loading the patches. Skipping is also what we
+want in that case: the patches adapt packages to the workers runtime and should
+not change how they behave under native Python.
+"""
+
+import importlib.util
+
+if importlib.util.find_spec("_cloudflare") is not None:
+    import _workers_sdk_entropy_import_context  # noqa: F401
+    import _workers_sdk_package_patches  # noqa: F401
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/asgi.py"; filename="./python_modules/asgi.py"
+Content-Type: application/octet-stream
+
+# Compatibility module for existing code that imports `asgi` directly.
+import sys
+
+from workers import asgi as _asgi
+
+sys.modules[__name__] = _asgi
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/pyvenv.cfg"; filename="./python_modules/pyvenv.cfg"
+Content-Type: application/octet-stream
+
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/__init__.py"; filename="./python_modules/workers/__init__.py"
+Content-Type: application/octet-stream
+
+from .blob import Blob, BlobEnding, BlobValue, File
+from .entrypoints import (
+    DurableObject,
+    WorkerEntrypoint,
+    WorkflowEntrypoint,
+    handler,
+)
+from .fetch import fetch
+from .formdata import FormData, FormDataValue
+from .request import Request
+from .response import FetchResponse, Response
+from .rpc import _EnvWrapper, python_from_rpc, python_to_rpc
+from .types import (
+    Body,
+    Context,
+    FetchKwargs,
+    Headers,
+    JSBody,
+    RequestInitCfProperties,
+)
+from .utils import import_from_javascript, patch_env
+
+__all__ = [
+    "Blob",
+    "BlobEnding",
+    "BlobValue",
+    "Body",
+    "Context",
+    "DurableObject",
+    "FetchKwargs",
+    "FetchResponse",
+    "File",
+    "FormData",
+    "FormDataValue",
+    "Headers",
+    "JSBody",
+    "Request",
+    "RequestInitCfProperties",
+    "Response",
+    "WorkerEntrypoint",
+    "WorkflowEntrypoint",
+    "env",
+    "fetch",
+    "handler",
+    "import_from_javascript",
+    "patch_env",
+    "python_from_rpc",
+    "python_to_rpc",
+    "waitUntil",
+    "wait_until",
+]
+
+
+def __getattr__(key):
+    if key == "env":
+        cloudflare_workers = import_from_javascript("cloudflare:workers")
+        return _EnvWrapper(cloudflare_workers.env)
+    if key in ("wait_until", "waitUntil"):
+        cloudflare_workers = import_from_javascript("cloudflare:workers")
+        return cloudflare_workers.waitUntil
+    raise AttributeError(f"module {__name__!r} has no attribute {key!r}")
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/asgi.py"; filename="./python_modules/workers/asgi.py"
+Content-Type: application/octet-stream
+
+import logging
+from asyncio import Event, Future, Queue, create_task, ensure_future
+from collections.abc import Awaitable
+from contextlib import contextmanager
+from typing import Any
+from urllib.parse import unquote
+
+import js
+
+from workers import Context, Request, WorkerEntrypoint
+from workers.utils import _to_js_headers
+
+ASGI = {"spec_version": "2.0", "version": "3.0"}
+NULL_BODY_STATUSES = frozenset({101, 103, 204, 205, 304})
+logger = logging.getLogger("asgi")
+background_tasks = set()
+
+
+def run_in_background(coro: Awaitable[Any]) -> Future:
+    fut = ensure_future(coro)
+    background_tasks.add(fut)
+
+    def _on_done(f):
+        background_tasks.discard(f)
+        exc = f.exception() if not f.cancelled() else None
+        if exc is not None:
+            logger.error("Unhandled exception in background task", exc_info=exc)
+
+    fut.add_done_callback(_on_done)
+    return fut
+
+
+async def close_stream_quietly(writer):
+    try:
+        await writer.close()
+    except Exception:
+        logger.debug("Closing the response stream failed", exc_info=True)
+
+
+@contextmanager
+def acquire_js_buffer(pybuffer):
+    from pyodide.ffi import create_proxy
+
+    px = create_proxy(pybuffer)
+    buf = px.getBuffer()
+    px.destroy()
+    try:
+        yield buf.data
+    finally:
+        buf.release()
+
+
+def request_to_scope(req, env, ws=False, state=None):
+    from js import URL
+
+    # @app.get("/example")
+    # async def example(request: Request):
+    #     request.headers.get("content-type")
+    # - this will error if header is not "bytes" as in ASGI spec.
+
+    # Support both JS and Python http.client.HTTPMessage headers.
+    req_headers = req.headers.items() if isinstance(req, Request) else req.headers
+
+    headers = [(k.lower().encode(), v.encode()) for k, v in req_headers]
+    url = URL.new(req.url)
+    assert url.protocol[-1] == ":"
+    scheme = url.protocol[:-1]
+    # ASGI requires "path" to be percent-decoded; the encoded original is
+    # available to apps via "raw_path".
+    # https://asgi.readthedocs.io/en/latest/specs/www.html#http-connection-scope
+    path = unquote(url.pathname)
+    assert "?".startswith(url.search[0:1])
+    query_string = url.search[1:].encode()
+    if ws:
+        ty = "websocket"
+    else:
+        ty = "http"
+    scope = {
+        "asgi": ASGI,
+        "headers": headers,
+        "http_version": "1.1",
+        "method": req.method,
+        "scheme": scheme,
+        "path": path,
+        "raw_path": url.pathname.encode(),
+        "query_string": query_string,
+        "type": ty,
+        "env": env,
+    }
+    if state is not None:
+        # ASGI requires a shallow copy of lifespan state for each request.
+        scope["state"] = dict(state)
+    return scope
+
+
+async def start_application(app):
+    # Drives one ASGI lifespan startup/shutdown cycle before/after serving the
+    # request. The lifespan protocol is optional, so we must tolerate apps that
+    # don't implement it and fall back to serving requests without lifespan.
+    # https://asgi.readthedocs.io/en/latest/specs/lifespan.html
+    receive_queue = Queue()
+    state = {}
+    await receive_queue.put({"type": "lifespan.startup"})
+
+    # `startup` resolves True on `lifespan.startup.complete`, False when the app
+    # has no lifespan support, and raises on `lifespan.startup.failed`.
+    # `shutdown_complete` mirrors the shutdown phase.
+    startup = Future()
+    shutdown_complete = Future()
+
+    async def shutdown():
+        # Nothing to shut down if the app never completed a lifespan startup.
+        if startup.done() and not startup.result():
+            return
+        await receive_queue.put({"type": "lifespan.shutdown"})
+        await shutdown_complete
+
+    async def no_lifespan_shutdown():
+        return
+
+    async def receive():
+        return await receive_queue.get()
+
+    async def send(got):
+        if got["type"] == "lifespan.startup.complete":
+            if not startup.done():
+                startup.set_result(True)
+            return
+        if got["type"] == "lifespan.startup.failed":
+            # `or`, not a .get default: an empty message field is legal and
+            # would otherwise produce RuntimeError('').
+            message = got.get("message") or "ASGI lifespan startup failed"
+            if not startup.done():
+                startup.set_exception(RuntimeError(message))
+            return
+        if got["type"] == "lifespan.shutdown.complete":
+            if not shutdown_complete.done():
+                shutdown_complete.set_result(None)
+            return
+        if got["type"] == "lifespan.shutdown.failed":
+            message = got.get("message") or "ASGI lifespan shutdown failed"
+            if not shutdown_complete.done():
+                shutdown_complete.set_exception(RuntimeError(message))
+            return
+        raise RuntimeError(f"Unexpected lifespan event {got['type']}")
+
+    async def run_lifespan():
+        try:
+            await app(
+                {
+                    "asgi": ASGI,
+                    "state": state,
+                    "type": "lifespan",
+                },
+                receive,
+                send,
+            )
+            # App returned without acking: a missing startup ack means it has no
+            # lifespan handler, so mark startup unsupported rather than hanging.
+            if not startup.done():
+                startup.set_result(False)
+            elif not shutdown_complete.done():
+                shutdown_complete.set_result(None)
+        except Exception as exc:
+            # Spec: an exception raised before startup is acked signals that the
+            # app doesn't support lifespan; serve requests anyway. Log it, or an
+            # app that crashed mid-startup looks like one with no lifespan
+            # handler at all.
+            if not startup.done():
+                logger.debug(
+                    "ASGI lifespan task raised before reporting startup; "
+                    "treating the app as not supporting lifespan",
+                    exc_info=exc,
+                )
+                startup.set_result(False)
+                return
+            # After a successful startup, a shutdown-phase error can't affect the
+            # already-served request, so log it and let shutdown complete.
+            logger.exception("Exception in ASGI lifespan application", exc_info=exc)
+            if not shutdown_complete.done():
+                shutdown_complete.set_result(None)
+
+    run_in_background(run_lifespan())
+    supported = await startup
+    if not supported:
+        return no_lifespan_shutdown, state
+    return shutdown, state
+
+
+async def process_request(  # noqa: PLR0913
+    app: Any,
+    req: "Request | js.Request",
+    env: Any,
+    # added for waitUntil, but not used anymore
+    # TODO(later): remove this parameter after unvendoring Python SDK from workerd
+    ctx: Context | None,
+    state: dict[str, Any] | None = None,
+) -> tuple[js.Response, Future[None]]:
+    from js import Response, TransformStream
+    from pyodide.ffi import create_proxy
+
+    status = None
+    headers = None
+    result = Future()
+    finished_response = Event()
+
+    # Streaming state — initialized lazily on first body chunk with more_body=True.
+    writer = None
+    writer_closed = False
+
+    receive_queue = Queue()
+    if req.body:
+        async for data in req.body:
+            await receive_queue.put(
+                {
+                    "body": data.to_bytes(),
+                    "more_body": True,
+                    "type": "http.request",
+                }
+            )
+    await receive_queue.put({"body": b"", "more_body": False, "type": "http.request"})
+
+    async def receive():
+        message = None
+        if not receive_queue.empty():
+            message = await receive_queue.get()
+        else:
+            await finished_response.wait()
+            message = {"type": "http.disconnect"}
+        return message
+
+    async def send(got):
+        nonlocal status
+        nonlocal headers
+        nonlocal writer
+        nonlocal writer_closed
+
+        if got["type"] == "http.response.start":
+            status = got["status"]
+            # Like above, we need to convert byte-pairs into string explicitly.
+            # A response header name may repeat (multiple Set-Cookie), so this
+            # must stay a sequence of pairs, not a name-keyed mapping.
+            headers = [(k.decode(), v.decode()) for k, v in got.get("headers", [])]
+
+        elif got["type"] == "http.response.body":
+            body = got.get("body", b"")
+            more_body = got.get("more_body", False)
+
+            if writer is not None:
+                # Already in streaming mode — write chunk to the stream.
+                with acquire_js_buffer(body) as jsbytes:
+                    await writer.write(jsbytes.slice())
+                if not more_body:
+                    await writer.close()
+                    writer_closed = True
+                    finished_response.set()
+            elif more_body:
+                # First body chunk with more data coming — switch to streaming.
+                # Create a TransformStream so the runtime can start consuming
+                # body chunks as they are written.
+                transform_stream = TransformStream.new()
+                readable = transform_stream.readable
+                writer = transform_stream.writable.getWriter()
+                resp = Response.new(
+                    readable, headers=_to_js_headers(headers), status=status
+                )
+                result.set_result(resp)
+                with acquire_js_buffer(body) as jsbytes:
+                    await writer.write(jsbytes.slice())
+            elif status in NULL_BODY_STATUSES:
+                # 101/103/204/205/304 must not carry a body per the Fetch spec.
+                # https://fetch.spec.whatwg.org/#null-body-status
+                resp = Response.new(
+                    None, headers=_to_js_headers(headers), status=status
+                )
+                result.set_result(resp)
+                finished_response.set()
+            else:
+                # Complete body in a single chunk
+                px = create_proxy(body)
+                buf = px.getBuffer()
+                px.destroy()
+                resp = Response.new(
+                    buf.data, headers=_to_js_headers(headers), status=status
+                )
+                result.set_result(resp)
+                finished_response.set()
+
+    # Run the application in the background
+    async def run_app():
+        try:
+            await app(request_to_scope(req, env, state=state), receive, send)
+
+            # If we get here and no response has been set yet, the app didn't generate a response
+            if not result.done():
+                raise RuntimeError("The application did not generate a response")  # noqa: TRY301
+        except Exception as e:
+            if not result.done():
+                result.set_exception(e)
+                if writer is not None:
+                    await writer.close()
+                finished_response.set()
+            else:
+                # Response already sent — exception can't be propagated to the
+                # client, so log it to avoid silently swallowing errors.
+                logger.exception("Exception in ASGI application after response started")
+                finished_response.set()
+                if writer is not None and not writer_closed:
+                    # End the body so a client reading it sees the stream stop
+                    # instead of waiting forever for chunks that will never
+                    # come. Deliberately not awaited: close() settles only once
+                    # the queued chunks reach a consumer, so a response body
+                    # that nobody reads would block this task, which the
+                    # runtime is waiting on through wait_until.
+                    run_in_background(close_stream_quietly(writer))
+
+    request_task = create_task(run_app())
+
+    try:
+        response = await result
+    except Exception:
+        # The request task handles application exceptions and should be allowed
+        # to finish before its error is propagated to fetch().
+        await request_task
+        raise
+
+    # Buffered responses do not depend on a consumer, so request cleanup can
+    # finish before returning. Streaming responses must run alongside the
+    # consumer because writes can be subject to backpressure.
+    if writer is None:
+        await request_task
+    return response, request_task
+
+
+async def process_websocket(
+    app: Any, req: "Request | js.Request", env: Any = None
+) -> js.Response:
+    from js import Response, WebSocketPair
+
+    client, server = WebSocketPair.new().object_values()
+    server.accept()
+    # Binary frames otherwise arrive as Blob (observed under wrangler dev),
+    # which cannot be read synchronously in the message callback.
+    server.binaryType = "arraybuffer"
+    queue = Queue()
+
+    def onopen(evt):
+        msg = {"type": "websocket.connect"}
+        queue.put_nowait(msg)
+
+    # onopen doesn't seem to get called. WS lifecycle events are a bit messed up
+    # here.
+    onopen(1)
+
+    def onclose(evt):
+        # Client-initiated closes surface to the app as "websocket.disconnect"
+        # per the ASGI spec ("websocket.close" is the app->server direction);
+        # frameworks raise their disconnect exceptions only on this type.
+        msg = {"type": "websocket.disconnect", "code": evt.code, "reason": evt.reason}
+        queue.put_nowait(msg)
+
+    def onmessage(evt):
+        data = evt.data
+        if isinstance(data, str):
+            msg = {"type": "websocket.receive", "text": data}
+        else:
+            # Binary frames arrive as an ArrayBuffer; the ASGI spec requires
+            # them under "bytes" (frameworks like Starlette dispatch on which
+            # key is present, so labeling them "text" breaks receive_bytes()).
+            msg = {"type": "websocket.receive", "bytes": data.to_bytes()}
+        queue.put_nowait(msg)
+
+    server.onopen = onopen
+    server.onclose = onclose
+    server.onmessage = onmessage
+
+    app_closed = False
+
+    async def ws_send(got):
+        nonlocal app_closed
+        if got["type"] == "websocket.accept":
+            # The Workers WebSocketPair is accepted before the upgrade response
+            # is returned, so there is no deferred accept operation here.
+            return
+        if got["type"] == "websocket.send":
+            b = got.get("bytes", None)
+            s = got.get("text", None)
+            if b is not None:
+                with acquire_js_buffer(b) as jsbytes:
+                    # Unlike the `Response` constructor,  server.send seems to
+                    # eagerly copy the source buffer
+                    server.send(jsbytes)
+            if s is not None:
+                server.send(s)
+            return
+        if got["type"] == "websocket.close":
+            app_closed = True
+            server.close(got.get("code", 1000), got.get("reason", ""))
+            return
+        logger.warning(" == Not implemented %s", got["type"])
+
+    async def ws_receive():
+        received = await queue.get()
+        return received
+
+    from pyodide.ffi import create_proxy
+
+    from workers import wait_until
+
+    task = run_in_background(
+        app(
+            request_to_scope(req, env if env is not None else {}, ws=True),
+            ws_receive,
+            ws_send,
+        )
+    )
+    # wait_until is JS's waitUntil, so the task crosses the boundary as a proxy,
+    # destroyed once it settles rather than left to leak.
+    task_proxy = create_proxy(task)
+
+    def _close_transport(finished):
+        if not app_closed:
+            # The app ended without closing, so a half-open connection would
+            # leave the client hanging instead of reconnecting.
+            failed = not finished.cancelled() and finished.exception() is not None
+            try:
+                server.close(1011 if failed else 1000, "")
+            except Exception:
+                pass  # the peer may already have closed the socket
+        task_proxy.destroy()
+
+    task.add_done_callback(_close_transport)
+    wait_until(task_proxy)
+
+    return Response.new(None, status=101, webSocket=client)
+
+
+async def fetch(
+    app: Any, req: "Request | js.Request", env: Any, ctx: Context | None = None
+) -> js.Response:
+    logger.debug("ASGI request: %s %s", req.method, req.url)
+    shutdown, state = await start_application(app)
+    try:
+        result, request_task = await process_request(app, req, env, ctx, state=state)
+    except Exception:
+        logger.exception("ASGI request failed")
+        await shutdown()
+        raise
+
+    if request_task.done():
+        await shutdown()
+    else:
+        from workers import wait_until  # noqa: PLC0415
+
+        async def finalize_request():
+            try:
+                await request_task
+            finally:
+                await shutdown()
+
+        wait_until(run_in_background(finalize_request()))
+
+    return result
+
+
+async def websocket(
+    app: Any, req: "Request | js.Request", env: Any = None
+) -> js.Response:
+    return await process_websocket(app, req, env)
+
+
+def entrypoint(app: Any) -> type[WorkerEntrypoint]:
+    """Create the default Worker entrypoint for an ASGI application."""
+
+    class Default(WorkerEntrypoint):
+        async def fetch(self, request):
+            if (request.headers.get("upgrade") or "").lower() == "websocket":
+                return await websocket(app, request, self.env)
+            return await fetch(app, request, self.env, self.ctx)
+
+    return Default
+
+
+def __getattr__(name):
+    if name == "env":
+        from fastapi import Depends, Request
+
+        @Depends
+        async def env(request: Request):
+            return request.scope["env"]
+
+        return env
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/blob.py"; filename="./python_modules/workers/blob.py"
+Content-Type: application/octet-stream
+
+from collections.abc import Iterable
+from contextlib import ExitStack, contextmanager
+from enum import StrEnum
+
+import js
+from pyodide.ffi import create_proxy, to_js
+
+from .utils import _is_iterable, _manage_pyproxies, _supports_buffer_protocol
+
+BlobValue = (
+    "str | bytes | js.ArrayBuffer | js.TypedArray | js.DataView | js.Blob | Blob | File"
+)
+
+
+class BlobEnding(StrEnum):
+    TRANSPARENT = "transparent"
+    NATIVE = "native"
+
+
+class Blob:
+    def __init__(
+        self,
+        blob_parts: "Iterable[BlobValue] | BlobValue",
+        content_type: str | None = None,
+        endings: BlobEnding | str | None = None,
+    ):
+        if endings:
+            endings = str(endings)
+
+        is_single_item = not _is_iterable(blob_parts)
+        if is_single_item:
+            # Inherit the content_type if we have a single item. If a File is passed
+            # in then its metadata is lost.
+            if not content_type and isinstance(blob_parts, Blob):
+                content_type = blob_parts.content_type
+            if hasattr(blob_parts, "constructor") and (
+                blob_parts.constructor.name in ("Blob", "File")
+            ):
+                if not content_type:
+                    content_type = blob_parts.type
+
+            # Otherwise create a new Blob below.
+            blob_parts = [blob_parts]
+
+        with ExitStack() as stack:
+            args = [stack.enter_context(_make_blob_entry(e)) for e in blob_parts]
+            with _manage_pyproxies() as pyproxies:
+                self._js_blob = js.Blob.new(
+                    to_js(args, pyproxies=pyproxies),
+                    type=content_type,
+                    endings=endings,
+                )
+
+    @property
+    def size(self) -> int:
+        return self._js_blob.size
+
+    @property
+    def content_type(self) -> str:
+        return self._js_blob.type
+
+    @property
+    def js_object(self) -> "js.Blob":
+        return self._js_blob
+
+    async def text(self) -> str:
+        return await self.js_object.text()
+
+    async def bytes(self) -> bytes:
+        return (await self.js_object.arrayBuffer()).to_bytes()
+
+    def slice(
+        self,
+        start: int | None = None,
+        end: int | None = None,
+        content_type: str | None = None,
+    ):
+        js_sliced_blob = self.js_object.slice(start, end, content_type)
+        return Blob([js_sliced_blob])
+
+
+class File(Blob):
+    def __init__(
+        self,
+        blob_parts: "Iterable[BlobValue] | BlobValue",
+        filename: str,
+        content_type: str | None = None,
+        endings: BlobEnding | str | None = None,
+        last_modified: int | None = None,
+    ):
+        if endings:
+            endings = str(endings)
+
+        is_single_item = not _is_iterable(blob_parts)
+        if is_single_item:
+            # Inherit the content_type and lastModified if we have a
+            # single item.
+            if not content_type and isinstance(blob_parts, Blob):
+                content_type = blob_parts.content_type
+            if not last_modified and isinstance(blob_parts, File):
+                last_modified = blob_parts.last_modified
+            if hasattr(blob_parts, "constructor") and (
+                blob_parts.constructor.name in ("Blob", "File")
+            ):
+                if not content_type:
+                    content_type = blob_parts.type
+                if blob_parts.constructor.name == "File":
+                    if not last_modified:
+                        last_modified = blob_parts.lastModified
+
+            # Otherwise create a new File below.
+            blob_parts = [blob_parts]
+
+        with ExitStack() as stack:
+            args = [stack.enter_context(_make_blob_entry(e)) for e in blob_parts]
+            with _manage_pyproxies() as pyproxies:
+                self._js_blob = js.File.new(
+                    to_js(args, pyproxies=pyproxies),
+                    filename,
+                    type=content_type,
+                    endings=endings,
+                    lastModified=last_modified,
+                )
+
+    @property
+    def name(self) -> str:
+        return self._js_blob.name
+
+    @property
+    def last_modified(self) -> int:
+        return self._js_blob.lastModified
+
+
+@contextmanager
+def _make_blob_entry(e):
+    if isinstance(e, str):
+        yield e
+        return
+    if isinstance(e, Blob):
+        yield e._js_blob
+        return
+    if hasattr(e, "constructor") and (e.constructor.name in ("Blob", "File")):
+        yield e
+        return
+    if _supports_buffer_protocol(e):
+        px = create_proxy(e)
+        buf = px.getBuffer()
+        try:
+            yield buf.data
+            return
+        finally:
+            buf.release()
+            px.destroy()
+    raise TypeError(f"Don't know how to handle {type(e)} for Blob()")
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/entrypoints.py"; filename="./python_modules/workers/entrypoints.py"
+Content-Type: application/octet-stream
+
+import functools
+import inspect
+from asyncio import create_task, gather
+from typing import TYPE_CHECKING, Any
+
+import _cloudflare_compat_flags
+import _pyodide_entrypoint_helper
+import js
+from js import Object
+from pyodide.ffi import create_once_callable, to_js
+
+from .request import Request
+from .rpc import (
+    _BindingWrapper,
+    _EnvWrapper,
+    _idempotent_new,
+    python_from_rpc,
+    python_to_rpc,
+)
+from .utils import (
+    _from_js_error,
+    _is_js_instance,
+    import_sdk_javascript_module_async,
+)
+
+if TYPE_CHECKING:
+    from js import DurableObjectState, Env, ExecutionContext
+
+
+class DurableObjectAbort(BaseException):
+    pass
+
+
+class DurableObjectContext:
+    # __new__ and __init__ set up to make sure that the following passes:
+    #
+    # a = DurableObjectContext(x)
+    # assert DurableObjectContext(a) is a
+    # assert a._ctx is x
+    __new__ = _idempotent_new
+
+    def __init__(self, ctx: "DurableObjectState"):
+        if ctx is self:
+            return
+        self._ctx = ctx
+
+    def __getattr__(self, name: str):
+        result = getattr(self._ctx, name)
+        if _is_js_instance(result, "DurableObjectStorage"):
+            # durable_object.ctx.storage
+            result = _BindingWrapper(result)
+        setattr(self, name, result)
+        return result
+
+    def abort(self, reason: str | None = None):
+        # DurableObjectState.abort() terminates JS execution immediately. If Python
+        # calls it synchronously while asyncio is still running the task in the event loop,
+        # V8 unwinds the stack before asyncio can run its task-exit cleanup, leaving
+        # stale task state behind for the next request.
+        #
+        # Therefore, we queue the real abort into a microtask so Python can unwind first,
+        # then raise BaseException to stop user code without being swallowed by
+        # `except Exception` handlers.
+        ctx = self._ctx
+
+        if reason is None:
+            callback = create_once_callable(lambda: ctx.abort())
+        else:
+            callback = create_once_callable(lambda: ctx.abort(reason))
+
+        js.queueMicrotask(callback)
+        raise DurableObjectAbort(reason or "Durable Object abort requested")
+
+
+class _WorkflowStepWrapper:
+    __new__ = _idempotent_new
+
+    def __init__(self, js_step):
+        if js_step is self:
+            return
+        self._js_step = js_step
+        self._memoized_dependencies = {}
+        self._in_flight = {}
+        self.step_closures = {}
+
+        # Assign the appropriate method based on compat flag
+        if _cloudflare_compat_flags.python_workflows_implicit_dependencies:
+            self.do = self._do_implicit
+        else:
+            self.do = self._do_legacy
+
+    def _do_legacy(self, name, depends=None, concurrent=False, config=None):
+        """Original signature - positional args allowed, explicit depends parameter."""
+        return self._create_step_decorator(
+            name=name,
+            depends=depends,
+            concurrent=concurrent,
+            config=config,
+            implicit=False,
+        )
+
+    def _do_implicit(self, name=None, *, concurrent=False, config=None):
+        """New signature - keyword-only args, dependencies resolved from param names."""
+        return self._create_step_decorator(
+            name=name,
+            depends=None,
+            concurrent=concurrent,
+            config=config,
+            implicit=True,
+        )
+
+    def _create_step_decorator(self, name, depends, concurrent, config, implicit):
+        """Shared decorator factory for both legacy and implicit modes."""
+
+        def decorator(func):
+            step_name = func.__name__ if name is None else name
+
+            async def wrapper():
+                results_future_list = self._build_dependency_list(
+                    func, depends, implicit
+                )
+                results = await self._gather_results(results_future_list, concurrent)
+                return await _do_call(self, step_name, wrapper, config, func, *results)
+
+            wrapper._step_name = step_name
+            self.step_closures[step_name] = wrapper
+            return wrapper
+
+        return decorator
+
+    def _build_dependency_list(self, func, depends, implicit):
+        """Build the dependency list based on mode (implicit vs legacy)."""
+        sig = inspect.signature(func)
+        results_future_list = []
+
+        if implicit:
+            # Implicit mode: resolve dependencies from parameter names
+            for p in sig.parameters.values():
+                if p.name in self.step_closures:
+                    results_future_list.append(self.step_closures[p.name])
+                elif p.name == "ctx":
+                    results_future_list.append(p)
+                else:
+                    raise TypeError(f"Received unexpected parameter {p.name}")
+        else:
+            # Legacy mode: use explicit depends list, support ctx parameter
+            non_ctx_params = [p for p in sig.parameters.values() if p.name != "ctx"]
+
+            if depends is None and len(non_ctx_params) > 0:
+                raise TypeError(
+                    f"Step has {len(non_ctx_params)} non-ctx parameter(s) but no 'depends' list provided"
+                )
+
+            elif depends is not None and len(depends) != len(non_ctx_params):
+                raise TypeError(
+                    f"Step declares {len(non_ctx_params)} non-ctx parameter(s) but 'depends' has {len(depends)} item(s)"
+                )
+
+            curr = 0
+            for p in sig.parameters.values():
+                if p.name == "ctx":
+                    results_future_list.append(p)
+                else:
+                    dep = depends[curr]
+                    if not hasattr(dep, "_step_name"):
+                        raise TypeError(
+                            f"'depends' entry for parameter {p.name!r} is not a "
+                            "function decorated with step.do"
+                        )
+                    results_future_list.append(dep)
+                    curr += 1
+
+        return results_future_list
+
+    async def _gather_results(self, results_future_list, concurrent):
+        """Resolve dependencies concurrently or sequentially."""
+        if concurrent:
+            return await gather(
+                *[self._resolve_dependency(dep) for dep in results_future_list or []]
+            )
+        else:
+            return [
+                await self._resolve_dependency(dep) for dep in results_future_list or []
+            ]
+
+    def sleep(self, *args, **kwargs):
+        return self._js_step.sleep(*args, **kwargs)
+
+    def sleep_until(self, name, timestamp):
+        if not isinstance(timestamp, str):
+            timestamp = python_to_rpc(timestamp)
+
+        return self._js_step.sleepUntil(name, timestamp)
+
+    async def wait_for_event(self, name, event_type, /, timeout="24 hours"):
+        return python_from_rpc(
+            await self._js_step.waitForEvent(
+                name,
+                to_js(
+                    {"type": event_type, "timeout": timeout},
+                    dict_converter=Object.fromEntries,
+                ),
+            )
+        )
+
+    async def _resolve_dependency(self, dep):
+        if isinstance(dep, inspect.Parameter) and dep.name == "ctx":
+            return dep
+        elif dep in self._memoized_dependencies:
+            return self._memoized_dependencies[dep]
+        elif dep in self._in_flight:
+            return await self._in_flight[dep]
+
+        return await dep()
+
+
+async def _do_call(entrypoint, name, key, config, callback, *results):
+    async def _callback(ctx=None):
+        # deconstruct the actual ctx object
+        resolved_results = tuple(
+            python_from_rpc(ctx)
+            if isinstance(r, inspect.Parameter) and r.name == "ctx"
+            else r
+            for r in results
+        )
+        result = callback(*resolved_results)
+
+        if inspect.iscoroutine(result):
+            result = await result
+        # The step result crosses the RPC boundary back to the Workflows engine
+        return python_to_rpc(result)
+
+    async def _closure():
+        try:
+            if config is None:
+                coroutine = await entrypoint._js_step.do(name, _callback)
+            else:
+                coroutine = await entrypoint._js_step.do(
+                    name, to_js(config, dict_converter=Object.fromEntries), _callback
+                )
+
+            return python_from_rpc(coroutine)
+        except Exception as exc:
+            raise _from_js_error(exc) from exc
+
+    task = create_task(_closure())
+    entrypoint._in_flight[key] = task
+
+    try:
+        result = await task
+        entrypoint._memoized_dependencies[key] = result
+    finally:
+        entrypoint._in_flight.pop(key, None)
+
+    return result
+
+
+def handler(func):
+    """
+    When applied to handlers such as `on_fetch` it will rewrite arguments passed in to native Python
+    types defined in this module. For example, the `request` argument to `on_fetch` gets converted
+    to an instance of the Request class defined in this module.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # TODO: support transforming kwargs
+        if len(args) > 0 and _is_js_instance(args[0], "Request"):
+            args = (Request(args[0]), *args[1:])
+
+        # Wrap `env` so that bindings can be used without to_js.
+        if len(args) > 1:
+            args = (args[0], _EnvWrapper(args[1]), *args[2:])
+
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def _wrap_class(cls):
+    # Override the class __init__ so that we can wrap the `env` in the constructor.
+    original_init = cls.__dict__.get("__init__")
+    if original_init is None:
+        return cls
+
+    def wrapped_init(self, *args, **kwargs):
+        args = list(args)
+        if len(args) > 0:
+            _pyodide_entrypoint_helper.patchWaitUntil(args[0])
+            if issubclass(cls, DurableObject):
+                args[0] = DurableObjectContext(args[0])
+        if len(args) > 1:
+            args[1] = _EnvWrapper(args[1])
+
+        original_init(self, *args, **kwargs)
+
+    cls.__init__ = wrapped_init
+    return cls
+
+
+_workflows_js_module = None
+
+
+async def _wrap_js_workflow_step(js_step):
+    """
+    Wrap the JS `WorkflowStep` stub with `wrapWorkflowStep` from the SDK's `workflows.js`.
+
+    The wrapper makes a Python `NonRetryableError` raised inside a step reach the Workflows
+    engine as a JS error the engine recognises as non-retryable (see `workflows.js`).
+    """
+    global _workflows_js_module  # noqa: PLW0603
+    if _workflows_js_module is None:
+        _workflows_js_module = await import_sdk_javascript_module_async("workflows.js")
+    return _workflows_js_module.wrapWorkflowStep(js_step)
+
+
+def _wrap_workflow_step(cls):
+    run_fn = cls.__dict__.get("run")
+    if run_fn is None:
+        return
+
+    @functools.wraps(run_fn)
+    async def wrapped_run(self, event=None, step=None, /, *args, **kwargs):
+        if event is not None:
+            event = python_from_rpc(event)
+        if step is not None:
+            step = _WorkflowStepWrapper(await _wrap_js_workflow_step(step))
+
+        result = run_fn(self, event, step, *args, **kwargs)
+
+        if inspect.iscoroutine(result):
+            result = await result
+
+        if result is None:
+            return result
+
+        # This should be wrapped again to js object
+        # as the value will go through the RPC boundary
+        return python_to_rpc(result)
+
+    cls.run = wrapped_run
+
+
+def _wrap_queue_handler(cls):
+    queue_fn = getattr(cls, "queue", None)
+    if queue_fn is None:
+        return
+
+    @functools.wraps(queue_fn)
+    async def wrapped_queue(self, batch, *args, **kwargs):
+        wrapped_batch = _BindingWrapper(batch)
+        result = queue_fn(self, wrapped_batch, *args, **kwargs)
+        if inspect.iscoroutine(result):
+            result = await result
+        return result
+
+    cls.queue = wrapped_queue
+
+
+@_wrap_class
+class DurableObject:
+    """
+    Base class used to define a Durable Object.
+    """
+
+    ctx: "DurableObjectContext"
+    env: "Env"
+
+    def __init__(self, ctx: "DurableObjectState", env: "Env"):
+        self.ctx = ctx
+        self.env = env
+
+    def __init_subclass__(cls, **_kwargs):
+        _wrap_class(cls)
+
+
+@_wrap_class
+class WorkerEntrypoint:
+    """
+    Base class used to define a Worker Entrypoint.
+    """
+
+    ctx: "ExecutionContext"
+    env: "Env"
+
+    def __init__(self, ctx: "ExecutionContext", env: "Env"):
+        self.ctx = ctx
+        self.env = env
+
+    def __init_subclass__(cls, **_kwargs: Any):
+        _wrap_class(cls)
+        _wrap_queue_handler(cls)
+
+
+@_wrap_class
+class WorkflowEntrypoint:
+    """
+    Base class used to define a Workflow Entrypoint.
+    """
+
+    ctx: "ExecutionContext"
+    env: "Env"
+
+    def __init__(self, ctx: "ExecutionContext", env: "Env"):
+        self.ctx = ctx
+        self.env = env
+
+    def __init_subclass__(cls, **_kwargs: Any):
+        _wrap_class(cls)
+        _wrap_workflow_step(cls)
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/fetch.py"; filename="./python_modules/workers/fetch.py"
+Content-Type: application/octet-stream
+
+from http import HTTPMethod
+from typing import Any, Unpack
+
+import js
+from js import Object
+from pyodide import __version__ as pyodide_version
+from pyodide.ffi import JsException, to_js
+from pyodide.http import pyfetch
+
+from .request import Request
+from .response import Response
+from .types import FetchKwargs
+
+if pyodide_version == "0.26.0a2":
+
+    async def _pyfetch_patched(
+        request: "str | js.Request", **kwargs: Any
+    ) -> "Response":
+        # This is copied from https://github.com/pyodide/pyodide/blob/d3f99e1d/src/py/pyodide/http.py
+        custom_fetch = kwargs["fetcher"] if "fetcher" in kwargs else js.fetch
+        kwargs["fetcher"] = None
+        try:
+            return Response(
+                await custom_fetch(
+                    request, to_js(kwargs, dict_converter=Object.fromEntries)
+                ),
+            )
+        except JsException as e:
+            raise OSError(e.message) from None
+else:
+    _pyfetch_patched = pyfetch
+
+
+async def fetch(
+    resource: "str | Request | js.Request",
+    **other_options: Unpack[FetchKwargs],
+) -> Response:
+    if isinstance(resource, Request):
+        resource = resource.js_object
+    if "method" in other_options and isinstance(other_options["method"], HTTPMethod):
+        other_options["method"] = other_options["method"].value
+
+    resp = await _pyfetch_patched(resource, **other_options)
+    return Response(resp.js_response)
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/formdata.py"; filename="./python_modules/workers/formdata.py"
+Content-Type: application/octet-stream
+
+from collections.abc import Generator, MutableMapping
+
+import js
+
+from .blob import Blob, File
+from .utils import _is_js_instance
+
+FormDataValue = "str | js.Blob | Blob"
+
+
+def _py_value_to_js(item: FormDataValue) -> "str | js.Blob":
+    if isinstance(item, Blob):
+        return item.js_object
+    else:
+        return item
+
+
+def _js_value_to_py(item: FormDataValue) -> "str | Blob | File":
+    if hasattr(item, "constructor") and (item.constructor.name in ("Blob", "File")):
+        if item.constructor.name == "File":
+            return File(item, item.name)
+        else:
+            return Blob(item)
+    else:
+        return item
+
+
+class FormData(MutableMapping[str, FormDataValue]):
+    """
+    This class represents a set of key/value pairs for forms.
+
+    The API of this class follows that of https://pypi.org/project/multidict/ and
+    https://developer.mozilla.org/en-US/docs/Web/API/FormData.
+    """
+
+    def __init__(
+        self, form_data: "js.FormData | None | dict[str, FormDataValue]" = None
+    ):
+        if not form_data:
+            self._js_form_data = js.FormData.new()
+            return
+
+        if isinstance(form_data, dict):
+            self._js_form_data = js.FormData.new()
+            for k, v in form_data.items():
+                self._js_form_data.append(k, _py_value_to_js(v))
+            return
+
+        if _is_js_instance(form_data, "FormData"):
+            self._js_form_data = form_data
+            return
+
+        raise TypeError("Expected form_data to be a dict or an instance of FormData")
+
+    def __getitem__(self, key: str) -> FormDataValue:
+        return _js_value_to_py(self._js_form_data.get(key))
+
+    def __setitem__(self, key: str, value: FormDataValue):
+        if isinstance(value, list):
+            raise TypeError("Expected single item in arguments to FormData.__setitem__")
+        self._js_form_data.set(key, _py_value_to_js(value))
+
+    def append(self, key: str, value: FormDataValue, filename: str | None = None):
+        self._js_form_data.append(key, _py_value_to_js(value), filename)
+
+    def delete(self, key: str):
+        self._js_form_data.delete(key)
+
+    def __contains__(self, key: str) -> bool:
+        return self._js_form_data.has(key)
+
+    def values(self) -> Generator[FormDataValue, None, None]:
+        for val in self._js_form_data.values():
+            yield _js_value_to_py(val)
+
+    def keys(self) -> Generator[str, None, None]:
+        yield from self._js_form_data.keys()
+
+    def __iter__(self):
+        yield from self.keys()
+
+    def items(self) -> Generator[tuple[str, FormDataValue], None, None]:
+        for k, v in self._js_form_data.entries():
+            yield (k, _js_value_to_py(v))
+
+    def __delitem__(self, key: str):
+        self.delete(key)
+
+    def __len__(self):
+        return len(self.keys())
+
+    def get_all(self, key: str) -> list[FormDataValue]:
+        return [_js_value_to_py(x) for x in self._js_form_data.getAll(key)]
+
+    @property
+    def js_object(self) -> "js.FormData":
+        return self._js_form_data
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/py.typed"; filename="./python_modules/workers/py.typed"
+Content-Type: application/octet-stream
+
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/request.py"; filename="./python_modules/workers/request.py"
+Content-Type: application/octet-stream
+
+import json
+from http import HTTPMethod
+from typing import Any, Unpack
+
+import js
+from pyodide.ffi import JsException, JsProxy
+
+from .blob import Blob
+from .formdata import FormData
+from .types import FetchKwargs
+from .utils import (
+    _get_js_body,
+    _is_js_instance,
+    _js_headers_to_http_message,
+    _jsnull_to_none,
+    _to_js_headers,
+    _to_python_exception,
+)
+
+
+class Request:
+    def __init__(
+        self, input: "Request | str | js.Request", **other_options: Unpack[FetchKwargs]
+    ):
+        if _is_js_instance(input, "Request"):
+            if len(other_options) > 0:
+                raise ValueError(
+                    "Expected no options when constructing Request from a js.Request"
+                )
+            self._js_request = input
+            return
+
+        if "method" in other_options and isinstance(
+            other_options["method"], HTTPMethod
+        ):
+            other_options["method"] = other_options["method"].value
+
+        if "headers" in other_options:
+            other_options["headers"] = _to_js_headers(other_options["headers"])
+        body = other_options.pop("body", None)
+        with _get_js_body(body) as js_body:
+            if body is not None:
+                other_options["body"] = js_body
+            self._js_request = js.Request.new(
+                input._js_request if isinstance(input, Request) else input,
+                **other_options,
+            )
+
+    def __repr__(self):
+        return (
+            f"Request(method={self._js_request.method!r}, url={self._js_request.url!r})"
+        )
+
+    @property
+    def js_object(self) -> "js.Request":
+        return self._js_request
+
+    # TODO: expose `body` as a native Python stream in the future, follow how we define `Response`
+    @property
+    def body(self) -> "js.ReadableStream":
+        return self.js_object.body
+
+    @property
+    def body_used(self) -> bool:
+        return self.js_object.bodyUsed
+
+    @property
+    def cf(self) -> "JsProxy | None":
+        """
+        Cloudflare-specific properties about the incoming request
+        (IncomingRequestCfProperties).  Access fields via attribute
+        notation, for example ``request.cf.colo``.
+
+        Returns None when not present (for example, in the dashboard/playground
+        preview or for requests constructed without a ``cf`` value).
+
+        See https://developers.cloudflare.com/workers/runtime-apis/request/#incomingrequestcfproperties
+        """
+        return _jsnull_to_none(self.js_object.cf)
+
+    @property
+    def cache(self) -> str:
+        return self.js_object.cache
+
+    @property
+    def credentials(self) -> str:
+        return self.js_object.credentials
+
+    @property
+    def destination(self) -> str:
+        return self.js_object.destination
+
+    @property
+    def headers(self):
+        return _js_headers_to_http_message(self.js_object.headers)
+
+    @property
+    def integrity(self) -> str:
+        return self.js_object.integrity
+
+    @property
+    def is_history_navigation(self) -> bool:
+        return self.js_object.isHistoryNavigation
+
+    @property
+    def keepalive(self) -> bool:
+        return self.js_object.keepalive
+
+    @property
+    def method(self) -> HTTPMethod:
+        return HTTPMethod[self.js_object.method]
+
+    @property
+    def mode(self) -> str:
+        return self.js_object.mode
+
+    @property
+    def redirect(self) -> str:
+        return self.js_object.redirect
+
+    @property
+    def referrer(self) -> str:
+        return self.js_object.referrer
+
+    @property
+    def referrer_policy(self) -> str:
+        return self.js_object.referrerPolicy
+
+    @property
+    def url(self) -> str:
+        return self.js_object.url
+
+    def _raise_if_failed(self) -> None:
+        # TODO: https://github.com/pyodide/pyodide/blob/a53c17fd8/src/py/pyodide/http.py#L252
+        if self.body_used:
+            # TODO: Use BodyUsedError in newer Pyodide versions.
+            raise OSError("Body already used")
+
+    """
+    Instance methods defined below.
+
+    The naming of these methods should match Request's methods when possible.
+
+    TODO: AbortController support.
+    """
+
+    async def buffer(self) -> "js.ArrayBuffer":
+        # The naming of this method matches that of Response.
+        self._raise_if_failed()
+        return await self.js_object.arrayBuffer()
+
+    async def form_data(self) -> "FormData":
+        self._raise_if_failed()
+        try:
+            return FormData(await self.js_object.formData())
+        except JsException as exc:
+            raise _to_python_exception(exc) from exc
+
+    async def blob(self) -> Blob:
+        self._raise_if_failed()
+        return Blob(await self.js_object.blob())
+
+    async def bytes(self) -> bytes:
+        self._raise_if_failed()
+        return (await self.buffer()).to_bytes()
+
+    def clone(self) -> "Request":
+        if self.body_used:
+            # TODO: Use BodyUsedError in newer Pyodide versions.
+            raise OSError("Body already used")
+        return Request(
+            self.js_object.clone(),
+        )
+
+    async def json(self, **kwargs: Any) -> Any:
+        self._raise_if_failed()
+        return json.loads(await self.text(), **kwargs)
+
+    async def text(self) -> str:
+        self._raise_if_failed()
+        return await self.js_object.text()
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/response.py"; filename="./python_modules/workers/response.py"
+Content-Type: application/octet-stream
+
+import json
+from http import HTTPStatus
+from typing import Any, Never
+
+import js
+import pyodide.http
+from pyodide.ffi import JsException, JsProxy
+
+from .blob import Blob
+from .formdata import FormData
+from .types import Body, Headers
+from .utils import (
+    RESPONSE_ACCEPTED_TYPES,
+    _get_js_body,
+    _get_js_constructor_name,
+    _is_js_instance,
+    _js_headers_to_http_message,
+    _jsnull_to_none,
+    _to_js_headers,
+    _to_python_exception,
+)
+
+
+class FetchResponse(pyodide.http.FetchResponse):
+    # TODO: Consider upstreaming the `body` attribute
+    # TODO: Behind a compat flag make this return a native stream (StreamReader?), or perhaps
+    #       behind a different name, maybe `stream`?
+    @property
+    def body(self) -> "js.ReadableStream":
+        """
+        Returns the body as a JavaScript ReadableStream from the JavaScript Response instance.
+        """
+        return _jsnull_to_none(self.js_response.body)
+
+    @property
+    def js_object(self) -> "js.Response":
+        return self.js_response
+
+    @property
+    def headers(self):
+        return _js_headers_to_http_message(self.js_object.headers)
+
+    """
+    Instance methods defined below.
+
+    Some methods are implemented by `FetchResponse`, these include `buffer`
+    (replacing JavaScript's `arrayBuffer`), `bytes`, `json`, and `text`.
+
+    There are also some additional methods implemented by `FetchResponse`.
+    See https://pyodide.org/en/stable/usage/api/python-api/http.html#pyodide.http.FetchResponse
+    for details.
+    """
+
+    async def formData(self) -> "FormData":  # TODO: Remove after certain compat date.
+        return await self.form_data()
+
+    async def form_data(self) -> "FormData":
+        self._raise_if_failed()
+        try:
+            return FormData(await self.js_response.formData())
+        except JsException as exc:
+            raise _to_python_exception(exc) from exc
+
+    def replace_body(self, body: Body) -> "Response":
+        """
+        Returns a new Response object with the same options (status, headers, etc) as
+        the original but with an updated body.
+        """
+        b = body.js_object if isinstance(body, FormData) else body
+        js_resp = js.Response.new(b, self.js_response)
+        return Response(js_resp)
+
+    async def blob(self) -> "Blob":
+        self._raise_if_failed()
+        return Blob(await self.js_object.blob())
+
+    """
+    Static methods defined below. The `error` static method is not implemented as
+    it is not useful for the Workers use case.
+    """
+
+    @staticmethod
+    def redirect(url: str, status: HTTPStatus | int = HTTPStatus.FOUND):
+        code = status.value if isinstance(status, HTTPStatus) else status
+        try:
+            return js.Response.redirect(url, code)
+        except JsException as exc:
+            raise _to_python_exception(exc) from exc
+
+    @staticmethod
+    def from_json(
+        data: str | dict[str, Any] | list[Any] | JsProxy,
+        status: HTTPStatus | int = HTTPStatus.OK,
+        status_text="",
+        headers: Headers = None,
+    ) -> "Response":
+        options = Response._create_options(status, status_text, headers)
+        js_resp = None
+        try:
+            if isinstance(data, JsProxy):
+                js_resp = js.Response.json(data, **options)
+            else:
+                if "headers" not in options:
+                    options["headers"] = _to_js_headers(
+                        {"content-type": "application/json"}
+                    )
+                elif not options["headers"].has("content-type"):
+                    options["headers"].set("content-type", "application/json")
+                js_resp = js.Response.new(json.dumps(data), **options)
+        except JsException as exc:
+            raise _to_python_exception(exc) from exc
+
+        return Response(js_resp)
+
+    def json(self, *args: Never, **kwargs: Never):
+        if isinstance(self, Response):
+            return super().json()
+        # For compatibility, allow static use of Response.json() to mean Response.from_json().
+        data = self
+        return Response.from_json(data, *args, **kwargs)
+
+
+class Response(FetchResponse):
+    """
+    This class represents the response to an HTTP request, with a similar API to that of the web
+    `Response` API: https://developer.mozilla.org/en-US/docs/Web/API/Response.
+    """
+
+    def __init__(
+        self,
+        body: Body = None,
+        status: HTTPStatus | int | None = None,
+        status_text="",
+        headers: Headers = None,
+        web_socket: "js.WebSocket | None" = None,
+    ):
+        """
+        Represents the response to a request.
+
+        Based on the JS API of the same name:
+        https://developer.mozilla.org/en-US/docs/Web/API/Response/Response.
+        """
+        # Verify passed in types.
+        js_type = _get_js_constructor_name(body)
+        if js_type:
+            if js_type not in RESPONSE_ACCEPTED_TYPES:
+                raise TypeError(f"Unsupported type in Response: {js_type}")
+        elif not isinstance(body, str | FormData | bytes) and body is not None:
+            raise TypeError(f"Unsupported type in Response: {type(body).__name__}")
+
+        # Handle constructing a Response from a JS Response.
+        if _is_js_instance(body, "Response"):
+            if status is not None or len(status_text) > 0 or headers is not None:
+                raise ValueError(
+                    "Expected no options when constructing Response from a js.Response"
+                )
+            super().__init__(body.url, body)
+            return
+
+        options = self._create_options(status, status_text, headers, web_socket)
+
+        # To avoid unnecessary copies we use this context manager.
+        with _get_js_body(body) as js_body:
+            # Initialize via the FetchResponse super-class which gives us access to
+            # methods that we would ordinarily have to redeclare.
+            js_resp = js.Response.new(js_body, **options)
+        super().__init__(js_resp.url, js_resp)
+
+    def __repr__(self):
+        body = [f"status={self.status}"]
+        if self.js_object.statusText:
+            body.append(f"status_text={self.status_text!r}")
+        if "content-type" in self.headers:
+            body.append(f"content_type={self.headers['content-type']!r}")
+        if self.js_object.url:
+            body.append(f"url={self.js_object.url!r}")
+        if self.js_object.type != "default":
+            body.append(f"type={self.js_object.type!r}")
+        return f"Response({', '.join(body)})"
+
+    @staticmethod
+    def _create_options(
+        status: HTTPStatus | int | None = HTTPStatus.OK,
+        status_text="",
+        headers: Headers = None,
+        web_socket: "js.WebSocket | None" = None,
+    ):
+        options = {}
+        if status:
+            options["status"] = (
+                status.value if isinstance(status, HTTPStatus) else status
+            )
+        if status_text:
+            options["statusText"] = status_text
+        if headers:
+            options["headers"] = _to_js_headers(headers)
+        if web_socket:
+            options["webSocket"] = web_socket
+        return options
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/rpc.py"; filename="./python_modules/workers/rpc.py"
+Content-Type: application/octet-stream
+
+import datetime
+import inspect
+
+import js
+from js import Object
+from pyodide.ffi import JsProxy, create_proxy, to_js
+
+from .blob import Blob, File
+from .fetch import fetch
+from .formdata import FormData
+from .request import Request
+from .response import Response
+from .utils import (
+    _JS_PASSTHROUGH_TYPES,
+    _get_js_constructor_name,
+    _is_iterable,
+    _is_js_instance,
+    jsnull,
+)
+
+
+def _python_from_rpc_default_converter(value, convert, cache):
+    if value is jsnull:
+        return None
+
+    if not hasattr(value, "constructor"):
+        # Assume that the object doesn't need conversion as it's not a JS object.
+        return value
+
+    if value.constructor.name == "Response":
+        return Response(value)
+    elif value.constructor.name == "FormData":
+        return FormData(value)
+    elif value.constructor.name == "Blob":
+        return Blob(value)
+    elif value.constructor.name == "File":
+        return File(value)
+    elif value.constructor.name == "Request":
+        return Request(value)
+    elif value.constructor.name == "Date":
+        # TODO: Pyodide should gain support for this, we should upstream this.
+        return datetime.datetime.fromtimestamp(value.getTime() / 1000)
+    elif value.constructor.name == "Error":
+        return Exception(value.toString())
+    elif value.constructor.name == "Number":
+        return value.valueOf()
+
+    # We used to throw an error here, but since these conversions are now automatic when the default
+    # entrypoint is being used, it makes sense to be less loud about it and just pass through the
+    # JS value un-modified.
+    #
+    # This does mean that in the future we need to be careful when adding type wrappers for new
+    # types here, so if you're doing this make sure to do so behind a compat flag.
+    return value
+
+
+class JsDict(dict):
+    """
+    Python dictionary that allows attribute access to keys.
+
+    This is used to convert JS objects to Python dictionaries while maintaining
+    the ability to access keys as attributes.
+    """
+
+    def __getattr__(self, name):
+        # The limitation of this approach is that if there is a key that conflicts with a built-in
+        # method or attribute of the dict class, it will not be accessible through attribute access.
+        # But that is a reasonable trade-off for the convenience of being able to access keys as
+        # attributes.
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+    def __setattr__(self, name, value):
+        self[name] = value
+
+
+def _replace_jsnull_with_none(obj):
+    """
+    Recursively converts JS objects to Python objects.
+    """
+    if obj is jsnull:
+        return None
+    if isinstance(obj, dict):
+        return JsDict({k: _replace_jsnull_with_none(v) for k, v in obj.items()})
+    if isinstance(obj, list):
+        return [_replace_jsnull_with_none(v) for v in obj]
+    return obj
+
+
+def python_from_rpc(obj: "JsProxy"):
+    """
+    Converts JS objects like Response, Request, Blob, etc. to equivalent Python objects defined in
+    this module and also other JS objects like Map, Set, etc. to equivalent Python stdlib objects.
+
+    This method is used for Workers RPC in Python to convert JavaScript objects to Python. As such
+    it does not support serializing all JS object types.
+    """
+
+    if obj is jsnull:
+        return None
+
+    if not hasattr(obj, "constructor"):
+        return obj
+
+    if obj.constructor.name == "TestController":
+        # This object currently has no methods defined on it. If this changes we should
+        # implement a Python wrapper for it, but for now we'll just pass in None.
+        return None
+
+    result = obj.to_py(default_converter=_python_from_rpc_default_converter)
+
+    return _replace_jsnull_with_none(result)
+
+
+def _raise_on_disabled_type(value):
+    if isinstance(value, _BindingWrapper):
+        return
+
+    if callable(value) and not isinstance(value, type):
+        return
+
+    if _is_js_instance(value, "RegExp"):
+        raise TypeError(f"{value.constructor.name} cannot be sent over RPC.")
+
+    if isinstance(value, (tuple, bytearray)):
+        raise TypeError(f"{type(value)} cannot be sent over RPC.")
+
+    if inspect.isawaitable(value):
+        # The caller is expected to await the value prior to conversion.
+        raise TypeError(f"Awaitable {type(value)} cannot be sent over RPC.")
+
+    if _is_iterable(value):
+        if isinstance(value, dict):
+            for v in value.values():
+                _raise_on_disabled_type(v)
+        else:
+            for v in value:
+                _raise_on_disabled_type(v)
+
+
+def _python_to_rpc_default_converter(obj, convert, cache):
+    if obj is None:
+        return jsnull
+
+    if isinstance(obj, _BindingWrapper):
+        return obj._binding
+
+    if hasattr(obj, "js_object"):
+        return obj.js_object
+
+    if isinstance(obj, datetime.datetime):
+        # TODO: Pyodide should gain support for this, we should upstream this.
+        return js.Date.new(obj.timestamp() * 1000)
+
+    if isinstance(obj, Exception):
+        return js.Error.new(str(obj))
+
+    if callable(obj) and not isinstance(obj, type):
+        # Wrap function with create_proxy so that
+        # it doesn't get garbage collected
+        return create_proxy(obj)
+
+    _raise_on_disabled_type(obj)
+
+    return obj
+
+
+def _replace_none_with_jsnull(value):
+    if value is None:
+        return jsnull
+    if isinstance(value, dict):
+        return {k: _replace_none_with_jsnull(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_replace_none_with_jsnull(v) for v in value]
+    return value
+
+
+def python_to_rpc(value) -> JsProxy:
+    """
+    Converts Python objects defined in this module (Response, Request, etc) and native Python types
+    like Map, Set, datetime to equivalent JavaScript types.
+
+    This method is used for Workers RPC in Python to convert Python objects to JavaScript. As such
+    it does not support serializing all Python object types.
+    """
+    if value is None:
+        return jsnull
+
+    if isinstance(value, _BindingWrapper):
+        return value._binding
+
+    value = _replace_none_with_jsnull(value)
+
+    # `to_js` won't always call the default_converter, for example when a list of tuples is passed
+    _raise_on_disabled_type(value)
+
+    result = to_js(
+        value,
+        default_converter=_python_to_rpc_default_converter,
+        dict_converter=Object.fromEntries,
+    )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Binding wrappers
+# ---------------------------------------------------------------------------
+
+
+def _idempotent_new(cls, obj):
+    """Set __new__ on a class to this so cls is idempotent:
+
+    >>> a = A(x)
+    >>> b = A(a)
+    >>> assert a is b
+
+    For this to work, start the __init__ function with:
+
+    if obj is self:
+        return
+
+    to prevent double-init.
+    """
+    if isinstance(obj, cls):
+        return obj
+    return object.__new__(cls)
+
+
+class _BindingWrapper:
+    __new__ = _idempotent_new
+
+    def __init__(self, binding):
+        if binding is self:
+            return
+        self._binding = binding
+
+    @property
+    def _real_name(self):
+        js_name = _get_js_constructor_name(self._binding)
+        if not js_name:
+            # Should not happen, but just in case
+            return type(self).__name__
+        return js_name
+
+    def _should_wrap_nested_attribute(self, jsobj) -> bool:
+        if not isinstance(jsobj, JsProxy):
+            return False
+
+        # TODO: This allowlist approach is a workaround. The long-term fix is to
+        # add dedicated Python wrappers for these types in python_from_rpc so they
+        # never reach _BindingWrapper in the first place.
+        js_type = _get_js_constructor_name(jsobj)
+        return js_type and js_type not in _JS_PASSTHROUGH_TYPES
+
+    def _wrap_js_value(self, value):
+        """
+        Wrap JSProxy returned from RPC calls with a
+        proper wrapper class.
+        """
+        if not self._should_wrap_nested_attribute(value):
+            return value
+
+        # A function or RpcTarget returned over RPC arrives as a callable JsRpcStub.
+        # Boxing it in a wrapper that has __call__ allows it to be called.
+        if callable(value):
+            return _RpcStubWrapper(value)
+
+        return self.__class__(value)
+
+    def _convert_result(self, result):
+        converted = python_from_rpc(result)
+
+        # After python_from_rpc, some objects may still be JsProxy objects.
+        # We need to wrap them with _BindingWrapper (or a subclass of it) again
+        # to ensure that accessing attributes on them will be properly converted.
+        if isinstance(converted, list):
+            return [self._wrap_js_value(item) for item in converted]
+        return self._wrap_js_value(converted)
+
+    @staticmethod
+    def _convert_args(args, kwargs):
+        js_args = [python_to_rpc(arg) for arg in args]
+        js_kwargs = {k: python_to_rpc(v) for k, v in kwargs.items()}
+        return js_args, js_kwargs
+
+    def _conver_and_invoke(self, fn, args, kwargs):
+        js_args, js_kwargs = self._convert_args(args, kwargs)
+        result = fn(*js_args, **js_kwargs)
+        if hasattr(result, "then") and callable(result.then):
+
+            async def await_and_convert():
+                return self._convert_result(await result)
+
+            return await_and_convert()
+        return self._convert_result(result)
+
+    def _getattr_helper(self, name):
+        attr = getattr(self._binding, name)
+
+        if not callable(attr):
+            return self._convert_result(attr)
+
+        def wrapper(*args, **kwargs):
+            return self._conver_and_invoke(attr, args, kwargs)
+
+        return wrapper
+
+    def __getattr__(self, name):
+        result = self._getattr_helper(name)
+        setattr(self, name, result)
+        return result
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._convert_result(self._binding[key])
+        return self._convert_result(getattr(self._binding, key))
+
+    def __iter__(self):
+        binding = self._binding
+        if not hasattr(binding, "__iter__"):
+            raise TypeError(f"'{self._real_name}' object is not iterable")
+        for item in binding:
+            yield self._convert_result(item)
+
+    def __bool__(self):
+        return self._binding is not None
+
+    def __len__(self):
+        length = getattr(self._binding, "length", None)
+        # RPC object always returns true for attribute lookup,
+        # so make sure it is actually a numeric length.
+        if not isinstance(length, int):
+            raise TypeError(f"'{self._real_name}' object has no len()")
+        return length
+
+
+class _RpcStubWrapper(_BindingWrapper):
+    """
+    A function or RpcTarget received over RPC.
+
+    Calling is always allowed but the server will reject it
+    if the target turns out not to be callable.
+    """
+
+    def __call__(self, *args, **kwargs):
+        return self._conver_and_invoke(self._binding, args, kwargs)
+
+
+class _FetcherWrapper(_BindingWrapper):
+    def fetch(self, *args, **kwargs):
+        return fetch(*args, fetcher=self._binding.fetch, **kwargs)
+
+
+class _DurableObjectNamespaceWrapper:
+    def __init__(self, binding):
+        self._binding = binding
+
+    def __getattr__(self, name):
+        return getattr(self._binding, name)
+
+    def get(self, *args, **kwargs):
+        return _FetcherWrapper(self._binding.get(*args, **kwargs))
+
+    def getByName(self, *args, **kwargs):
+        return _FetcherWrapper(self._binding.getByName(*args, **kwargs))
+
+    def jurisdiction(self, *args, **kwargs):
+        return _DurableObjectNamespaceWrapper(
+            self._binding.jurisdiction(*args, **kwargs)
+        )
+
+
+class _WorkflowInstanceWrapper(_BindingWrapper):
+    # status/pause/resume/restart/terminate share their JS names and are handled by
+    # the _BindingWrapper, which already converts arguments and results.
+    # Only send_event needs the snake_case -> camelCase mapping for backward compatibility
+
+    async def send_event(self, *args, **kwargs):
+        js_args, js_kwargs = self._convert_args(args, kwargs)
+        return self._convert_result(
+            await self._binding.sendEvent(*js_args, **js_kwargs)
+        )
+
+
+class _WorkflowBindingWrapper(_BindingWrapper):
+    async def get(self, *args, **kwargs):
+        js_args, js_kwargs = self._convert_args(args, kwargs)
+        return _WorkflowInstanceWrapper(await self._binding.get(*js_args, **js_kwargs))
+
+    async def create(self, *args, **kwargs):
+        js_args, js_kwargs = self._convert_args(args, kwargs)
+        return _WorkflowInstanceWrapper(
+            await self._binding.create(*js_args, **js_kwargs)
+        )
+
+    async def create_batch(self, *args, **kwargs):
+        js_args, js_kwargs = self._convert_args(args, kwargs)
+        return [
+            _WorkflowInstanceWrapper(w)
+            for w in await self._binding.createBatch(*js_args, **js_kwargs)
+        ]
+
+
+class _EnvWrapper:
+    _BINDING_TYPES = {
+        "KvNamespace",
+        "R2Bucket",
+        "D1Database",
+        "WorkerQueue",
+        "Ai",
+        "VectorizeIndexImpl",
+        "AnalyticsEngine",
+        "AnalyticsEngineDataset",
+        "LocalAnalyticsEngineDataset",
+        "ImagesBindingImpl",
+        "HostedImagesBindingImpl",
+        "Ratelimit",
+    }
+
+    __new__ = _idempotent_new
+
+    def __init__(self, env):
+        if env is self:
+            return
+        self._env = env
+
+    def _getattr_helper(self, name):
+        binding = getattr(self._env, name)
+        if _is_js_instance(binding, "Fetcher"):
+            return _FetcherWrapper(binding)
+
+        if _is_js_instance(binding, "DurableObjectNamespace"):
+            return _DurableObjectNamespaceWrapper(binding)
+
+        if _is_js_instance(binding, "WorkflowImpl"):
+            return _WorkflowBindingWrapper(binding)
+
+        if _is_js_instance(binding, self._BINDING_TYPES):
+            return _BindingWrapper(binding)
+
+        return binding
+
+    def __getattr__(self, name):
+        result = self._getattr_helper(name)
+        setattr(self, name, result)
+        return result
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/types.py"; filename="./python_modules/workers/types.py"
+Content-Type: application/octet-stream
+
+from collections.abc import Awaitable
+from http import HTTPMethod
+from typing import Any, Protocol, TypeAlias, TypedDict
+
+import js
+from pyodide.ffi import JsBuffer
+from pyodide.http import pyfetch
+
+from .formdata import FormData
+
+
+class Context(Protocol):
+    def waitUntil(self, other: Awaitable[Any]) -> None: ...
+
+
+JSBody: TypeAlias = (
+    "js.Blob | JsBuffer | js.FormData | js.ReadableStream | js.URLSearchParams"
+)
+Body: TypeAlias = "str | FormData | JSBody"
+Headers: TypeAlias = "dict[str, str] | list[tuple[str, str]] | js.Headers"
+
+
+# https://developers.cloudflare.com/workers/runtime-apis/request/#the-cf-property-requestinitcfproperties
+class RequestInitCfProperties(TypedDict, total=False):
+    apps: bool | None
+    cacheEverything: bool | None
+    cacheKey: str | None
+    cacheTags: list[str] | None
+    cacheTtl: int
+    cacheTtlByStatus: dict[str, int]
+    image: (
+        Any | None
+    )  # TODO: https://developers.cloudflare.com/images/transform-images/transform-via-workers/
+    mirage: bool | None
+    polish: str | None
+    resolveOverride: str | None
+    scrapeShield: bool | None
+    webp: bool | None
+
+
+# This matches the Request options:
+# https://developers.cloudflare.com/workers/runtime-apis/request/#options
+class FetchKwargs(TypedDict, total=False):
+    headers: "Headers | None"
+    body: "Body | None"
+    method: HTTPMethod | None
+    redirect: str | None
+    cf: RequestInitCfProperties | None
+    fetcher: type[pyfetch] | None
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/utils.py"; filename="./python_modules/workers/utils.py"
+Content-Type: application/octet-stream
+
+import http.client
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from typing import Any
+
+import _pyodide_entrypoint_helper
+import js
+from pyodide.ffi import (
+    JsException,
+    create_proxy,
+    destroy_proxies,
+    to_js,
+)
+
+from .workflows import NonRetryableError
+
+try:
+    from pyodide.ffi import jsnull
+except ImportError:
+    jsnull = None
+
+
+RESPONSE_ACCEPTED_TYPES = {
+    # BufferSource types
+    "Blob",
+    "ArrayBuffer",
+    "TypedArray",
+    "DataView",
+    "Uint8Array",
+    "Uint8ClampedArray",
+    "Int8Array",
+    "Uint16Array",
+    "Int16Array",
+    "Uint32Array",
+    "Int32Array",
+    "Float16Array",
+    "Float32Array",
+    "Float64Array",
+    "BigInt64Array",
+    "BigUint64Array",
+    # Other types
+    "FormData",
+    "ReadableStream",
+    "URLSearchParams",
+    "Response",
+}
+
+# JS built-in types that should NOT be wrapped in _BindingWrapper.
+# These have their own Python-side semantics (e.g. passed directly to Response())
+# and wrapping them breaks property access like `.constructor.name`.
+_JS_PASSTHROUGH_TYPES = RESPONSE_ACCEPTED_TYPES | {
+    "Headers",
+}
+
+
+@contextmanager
+def _get_js_body(body):
+    from .formdata import FormData
+
+    if isinstance(body, bytes):
+        proxy_bytes = create_proxy(body)
+        proxy_buffer = proxy_bytes.getBuffer()
+        try:
+            yield proxy_buffer.data
+            return
+        finally:
+            proxy_buffer.release()
+            proxy_bytes.destroy()
+    if isinstance(body, FormData):
+        yield body.js_object
+        return
+    yield body
+
+
+def _jsnull_to_none(x):
+    if x is jsnull:
+        return None
+    return x
+
+
+def import_from_javascript(module_name: str) -> Any:
+    """
+    Import a JavaScript ES module from Python.
+
+    Args:
+        module_name: The name of the module to import. This can be a module name or a path.
+
+    Returns:
+        The imported module object.
+
+    Example:
+        cloudflare_workers = import_from_javascript("cloudflare:workers")
+        env = cloudflare_workers.env
+
+    Note:
+        Behind the scenes import_from_javascript uses JSPI to do imports but that means we need an
+        async context. To enable importing cloudflare:workers and cloudflare:sockets in the global
+        scope we specifically imported them in the global scope and exposed them here.
+    """
+    # Special case for global scope available modules
+    # JSPI won't work in the global scope in 0.26.0a2 so we need modules importable in the global
+    # scope to be imported beforehand.
+    if module_name == "cloudflare:workers":
+        return _pyodide_entrypoint_helper.cloudflareWorkersModule
+    elif module_name == "cloudflare:sockets":
+        return _pyodide_entrypoint_helper.cloudflareSocketsModule
+
+    try:
+        from pyodide.ffi import run_sync
+
+        # Call the JavaScript import function
+        return run_sync(_pyodide_entrypoint_helper.doAnImport(module_name))
+    except JsException as e:
+        raise ImportError(f"Failed to import '{module_name}': {e}") from e
+    except RuntimeError as e:
+        if e.args[0] == "No suspender":
+            raise ImportError(
+                f"Failed to import '{module_name}': Only 'cloudflare:workers' and 'cloudflare:sockets' are available in the global scope."
+            ) from e
+        raise
+    except ImportError as e:
+        if e.args[0].startswith("cannot import name 'run_sync' from 'pyodide.ffi'"):
+            raise ImportError(
+                f"Failed to import '{module_name}': Only 'cloudflare:workers' and 'cloudflare:sockets' are available until the next python runtime version."
+            ) from e
+        raise
+
+
+# Directory, relative to the worker bundle root, that `pywrangler sync` vendors Python packages
+# into. wrangler registers `.js`/`.mjs` files found under `python_modules/workers/` as ES modules
+# (everything else in `python_modules/` is opaque data), which is what lets them be imported via
+# `import_from_javascript`.
+_SDK_JS_MODULE_PREFIX = "python_modules/workers/"
+
+
+async def import_sdk_javascript_module_async(name: str) -> Any:
+    """
+    Asynchronous function to import an sdk js module
+
+    This does not rely on JSPI, so it also works with Pyodide 0.26.0a2.
+    """
+    try:
+        return await _pyodide_entrypoint_helper.doAnImport(_SDK_JS_MODULE_PREFIX + name)
+    except JsException as e:
+        raise ImportError(f"Failed to import '{name}': {e}") from e
+
+
+@contextmanager
+def patch_env(
+    d: dict[str, Any] | Sequence[tuple[str, Any]] | None = None, **kwds: dict[str, Any]
+) -> Iterator[None]:
+    if d:
+        kwds = dict(d) | kwds
+    yield from _pyodide_entrypoint_helper.patch_env_helper(to_js(kwds))
+
+
+def _to_python_exception(exc: JsException) -> Exception:
+    if exc.name == "RangeError":
+        return ValueError(exc.message)
+    elif exc.name == "TypeError":
+        return TypeError(exc.message)
+    else:
+        return exc
+
+
+_NON_RETRYABLE_ERROR_NAME = "NonRetryableError"
+
+
+def _from_js_error(exc: JsException) -> Exception:
+    # convert into Python exception after a full round trip
+    # Python - JS - Python
+    message = exc.message or ""
+
+    # A NonRetryableError raised inside a workflow step is translated by the
+    # runtime into a JS error named "NonRetryableError" before it reaches the
+    # Workflows engine, which is how the engine knows not to retry the step.
+    # When the engine rethrows it back to us the name either survives, or is
+    # folded into the message as a prefix.
+    if getattr(exc, "name", None) == _NON_RETRYABLE_ERROR_NAME:
+        return NonRetryableError(message)
+    if message == _NON_RETRYABLE_ERROR_NAME:
+        return NonRetryableError()
+    if message.startswith(_NON_RETRYABLE_ERROR_NAME + ": "):
+        return NonRetryableError(message[len(_NON_RETRYABLE_ERROR_NAME) + 2 :])
+
+    # A Python exception that escaped to JS is a Pyodide `PythonError` whose
+    # message is the formatted traceback. Depending on how it was serialized
+    # over RPC it either keeps its name or arrives as a plain `Error` with
+    # "PythonError: " folded into the message
+    if getattr(exc, "name", None) != "PythonError" and not message.startswith(
+        "PythonError"
+    ):
+        return _to_python_exception(exc)
+
+    # extract the Python exception type from the last line of the traceback. The
+    # message may have been stripped down to just "PythonError" when crossing an RPC
+    # boundary, in which case there is no traceback to inspect.
+    lines = message.rstrip().split("\n")
+    if len(lines) < 2:
+        return _to_python_exception(exc)
+    error_message_last_line = lines[-1]
+    if error_message_last_line.startswith("TypeError"):
+        return TypeError(error_message_last_line)
+    elif error_message_last_line.startswith("ValueError"):
+        return ValueError(error_message_last_line)
+    elif error_message_last_line.startswith("workers.workflows.NonRetryableError"):
+        return NonRetryableError(error_message_last_line)
+    else:
+        return _to_python_exception(exc)
+
+
+@contextmanager
+def _manage_pyproxies():
+    proxies = js.Array.new()
+    try:
+        yield proxies
+    finally:
+        destroy_proxies(proxies)
+
+
+def _is_js_instance(val, js_cls_names: str | set[str]):
+    if not hasattr(val, "constructor"):
+        return False
+    name = val.constructor.name
+    if isinstance(js_cls_names, set):
+        return name in js_cls_names
+    return name == js_cls_names
+
+
+try:
+    import _cloudflare_compat_flags
+except ImportError:
+    _cloudflare_compat_flags = object()
+
+
+def get_compat_flag(flag: str) -> bool:
+    return getattr(_cloudflare_compat_flags, flag, False)
+
+
+def _to_js_headers(headers):
+    if isinstance(headers, list):
+        # We should have a list[tuple[str, str]]
+        return js.Headers.new(headers)
+    elif isinstance(headers, dict):
+        return js.Headers.new(headers.items())
+    elif _is_js_instance(headers, "Headers"):
+        return headers
+    else:
+        raise TypeError("Received unexpected type for headers argument")
+
+
+class HTTPMessageMapping(http.client.HTTPMessage, Mapping):
+    pass
+
+
+def _js_headers_to_http_message(
+    js_headers: dict[str, str],
+):
+    # Newer Pyodide versions already expose headers as an http.client.HTTPMessage,
+    # in which case there is nothing to convert.
+    if isinstance(js_headers, HTTPMessageMapping):
+        return js_headers
+
+    result = HTTPMessageMapping()
+    if not get_compat_flag("python_request_headers_preserve_commas"):
+        for key, val in js_headers:
+            result[key] = val.strip()
+
+        return result
+
+    # With the exception of Set-Cookie, duplicate headers can and are combined with a comma
+    # in the JS Headers API. We do the same when returning the headers to Python.
+    #
+    # See https://httpwg.org/specs/rfc9110.html#rfc.section.5.3.
+    set_cookie_headers = js_headers.getSetCookie()
+    if set_cookie_headers:
+        for value in set_cookie_headers:
+            result.add_header("Set-Cookie", value.strip())
+
+    for key, val in js_headers:
+        if key.lower() == "set-cookie":
+            continue
+        result.add_header(key, val.strip())
+
+    return result
+
+
+def _get_js_constructor_name(obj) -> str | None:
+    if hasattr(obj, "constructor"):
+        return obj.constructor.name
+    return None
+
+
+def _supports_buffer_protocol(o):
+    try:
+        # memoryview used only for testing type; 'with' releases the view instantly
+        with memoryview(o):
+            return True
+    except TypeError:
+        return False
+
+
+def _is_iterable(obj):
+    if isinstance(obj, (str, bytes)):
+        return False
+    try:
+        iter(obj)
+    except TypeError:
+        return False
+    else:
+        return True
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/workflows.js"; filename="./python_modules/workers/workflows.js"
+Content-Type: application/javascript+module
+
+// JavaScript helpers for Python Workflows
+
+const NON_RETRYABLE_ERROR_NAME = "NonRetryableError";
+
+function isPythonError(e) {
+  return (
+    e instanceof Error &&
+    e.constructor?.name === "PythonError" &&
+    typeof e.type === "string"
+  );
+}
+
+// Extract the message the user passed to the Python exception from the
+// traceback stored in `PythonError.message`.
+//
+// The last non-empty line of a formatted traceback is
+// `<qualified.ExceptionType>: <message>`, or just `<qualified.ExceptionType>`
+// when the exception was raised without a message. For example, given
+//
+//   Traceback (most recent call last):
+//     File "/session/metadata/worker.py", line 19, in non_retryable
+//       raise NonRetryableError("do not retry")
+//   workers.workflows.NonRetryableError: do not retry
+//
+// this returns "do not retry", and given
+//
+//   Traceback (most recent call last):
+//     File "/session/metadata/worker.py", line 34, in no_message
+//       raise NonRetryableError()
+//   workers.workflows.NonRetryableError
+//
+// it returns "".
+function pythonExceptionMessage(e) {
+  const lines = e.message.split("\n").filter((line) => line.trim() !== "");
+  const last = lines.at(-1) ?? "";
+  const sep = last.indexOf(": ");
+  return sep === -1 ? "" : last.slice(sep + 2);
+}
+
+// Wraps a Python step callback passed to `WorkflowStep.do()`.
+//
+// If the error thrown is a Python NonRetryable error, translate it into a JS
+// error that the engine will recognize as non retryable. Leave other errors
+// alone.
+export function wrapWorkflowStepCallback(pyCallback) {
+  return async function (...args) {
+    try {
+      return await pyCallback(...args);
+    } catch (e) {
+      if (isPythonError(e) && e.type === NON_RETRYABLE_ERROR_NAME) {
+        const err = new Error(pythonExceptionMessage(e));
+        err.name = NON_RETRYABLE_ERROR_NAME;
+        throw err;
+      }
+      throw e;
+    }
+  };
+}
+
+// Wraps the `WorkflowStep` RPC stub passed to a Python
+// `WorkflowEntrypoint.run()` so that the callback given to `step.do()` goes
+// through `wrapWorkflowStepCallback`.
+//
+// Because the wrapped `do` returns the stub's own promise, a Python callback
+// passed to it keeps exactly the lifetime it would have had without the
+// wrapper.
+export function wrapWorkflowStep(step) {
+  // RPC stubs are callable, so `typeof step` is 'function'.
+  if (
+    step === null ||
+    (typeof step !== "object" && typeof step !== "function")
+  ) {
+    return step;
+  }
+  return new Proxy(step, {
+    apply(target, thisArg, args) {
+      return Reflect.apply(target, thisArg, args);
+    },
+    get(target, prop) {
+      if (prop !== "do") {
+        return Reflect.get(target, prop);
+      }
+      return function (name, ...rest) {
+        const args = rest.map((arg) =>
+          typeof arg === "function" ? wrapWorkflowStepCallback(arg) : arg
+        );
+        return target.do(name, ...args);
+      };
+    },
+  });
+}
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/workflows.py"; filename="./python_modules/workers/workflows.py"
+Content-Type: application/octet-stream
+
+"""
+Workflow-specific classes and exceptions for the workers module.
+"""
+
+
+class NonRetryableError(Exception):
+    """
+    A marker exception used to signal that a workflow step should not be retried.
+    This is a special exception used by workflows.
+    """
+
+    pass
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers/wsgi.py"; filename="./python_modules/workers/wsgi.py"
+Content-Type: application/octet-stream
+
+import io
+import logging
+import sys
+from collections.abc import Callable, Iterator
+from typing import Any
+from urllib.parse import unquote, urlsplit
+
+import js
+
+from workers import Context, Request, WorkerEntrypoint
+
+logger = logging.getLogger("wsgi")
+NULL_BODY_STATUSES = frozenset({101, 103, 204, 205, 304})
+
+
+def _wsgi_native_string(value: str) -> str:
+    """Convert a (possibly non-ASCII) Python ``str`` into a WSGI "native string".
+
+    PEP 3333 requires that strings handed to a WSGI application use the
+    bytes-in-unicode convention: the string contains characters whose code
+    points correspond to the raw bytes (i.e. it is decoded with ``latin-1``).
+    Frameworks such as Werkzeug/Flask undo this by re-encoding with ``latin-1``
+    and decoding with ``utf-8``.
+    """
+    return value.encode("utf-8").decode("latin-1")
+
+
+class _ReadableStreamInput(io.RawIOBase):
+    """A blocking, file-like ``wsgi.input`` backed by an async ``ReadableStream``.
+
+    WSGI apps read the request body synchronously, but the Workers body is an
+    async ``ReadableStream``. We bridge the two lazily using Pyodide's
+    ``run_sync`` (JSPI stack switching): each ``readinto`` pulls only as much
+    from the stream as the application asks for, so the body is never fully
+    buffered up-front.
+
+    This only works while a JSPI suspender is on the stack, which is the case
+    here because the WSGI app runs synchronously inside the async ``fetch``
+    handler.
+    """
+
+    def __init__(self, js_body: "js.ReadableStream") -> None:
+        self._reader = js_body.getReader()
+        self._buf = bytearray()
+        self._eof = False
+
+    def readable(self) -> bool:
+        return True
+
+    def _fill(self) -> None:
+        from pyodide.ffi import run_sync
+
+        while not self._buf and not self._eof:
+            result = run_sync(self._reader.read())
+            if result.done:
+                self._eof = True
+            elif result.value is not None:
+                self._buf.extend(result.value.to_bytes())
+
+    def readinto(self, b) -> int:
+        self._fill()
+        if not self._buf:
+            return 0
+        n = min(len(b), len(self._buf))
+        b[:n] = self._buf[:n]
+        del self._buf[:n]
+        return n
+
+    def close(self) -> None:
+        if not self.closed:
+            self._release_reader()
+        super().close()
+
+    def __del__(self):
+        self.close()
+
+    def _release_reader(self) -> None:
+        """Discard the request body and release the underlying reader.
+
+        If the body was fully consumed we just release the lock. Otherwise we
+        ``cancel()`` the reader to drop the remainder; ``cancel()`` returns a JS
+        promise that the runtime settles on its own, so we don't await it.
+        """
+        from pyodide.ffi import run_sync
+
+        try:
+            if self._eof:
+                self._reader.releaseLock()
+            else:
+                run_sync(self._reader.cancel())
+        except Exception:  # noqa: BLE001 - best-effort cleanup
+            pass
+
+
+def _make_wsgi_input(req: "Request | js.Request") -> "io.BufferedIOBase | None":
+    """Build a lazy, stream-backed ``wsgi.input`` if the runtime supports it.
+
+    Returns ``None`` when lazy streaming is unavailable, signalling the caller
+    to fall back to pre-buffering the body.
+    """
+    if not req.body:
+        return io.BytesIO(b"")
+    # `req.body` is a JS ReadableStream for both workers.Request and js.Request.
+    return io.BufferedReader(_ReadableStreamInput(req.body))
+
+
+async def _read_body(req: "Request | js.Request") -> bytes:
+    """Read the entire request body into memory (fallback when streaming is off)."""
+    if not req.body:
+        return b""
+    chunks = [data.to_bytes() async for data in req.body]
+    return b"".join(chunks)
+
+
+def build_environ(
+    req: "Request | js.Request",
+    env: dict[str, Any],
+    body: "bytes | io.IOBase",
+) -> dict[str, Any]:
+    # `body` may be raw bytes or a file-like `wsgi.input` stream
+    if isinstance(body, (bytes, bytearray)):
+        wsgi_input: Any = io.BytesIO(body)
+        content_length_fallback: int | None = len(body)
+    else:
+        wsgi_input = body
+        content_length_fallback = None
+
+    req_headers = req.headers.items() if isinstance(req, Request) else req.headers
+
+    url = urlsplit(req.url)
+    scheme = url.scheme
+    if not scheme:
+        raise ValueError(f"Request URL is not absolute: {req.url!r}")
+
+    # PATH_INFO is the URL-decoded path expressed as a WSGI native string.
+    path_info = _wsgi_native_string(unquote(url.path or "/"))
+    # QUERY_STRING stays percent-encoded per the spec.
+    query_string = url.query
+
+    server_port = str(url.port) if url.port else ("443" if scheme == "https" else "80")
+
+    method = req.method
+    # `workers.Request.method` is an `http.HTTPMethod` (a str subclass); coerce
+    # to a plain string so frameworks comparing against literals behave.
+    method = str(method.value) if hasattr(method, "value") else str(method)
+
+    environ: dict[str, Any] = {
+        "REQUEST_METHOD": method,
+        "SCRIPT_NAME": "",
+        "PATH_INFO": path_info,
+        "QUERY_STRING": query_string,
+        # A request URL is always absolute here, so hostname is populated; keep a
+        # fallback since WSGI requires SERVER_NAME to be non-empty.
+        "SERVER_NAME": url.hostname,
+        "SERVER_PORT": server_port,
+        "SERVER_PROTOCOL": "HTTP/1.1",
+        "wsgi.version": (1, 0),
+        "wsgi.url_scheme": scheme,
+        "wsgi.input": wsgi_input,
+        "wsgi.errors": sys.stderr,
+        "wsgi.multithread": False,
+        "wsgi.multiprocess": False,
+        "wsgi.run_once": False,
+        # Cloudflare-specific extension so handlers can reach bindings, mirroring
+        # the `scope["env"]` convention used by asgi.py.
+        "workers.env": env,
+    }
+
+    for key, value in req_headers:
+        name = key.upper().replace("-", "_")
+        if name in ("CONTENT_TYPE", "CONTENT_LENGTH"):
+            environ[name] = value
+        else:
+            http_name = "HTTP_" + name
+            if http_name in environ:
+                # Repeated headers are folded into a single comma-separated value.
+                environ[http_name] += "," + value
+            else:
+                environ[http_name] = value
+
+    # Only synthesize CONTENT_LENGTH when the body was pre-buffered; when
+    # streaming lazily we don't know the length without consuming it.
+    if "CONTENT_LENGTH" not in environ and content_length_fallback:
+        environ["CONTENT_LENGTH"] = str(content_length_fallback)
+
+    return environ
+
+
+def _to_js_uint8array(chunk: bytes) -> "js.Uint8Array":
+    """Copy Python ``bytes`` into a standalone, JS-owned ``Uint8Array``.
+
+    A copy (rather than a view over the WASM heap) is required because
+    ``ReadableStreamDefaultController.enqueue`` keeps the chunk by reference in
+    the stream's internal queue until the consumer reads it later, by which
+    point ``chunk`` has been released. ``to_js`` copies buffer data out of the
+    heap into a fresh ``ArrayBuffer`` (pyodide's ``python2js_buffer``), so its
+    result stays valid.
+    """
+    from pyodide.ffi import to_js
+
+    return to_js(chunk)
+
+
+def _close_iterable(iterable: Any) -> None:
+    # PEP 3333: if the iterable has a close() method, the server must call it.
+    close = getattr(iterable, "close", None)
+    if close is not None:
+        close()
+
+
+# Sentinel marking exhaustion of the response body iterator.
+_END = object()
+
+
+def _make_streaming_response(
+    status: str,
+    headers: "list[tuple[str, str]]",
+    chunks: "Iterator[bytes]",
+    on_close: "Callable[[], None]",
+) -> js.Response:
+    """Build a ``js.Response`` whose body is pulled lazily from *chunks*.
+
+    Uses a ``ReadableStream`` with a synchronous, pull-based source so response
+    bytes are produced on demand as the client reads, instead of buffering the
+    whole body in memory. ``on_close`` runs exactly once when the stream is
+    exhausted, errored, or cancelled.
+    """
+    from js import Headers as JsHeaders
+    from js import ReadableStream, Response
+    from pyodide.ffi import create_proxy
+
+    # WSGI status is e.g. "200 OK"; split into code + reason phrase.
+    code_str, _, reason = status.partition(" ")
+    code = int(code_str)
+    options: dict[str, Any] = {"status": code}
+    if reason:
+        options["statusText"] = reason
+
+    js_headers = JsHeaders.new()
+    for key, value in headers:
+        # `append` (not `set`) preserves repeated headers such as Set-Cookie.
+        js_headers.append(key, value)
+    options["headers"] = js_headers
+
+    if code in NULL_BODY_STATUSES:
+        # 101/103/204/205/304 must not carry a body per the Fetch spec.
+        # https://fetch.spec.whatwg.org/#null-body-status
+        on_close()
+        return Response.new(None, **options)
+
+    proxies: list[Any] = []
+    done = False
+
+    def cleanup() -> None:
+        nonlocal done
+        if done:
+            return
+        done = True
+        try:
+            on_close()
+        finally:
+            for proxy in proxies:
+                proxy.destroy()
+
+    # Make proxies async so that it is possible to stack switch inside them.
+    @create_proxy
+    async def pull(controller: Any) -> None:
+        try:
+            chunk = next(chunks, _END)
+        except Exception as exc:  # noqa: BLE001 - forward app errors to the stream
+            logger.exception("Exception while streaming WSGI response body")
+            cleanup()
+            controller.error(str(exc))
+            return
+        if chunk is _END:
+            controller.close()
+            cleanup()
+            return
+        controller.enqueue(_to_js_uint8array(chunk))
+
+    @create_proxy
+    async def cancel(_reason: Any = None) -> None:
+        cleanup()
+
+    proxies = [pull, cancel]
+    return Response.new(ReadableStream.new(pull=pull, cancel=cancel), **options)
+
+
+def process_request(
+    app: Any,
+    req: "Request | js.Request",
+    env: Any,
+    body: "bytes | io.IOBase",
+) -> js.Response:
+    environ = build_environ(req, env, body)
+
+    response_state: dict[str, Any] = {"status": None, "headers": None}
+    # Output from the (rarely used) legacy `write()` callable. Modern frameworks
+    # (Flask, Werkzeug, Django) return an iterable instead; when they do use
+    # write(), that output is emitted before the iterable's chunks.
+    write_chunks: list[bytes] = []
+
+    def write(chunk: bytes) -> None:
+        if response_state["status"] is None:
+            raise AssertionError("write() called before start_response()")
+        if chunk:
+            write_chunks.append(chunk)
+
+    def start_response(status, response_headers, exc_info=None):
+        if exc_info is not None:
+            try:
+                if response_state["status"] is not None:
+                    # Headers were already sent; re-raise the original error.
+                    raise exc_info[1].with_traceback(exc_info[2])
+            finally:
+                exc_info = None
+        elif response_state["status"] is not None:
+            raise AssertionError("start_response() called more than once")
+
+        response_state["status"] = status
+        response_state["headers"] = response_headers
+        return write
+
+    result = app(environ, start_response)
+    result_iter = iter(result)
+
+    def close_all() -> None:
+        _close_iterable(result)
+        try:
+            environ["wsgi.input"].close()
+        except Exception:  # noqa: BLE001 - best-effort cleanup
+            logger.exception("Failed to close wsgi.input")
+
+    # WSGI apps must call start_response before yielding the first body chunk,
+    # but some defer it until the first non-empty chunk is produced. Pull that
+    # chunk now so status/headers are known before we construct the Response.
+    try:
+        first_chunk: Any = _END
+        for chunk in result_iter:
+            if chunk:
+                first_chunk = chunk
+                break
+    except Exception:
+        close_all()
+        raise
+
+    if response_state["status"] is None:
+        close_all()
+        raise RuntimeError("The WSGI application did not call start_response()")
+
+    def body_chunks() -> "Iterator[bytes]":
+        yield from write_chunks
+        if first_chunk is not _END:
+            yield first_chunk
+        for chunk in result_iter:
+            if chunk:
+                yield chunk
+
+    return _make_streaming_response(
+        response_state["status"], response_state["headers"], body_chunks(), close_all
+    )
+
+
+async def fetch(
+    app: Any,
+    req: "Request | js.Request",
+    env: Any,
+    # Accepted for parity with asgi.fetch; WSGI has no use for it.
+    ctx: Context | None = None,
+) -> js.Response:
+    logger.debug("WSGI request: %s %s", req.method, req.url)
+    # Prefer lazily streaming the body through `wsgi.input` (no full buffering);
+    # fall back to pre-buffering when `run_sync`/JSPI isn't available.
+    body: bytes | io.IOBase | None = _make_wsgi_input(req)
+    if body is None:
+        body = await _read_body(req)
+    try:
+        return process_request(app, req, env, body)
+    except Exception:
+        logger.exception("WSGI request failed")
+        raise
+
+
+def entrypoint(app: Any) -> type[WorkerEntrypoint]:
+    """Create the default Worker entrypoint for a WSGI application."""
+
+    class Default(WorkerEntrypoint):
+        async def fetch(self, request):
+            return await fetch(app, request, self.env)
+
+    return Default
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers_runtime_sdk-1.9.2.dist-info/INSTALLER"; filename="./python_modules/workers_runtime_sdk-1.9.2.dist-info/INSTALLER"
+Content-Type: application/octet-stream
+
+uv
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers_runtime_sdk-1.9.2.dist-info/METADATA"; filename="./python_modules/workers_runtime_sdk-1.9.2.dist-info/METADATA"
+Content-Type: application/octet-stream
+
+Metadata-Version: 2.5
+Name: workers-runtime-sdk
+Version: 1.9.2
+Summary: Python SDK for Cloudflare Workers
+Project-URL: Homepage, https://github.com/cloudflare/workers-py
+Project-URL: Bug Tracker, https://github.com/cloudflare/workers-py/issues
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+
+# workers-runtime-sdk
+
+Runtime SDK for Python Cloudflare Workers.
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers_runtime_sdk-1.9.2.dist-info/RECORD"; filename="./python_modules/workers_runtime_sdk-1.9.2.dist-info/RECORD"
+Content-Type: application/octet-stream
+
+_cloudflare_compat_flags.pyi,sha256=xvA4GFtXkDbK6rIv4GMZ_4WYo--45cOvP7kuNcaehFk,131
+_pyodide_entrypoint_helper.pyi,sha256=WbDYGJQbNnFIFDlrVIeHeEukU-HuAn33e9wShldLkyU,264
+_workers_sdk_entropy_import_context.py,sha256=YEBA577651kmE2n-SJh8iOlpcow2agkpaTz2BlnhSms,7113
+_workers_sdk_package_patches.py,sha256=Xbsukr-l2_SBWRJ1aErQ7eoGo4sqDFFDfHWSbWE2WX4,1868
+_workers_sdk_patch_loader.pth,sha256=lTY3O3PXGtu03qdoLPGlqtSp0RIChHJCnbmceloDmLY,33
+_workers_sdk_patch_loader.py,sha256=TygDci5ljg_MAKdVliDikOv0xMWG4DdWeEnjn2gX3CQ,683
+asgi.py,sha256=kau0kFV0ZD-PXsf8TNJXXG1cCSkLhD8o1ljjgvei9bQ,148
+workers/__init__.py,sha256=fDxbzDwspZQji5bJoKqU7y5F51i92bYIw8dHsRyPbiU,1446
+workers/asgi.py,sha256=9gYlCyCHx7__zcroqd2V8ICVSCDkV-ky2qd4A8T9010,17891
+workers/blob.py,sha256=pggk_3X3fAZhrsP1HcSg-IepuicNPYQdSHgOMfRgSi4,4767
+workers/entrypoints.py,sha256=B9w3HPaOXr1Gg6jEbPUVZUeYxTIKM_LgFMWIsV6Jrkk,12987
+workers/fetch.py,sha256=HwLSL5O4R_Xh0NPelslju1nRgK3hCM_CdbjOGMMB33Q,1416
+workers/formdata.py,sha256=VMTvwRt8lKd0pguU_glDyONLIlaORECedKRiSiEBmv8,3025
+workers/py.typed,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+workers/request.py,sha256=KvsMblv5FJXUj2zskTWKSIKFS5QF4G7La5E1KCoAecU,5270
+workers/response.py,sha256=qHKCrf9RlgfSujpopuevStZqK5VQfZ3fp56nI5Ma24A,7128
+workers/rpc.py,sha256=6i5Oi5vMKE7cz0wnhiGPoEm2hPrRFOLUGstLALvVtV0,14182
+workers/types.py,sha256=EnqP7x-QyRz0SdinTbKWzO37SOVPfKioo2tVHmQDNJw,1468
+workers/utils.py,sha256=ci2IbW-XDmdnOijVz-NwbHLtMB5kPpVLGFdAA6W1w4I,9708
+workers/workflows.js,sha256=eRIrON3i5ZdkbLzJmJpbeJIfHORrP7UfYl7cFUc7IqE,2898
+workers/workflows.py,sha256=k3n99BbaVtJAA2kWWlG3Lag_ckrqiTrHhShWMdCYA78,270
+workers/wsgi.py,sha256=ZHONvyJqdkoQhb7676j2nIruR6GnrCKsM0WDFesz6X8,13426
+workers_runtime_sdk-1.9.2.dist-info/INSTALLER,sha256=5hhM4Q4mYTT9z6QB6PGpUAW81PGNFrYrdXMj4oM_6ak,2
+workers_runtime_sdk-1.9.2.dist-info/METADATA,sha256=LTekmXin60eOwxtpb1RH9lwNHQ_fotqUBmcePFdZBUY,521
+workers_runtime_sdk-1.9.2.dist-info/RECORD,,
+workers_runtime_sdk-1.9.2.dist-info/REQUESTED,sha256=47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,0
+workers_runtime_sdk-1.9.2.dist-info/WHEEL,sha256=W3fkpkm7-wf9vBI5Z-7s0eWkeM-spu78I8Neb98DeEg,87
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers_runtime_sdk-1.9.2.dist-info/REQUESTED"; filename="./python_modules/workers_runtime_sdk-1.9.2.dist-info/REQUESTED"
+Content-Type: application/octet-stream
+
+
+------formdata-undici-097087528603
+Content-Disposition: form-data; name="./python_modules/workers_runtime_sdk-1.9.2.dist-info/WHEEL"; filename="./python_modules/workers_runtime_sdk-1.9.2.dist-info/WHEEL"
+Content-Type: application/octet-stream
+
+Wheel-Version: 1.0
+Generator: hatchling 1.32.4
+Root-Is-Purelib: true
+Tag: py3-none-any
+
+------formdata-undici-097087528603--

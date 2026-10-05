@@ -1497,6 +1497,36 @@
         "requestMediaType": "json"
       },
       {
+        "id": "DELETE /accounts/{account_id}/workers/workers/{worker_id}",
+        "method": "DELETE",
+        "path": "/accounts/{account_id}/workers/workers/{worker_id}",
+        "operationId": "deleteWorker",
+        "status": "supported",
+        "source": "cloudflare-openapi",
+        "operationSha256": "55465f1dede51549995cd46be18a9dfa4ebb9ce080c555bf0780937a0c4c7245",
+        "requestMediaType": "none"
+      },
+      {
+        "id": "GET /accounts/{account_id}/workers/workers/{worker_id}/versions",
+        "method": "GET",
+        "path": "/accounts/{account_id}/workers/workers/{worker_id}/versions",
+        "operationId": "listWorkerVersions",
+        "status": "supported",
+        "source": "cloudflare-openapi",
+        "operationSha256": "89bb76b59bfec49458949f7cf933610ce3a35b1e8ac4f8dbaf5421549564c341",
+        "requestMediaType": "none"
+      },
+      {
+        "id": "GET /accounts/{account_id}/workers/workers/{worker_id}/versions/{version_id}",
+        "method": "GET",
+        "path": "/accounts/{account_id}/workers/workers/{worker_id}/versions/{version_id}",
+        "operationId": "getWorkerVersion",
+        "status": "supported",
+        "source": "cloudflare-openapi",
+        "operationSha256": "e210e42a96c685d7ecab9405c610b4a764c089a548cfa621bc6e038db1e1950c",
+        "requestMediaType": "none"
+      },
+      {
         "id": "POST /accounts/{account_id}/workers/assets/upload/{manifest_hash}",
         "method": "POST",
         "path": "/accounts/{account_id}/workers/assets/upload/{manifest_hash}",
@@ -2402,996 +2432,459 @@
     ],
     "deviations": ["OC-OBSERVABILITY-001"]
   },
-  "wrangler": {
-    "version": "4.143.0",
-    "configSchemaSha256": "a0555d08790e27a35dad1e03976b39a11e160f7578e181f1277333c42ee161c5",
+  "cf": {
+    "version": "1.0.0-beta.12",
+    "configSchemaSha256": "ec075764a142b17af1fde221da27ac299c83146264ac976158186bfeb838bce3",
     "fields": [
-      {
-        "id": "$schema",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "env",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "durable_objects",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
       {
         "id": "name",
         "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
-        "id": "account_id",
+        "id": "compatibilityDate",
         "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
-        "id": "compatibility_date",
+        "id": "compatibilityFlags",
         "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "compatibility_flags",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "main",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "find_additional_modules",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "preserve_file_names",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "base_dir",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "workers_dev",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "preview_urls",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "routes",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "route",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "tsconfig",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "jsx_factory",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "jsx_fragment",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "migrations",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "exports",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "triggers",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "limits",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "rules",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "build",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "no_bundle",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "minify",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "keep_names",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "first_party_worker",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "logfwdr",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "logpush",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "upload_source_maps",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "placement",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
         "id": "assets",
         "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
-        "id": "observability",
+        "id": "domains",
         "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
-        "id": "access",
+        "id": "triggers",
+        "status": "supported",
+        "source": "cf-config-schema"
+      },
+      {
+        "id": "tailConsumers",
         "status": "unsupported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
         "id": "cache",
         "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
-        "id": "compliance_region",
+        "id": "placement",
+        "status": "supported",
+        "source": "cf-config-schema"
+      },
+      {
+        "id": "limits",
+        "status": "supported",
+        "source": "cf-config-schema"
+      },
+      {
+        "id": "logpush",
         "status": "unsupported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
-        "id": "python_modules",
+        "id": "observability",
+        "status": "supported",
+        "source": "cf-config-schema"
+      },
+      {
+        "id": "workersDev",
+        "status": "supported",
+        "source": "cf-config-schema"
+      },
+      {
+        "id": "previewUrls",
+        "status": "supported",
+        "source": "cf-config-schema"
+      },
+      {
+        "id": "firstPartyWorker",
         "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "previews",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "define",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "vars",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "secrets",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "workflows",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "cloudchamber",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "containers",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "kv_namespaces",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "send_email",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "queues",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "connect",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "r2_buckets",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "d1_databases",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "vectorize",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "ai_search_namespaces",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "ai_search",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "agent_memory",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "hyperdrive",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "services",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "analytics_engine_datasets",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "browser",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "ai",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "images",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "media",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "stream",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "version_metadata",
-        "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
         "id": "unsafe",
         "status": "unsupported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
-        "id": "mtls_certificates",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "tail_consumers",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "streaming_tail_consumers",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "dispatch_namespaces",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "pipelines",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "secrets_store_secrets",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "artifacts",
+        "id": "env",
         "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
-        "id": "unsafe_hello_world",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "flagship",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "ratelimits",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "worker_loaders",
+        "id": "exports",
         "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
-        "id": "vpc_services",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "vpc_networks",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "pages_build_output_dir",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "send_metrics",
+        "id": "entrypoint",
         "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "dependencies_instrumentation",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "dev",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "site",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "wasm_modules",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "text_blobs",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "data_blobs",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "alias",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "keep_vars",
-        "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "addresses",
-        "status": "unsupported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
         "id": "observability.logs",
         "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
         "id": "observability.traces",
         "status": "unsupported",
-        "source": "wrangler-config-schema",
+        "source": "cf-config-schema",
         "stage": "P7"
       },
       {
-        "id": "limits.cpu_ms",
+        "id": "limits.cpuMs",
         "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       },
       {
         "id": "limits.subrequests",
         "status": "supported",
-        "source": "wrangler-config-schema"
-      },
-      {
-        "id": "usage_model",
-        "status": "unsupported",
-        "source": "pinned-schema-absence",
-        "stage": "P8",
-        "constraint": "wrangler@4.143.0 config-schema.json has no usage_model property"
-      },
-      {
-        "id": "worker_loaders[].binding",
-        "status": "supported",
-        "source": "wrangler-config-schema"
+        "source": "cf-config-schema"
       }
     ],
     "bindings": [
       {
         "id": "plain_text",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "json",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "secret_text",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "kv_namespace",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "r2_bucket",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "d1",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "vectorize",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "ai_search_namespace",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "ai_search",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "ai",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "durable_object_namespace",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "queue",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "workflow",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "service",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "images",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "version_metadata",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "assets",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "worker_loader",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "artifacts",
         "status": "supported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "browser",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "hyperdrive",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "analytics_engine",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "dispatch_namespace",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "mtls_certificate",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "ratelimit",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "pipeline",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "secrets_store_secret",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "send_email",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "service_environment",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       },
       {
         "id": "unsafe",
         "status": "unsupported",
-        "source": "wrangler-multipart"
+        "source": "cf-multipart"
       }
     ],
     "commands": [
       {
-        "id": "whoami",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
         "id": "deploy",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "versions upload",
+        "id": "workers delete",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "versions list",
+        "id": "workers versions create",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "versions view",
+        "id": "workers versions list",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "versions deploy",
+        "id": "workers versions get",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "deployments list",
+        "id": "workers deployments create",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "deployments status",
+        "id": "workers deployments list",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "rollback",
+        "id": "workers secrets update",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "secret put",
+        "id": "workers secrets list",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "secret list",
+        "id": "workers secrets delete",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "secret delete",
+        "id": "workers secrets bulk",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "secret bulk",
+        "id": "kv namespaces create",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "kv namespace create",
+        "id": "kv namespaces list",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "kv namespace list",
+        "id": "kv namespaces delete",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "kv namespace delete",
+        "id": "kv keys put",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "kv key put",
+        "id": "kv keys get",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "kv key get",
+        "id": "kv keys list",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "kv key list",
+        "id": "kv keys delete",
         "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "kv key delete",
-        "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
         "id": "d1 create",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
         "id": "d1 list",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "d1 info",
+        "id": "d1 get",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "d1 execute",
+        "id": "d1 query",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
         "id": "d1 migrations apply",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
         "id": "d1 delete",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "r2 bucket create",
+        "id": "r2 buckets create",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "r2 bucket list",
+        "id": "r2 buckets list",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "r2 bucket delete",
+        "id": "r2 buckets delete",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "r2 object put",
+        "id": "r2 objects put",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "r2 object get",
+        "id": "r2 objects get",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "r2 object delete",
+        "id": "r2 objects delete",
         "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize create",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize list",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize get",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize delete",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize insert",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize upsert",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize query",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize get-vectors",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize delete-vectors",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize info",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize create-metadata-index",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize list-metadata-index",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "vectorize delete-metadata-index",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search namespace create",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search namespace list",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search namespace get",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search namespace update",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search namespace delete",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search create",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search list",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search get",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search update",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search delete",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search stats",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search search",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "ai-search jobs",
-        "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
         "id": "queues create",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
         "id": "queues list",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
         "id": "queues delete",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "workflows",
+        "id": "workflows list",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "tail",
+        "id": "workflows get",
         "status": "supported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       },
       {
-        "id": "artifacts namespaces list",
+        "id": "workflows delete",
         "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "artifacts namespaces get",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "artifacts repos create",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "artifacts repos list",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "artifacts repos get",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "artifacts repos delete",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "artifacts repos issue-token",
-        "status": "supported",
-        "source": "wrangler-cli"
-      },
-      {
-        "id": "dev --remote",
-        "status": "unsupported",
-        "source": "wrangler-cli"
+        "source": "cf-cli"
       }
     ]
   },
@@ -42798,7 +42291,7 @@
           ],
           "runtime_cases": [
             "p0-2::resource_limits_recovery::w2_resource_limits_protect_neighbors_and_recover_a_wedged_generation",
-            "p6-wrangler-resources::w2_wrangler_limits_settings_clone_and_restart"
+            "p6-cf-resources::w2_cf_limits_settings_clone_and_restart"
           ],
           "deviations": []
         },
@@ -42820,7 +42313,7 @@
           ],
           "runtime_cases": [
             "p0-2::resource_limits_recovery::w2_resource_limits_protect_neighbors_and_recover_a_wedged_generation",
-            "p6-wrangler-resources::w2_wrangler_limits_settings_clone_and_restart"
+            "p6-cf-resources::w2_cf_limits_settings_clone_and_restart"
           ],
           "deviations": []
         },
@@ -42841,7 +42334,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": ["OC-WKR-LIMIT-001"]
         },
@@ -42862,7 +42355,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": ["OC-WKR-LIMIT-001"]
         },
@@ -42883,7 +42376,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -42904,7 +42397,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -42925,7 +42418,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -42946,7 +42439,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -42967,7 +42460,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -42988,7 +42481,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -43009,7 +42502,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -43047,7 +42540,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -43068,7 +42561,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -43089,7 +42582,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -43110,7 +42603,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -43132,7 +42625,7 @@
           ],
           "runtime_cases": [
             "p0-2::resource_limits_recovery::w2_resource_limits_protect_neighbors_and_recover_a_wedged_generation",
-            "p6-wrangler-resources::w2_wrangler_limits_settings_clone_and_restart"
+            "p6-cf-resources::w2_cf_limits_settings_clone_and_restart"
           ],
           "deviations": []
         },
@@ -43153,7 +42646,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -43174,7 +42667,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -43212,7 +42705,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         },
@@ -43233,7 +42726,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": ["OC-WKR-LIMIT-001"]
         },
@@ -43254,7 +42747,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": ["OC-WKR-LIMIT-001"]
         },
@@ -43276,7 +42769,7 @@
           ],
           "runtime_cases": [
             "p0-2::resource_limits_recovery::w2_resource_limits_protect_neighbors_and_recover_a_wedged_generation",
-            "p6-wrangler-resources::w2_wrangler_limits_settings_clone_and_restart"
+            "p6-cf-resources::w2_cf_limits_settings_clone_and_restart"
           ],
           "deviations": []
         },
@@ -43297,7 +42790,7 @@
             "ts::test/conformance/fixtures/dynamic-loader-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
+            "p6-cf-resources::worker_loader::worker_loader_native_binding_versions_delete_and_restart"
           ],
           "deviations": []
         }
@@ -56269,7 +55762,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56290,7 +55783,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56311,7 +55804,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56332,7 +55825,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56353,7 +55846,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56374,7 +55867,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56395,7 +55888,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56416,7 +55909,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56437,7 +55930,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56458,7 +55951,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56479,7 +55972,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56500,7 +55993,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56521,7 +56014,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56542,7 +56035,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56563,7 +56056,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56584,7 +56077,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56605,7 +56098,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56626,7 +56119,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56647,7 +56140,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56668,7 +56161,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56689,7 +56182,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56710,7 +56203,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56731,7 +56224,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56752,7 +56245,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56773,7 +56266,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56794,7 +56287,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56815,7 +56308,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56836,7 +56329,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56857,7 +56350,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56878,7 +56371,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56899,7 +56392,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56920,7 +56413,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56941,7 +56434,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56962,7 +56455,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -56983,7 +56476,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57004,7 +56497,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57025,7 +56518,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57046,7 +56539,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57067,7 +56560,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57088,7 +56581,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57109,7 +56602,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57130,7 +56623,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57151,7 +56644,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57172,7 +56665,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57193,7 +56686,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57214,7 +56707,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57235,7 +56728,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57256,7 +56749,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57277,7 +56770,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57298,7 +56791,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57319,7 +56812,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57340,7 +56833,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         },
@@ -57361,7 +56854,7 @@
             "ts::test/conformance/fixtures/artifacts-surface.ts"
           ],
           "runtime_cases": [
-            "p6-wrangler-resources::fixed_wrangler_resource_commands_use_live_v4_authorities"
+            "p6-cf-resources::fixed_cf_resource_commands_use_live_v4_authorities"
           ],
           "deviations": []
         }

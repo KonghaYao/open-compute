@@ -284,7 +284,7 @@ pub(super) async fn run_loaded(
         | Command::UpdateCheck
         | Command::UpgradePreflight
         | Command::Target { .. }
-        | Command::Wrangler { .. }
+        | Command::Cf { .. }
         | Command::Config {
             command: ConfigCommand::Init { .. },
         } => {

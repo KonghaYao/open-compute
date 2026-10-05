@@ -26,7 +26,7 @@ pub enum QueueContentType {
     Text,
     /// Opaque owned bytes.
     Bytes,
-    /// Day1 structured-clone `v8` body encoded by the queue-v8 codec.
+    /// Unmodified native V8 bytes validated by the pinned workerd Queue codec.
     V8,
 }
 

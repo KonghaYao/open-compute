@@ -95,6 +95,10 @@ fn main() {
         }
         "timeout" => hang(),
         "secret_logs" => {
+            eprintln!("PythonError: Traceback (most recent call last):");
+            eprintln!("  File \"/session/metadata/main.py\", line 38, in fetch");
+            eprintln!("RuntimeError: unregistered-tenant-secret");
+            println!("tenant source and unregistered-tenant-secret");
             eprintln!("token={}", cfg.token);
             eprintln!("Authorization: Bearer {}", cfg.token);
             eprintln!("x-open-compute-internal-token: {}", cfg.token);

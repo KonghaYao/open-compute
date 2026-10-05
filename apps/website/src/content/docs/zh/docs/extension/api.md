@@ -1,6 +1,6 @@
 ---
 title: "扩展 API"
-description: "Operator 配置、extension.toml、Wrangler services 与 props，以及仅 facade 可见的 HOST 端口。"
+description: "Operator 配置、extension.toml、cf services 与 props，以及仅 facade 可见的 HOST 端口。"
 ---
 
 本页是本地原生扩展的 operator 与 Worker 合同。它不是 Cloudflare 托管 Workers API。
@@ -40,9 +40,9 @@ executable = "native/files-provider"
 
 没有 cwd fallback、网络下载、动态库加载、version 字段或热更新。错误会使启动失败。
 
-## Wrangler `services` + `props`
+## cf `bindings.worker` + `props`
 
-用户 Worker 继续使用标准 Service Binding 字段。不要发明 Wrangler `extensions` 数组或新的 `type`。
+用户 Worker 继续使用标准 Service Binding 字段。不要发明 cf `extensions` 数组或新的 `type`。
 
 ```json
 {

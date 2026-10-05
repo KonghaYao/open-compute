@@ -93,7 +93,7 @@ checkout、artifact、日志或 package；该流程不声明 npm provenance。�
 - 不公开 generic raw request、完整 official namespace、unsupported sibling/leaf method 或不可达 resource types；
 - build、daemon startup 和 client construction 均不联网更新 schema、SDK 或 package；
 - vendor operation 成为已验证的官方 API 后直接迁移到 official resource/method，不保留重复调用路径；
-- Dashboard、Wrangler 和 tenant bindings 不以该 SDK 作为新的权限边界。
+- Dashboard、cf 和 tenant bindings 不以该 SDK 作为新的权限边界。
 
 ## 5. 验收证据
 

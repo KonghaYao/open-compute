@@ -23,23 +23,23 @@ export default {
 } satisfies ExportedHandler<{ DB: D1Database }>;
 ```
 
-在 `wrangler.jsonc` 中绑定已存在的 database：
+在 `cloudflare.config.ts` 中绑定已存在的 database：
 
-```json
-{
-  "name": "d1-app",
-  "main": "src/index.ts",
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "app",
-      "database_id": "<d1-database-id>"
-    }
-  ]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "d1-app",
+    entrypoint: "src/index.ts",
+    env: {
+      DB: bindings.d1({ id: "<d1-database-id>", name: "app" }),
+    },
+  },
+});
 ```
 
-`database_id` 必须指向平台上已有的 database。语法见[绑定](/zh/docs/workers/configuration/bindings/)。类型生成使用项目内 Wrangler，真实 target 部署使用 `ocd wrangler deploy`。
+`database_id` 必须指向平台上已有的 database。语法见[绑定](/zh/docs/workers/configuration/bindings/)。类型生成使用项目内 cf，真实 target 部署使用 `ocd cf deploy`。
 
 ## 兼容性
 

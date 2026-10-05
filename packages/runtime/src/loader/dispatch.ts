@@ -1,14 +1,15 @@
 import { routeDefaultHttp } from "../assets/router.js";
 import { observedEntrypoint } from "../observability/collector.js";
-import { decodeDurableValue } from "../serialization/codec.js";
+import { queueMetrics } from "../queues/metrics.js";
+import type { QueueWireCodec } from "../queues/native-adapter.js";
 import {
   SERVICE_WEBSOCKET_HANDOFF_HEADER,
   serviceWebSocketHandoffHandles,
 } from "../services/facade.js";
 import { tenantEnv, validationEnv } from "./bindings.js";
 import { assertEnvelope } from "./envelope.js";
-import { bytes, modulesFor } from "./modules.js";
-import type { LoaderEnv, RuntimeModule } from "./protocol.js";
+import { modulesFor } from "./modules.js";
+import type { LoaderEnv } from "./protocol.js";
 import {
   assembleOnce,
   bindingError,
@@ -23,9 +24,17 @@ import {
 } from "./shared.js";
 
 const MAX_QUEUE_MESSAGES = 100;
-const MAX_QUEUE_BODY_BYTES = 128 * 1024;
-const MAX_QUEUE_BATCH_BYTES = 256 * 1024;
+const MAX_QUEUE_BODY_BYTES = 128000;
+const MAX_QUEUE_BATCH_BYTES = 256000;
 const SCHEDULED_WORKFLOW_BINDING = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const SERVICE_ERRORS = [
+  ["SERVICE_BINDING_DENIED", 403],
+  ["SERVICE_TARGET_NOT_READY", 503],
+  ["SERVICE_UNAVAILABLE", 503],
+  ["SERVICE_ENTRYPOINT_NOT_FOUND", 404],
+  ["SERVICE_LIMIT_EXCEEDED", 429],
+  ["SERVICE_TIMEOUT", 504],
+] as const;
 
 function stableError(
   code: string,
@@ -58,17 +67,10 @@ function stableError(
 
 function classify(
   error: unknown,
+  validation: boolean,
 ): [string, number, { code: number; outcome: string }?] {
   const message = String(error instanceof Error ? error.message : error);
-  const service = [
-    ["SERVICE_BINDING_DENIED", 403],
-    ["SERVICE_TARGET_NOT_READY", 503],
-    ["SERVICE_UNAVAILABLE", 503],
-    ["SERVICE_ENTRYPOINT_NOT_FOUND", 404],
-    ["SERVICE_LIMIT_EXCEEDED", 429],
-    ["SERVICE_TIMEOUT", 504],
-  ] as const;
-  for (const [code, status] of service) {
+  for (const [code, status] of SERVICE_ERRORS) {
     if (message.includes(code)) return [code, status];
   }
   if (/entrypoint|no such entrypoint|was not found/i.test(message)) {
@@ -96,6 +98,7 @@ function classify(
     ];
   }
   if (
+    validation &&
     /compatibility (?:date|flag|flags)|syntax|parse|unexpected|module|wasm|initializ|startup/i.test(
       message,
     )
@@ -137,14 +140,13 @@ export async function handleDispatch(
       request.headers.get("x-open-compute-entrypoint") || undefined;
     const envelope = assertEnvelope(request, validation, entrypoint);
     const internalToken = request.headers.get(TOKEN_HEADER) || "";
+    const scope = validation
+      ? probe || entrypoint
+        ? "probe"
+        : "validation"
+      : "runtime";
     // Resolve and verify on every path, including a warm WorkerLoader key.
-    const snapshot = await resolveSnapshot(
-      env,
-      envelope,
-      validation,
-      probe || Boolean(entrypoint),
-      internalToken,
-    );
+    const snapshot = await resolveSnapshot(env, envelope, scope, internalToken);
     const runtimeKey = validation
       ? `${envelope.runtimeKey}/validation`
       : envelope.runtimeKey;
@@ -197,13 +199,14 @@ export async function handleDispatch(
       const code = await assembleOnce(runtimeKey, async () => {
         const built = modulesFor(snapshot, validation, entrypoint);
         return {
-          ...snapshotWorkerCode(snapshot),
+          ...(await snapshotWorkerCode(env, snapshot, scope, internalToken)),
           mainModule: built.mainModule,
           modules: built.modules,
           ...(validation
-            ? { env: validationEnv(snapshot, env.WORKER_LOADER_FACTORY) }
+            ? validationEnv(snapshot, built.policy, env.WORKER_LOADER_FACTORY)
             : tenantEnv(
                 snapshot,
+                built.policy,
                 ctx,
                 env.WORKER_LOADER_FACTORY,
                 versionId,
@@ -278,19 +281,20 @@ export async function handleDispatch(
     const stable = stableCode(error);
     if (stable) {
       const status =
-        stable === "VERSION_NOT_READY"
+        SERVICE_ERRORS.find(([code]) => code === stable)?.[1] ??
+        (stable === "VERSION_NOT_READY"
           ? 409
           : stable === "ARTIFACT_UNAVAILABLE"
             ? 503
             : stable === "BUNDLE_RUNTIME_INVALID"
               ? 422
-              : 500;
+              : 500);
       const response = stableError(stable, status, requestId);
       if (executionStarted)
         response.headers.set("x-open-compute-execution-started", "1");
       return response;
     }
-    const [code, status, cloudflare] = classify(error);
+    const [code, status, cloudflare] = classify(error, validation);
     const response =
       validation && code === "RESOURCE_LIMIT_EXCEEDED"
         ? stableError("BUNDLE_RUNTIME_INVALID", 422, requestId, {
@@ -304,40 +308,56 @@ export async function handleDispatch(
   }
 }
 
-function customEventMessageBody(message: Record<string, unknown>) {
+function customEventMessageBody(
+  message: Record<string, unknown>,
+  codec: QueueWireCodec,
+) {
   if (
     !message ||
     typeof message !== "object" ||
-    typeof message.bodyBase64 !== "string"
+    typeof message.bodyBase64 !== "string" ||
+    message.bodyBase64.length > Math.ceil(MAX_QUEUE_BODY_BYTES / 3) * 4
   ) {
     throw bindingError("QUEUE_DISPOSITION_INVALID");
   }
-  const raw = bytes(message.bodyBase64);
-  if (raw.byteLength > MAX_QUEUE_BODY_BYTES) {
+  try {
+    const binary = atob(message.bodyBase64);
+    if (btoa(binary) !== message.bodyBase64) {
+      throw bindingError("QUEUE_DISPOSITION_INVALID");
+    }
+    const raw = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    if (raw.byteLength > MAX_QUEUE_BODY_BYTES) {
+      throw bindingError("QUEUE_DISPOSITION_INVALID");
+    }
+    let body: unknown;
+    switch (message.contentType) {
+      case "json":
+        body = JSON.parse(
+          new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(
+            raw,
+          ),
+        );
+        break;
+      case "text":
+        body = new TextDecoder("utf-8", {
+          fatal: true,
+          ignoreBOM: false,
+        }).decode(raw);
+        break;
+      case "bytes":
+        body = raw;
+        break;
+      case "v8":
+        body = codec.decodeV8(raw);
+        if (body === undefined) throw bindingError("QUEUE_DISPOSITION_INVALID");
+        break;
+      default:
+        throw bindingError("QUEUE_DISPOSITION_INVALID");
+    }
+    return { body, byteLength: raw.byteLength };
+  } catch {
     throw bindingError("QUEUE_DISPOSITION_INVALID");
   }
-  let body: unknown;
-  switch (message.contentType) {
-    case "json":
-      body = JSON.parse(
-        new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(raw),
-      );
-      break;
-    case "text":
-      body = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(
-        raw,
-      );
-      break;
-    case "bytes":
-      body = raw;
-      break;
-    case "v8":
-      body = decodeDurableValue(raw, "queue-v8");
-      break;
-    default:
-      throw bindingError("QUEUE_DISPOSITION_INVALID");
-  }
-  return { body, byteLength: raw.byteLength };
 }
 
 function queueBatchMetadata(input: unknown): {
@@ -353,33 +373,11 @@ function queueBatchMetadata(input: unknown): {
   if (!isRecord(input) || !isRecord(input.metrics)) {
     throw bindingError("QUEUE_DISPOSITION_INVALID");
   }
-  const metrics = input.metrics;
-  if (
-    typeof metrics.backlogCount !== "number" ||
-    !Number.isSafeInteger(metrics.backlogCount) ||
-    metrics.backlogCount < 0 ||
-    typeof metrics.backlogBytes !== "number" ||
-    !Number.isSafeInteger(metrics.backlogBytes) ||
-    metrics.backlogBytes < 0
-  ) {
+  try {
+    return { metrics: queueMetrics(input.metrics) };
+  } catch {
     throw bindingError("QUEUE_DISPOSITION_INVALID");
   }
-  const oldest = metrics.oldestMessageTimestampMs;
-  const output: {
-    backlogCount: number;
-    backlogBytes: number;
-    oldestMessageTimestamp?: Date;
-  } = {
-    backlogCount: metrics.backlogCount,
-    backlogBytes: metrics.backlogBytes,
-  };
-  if (oldest !== undefined && oldest !== null && oldest !== 0) {
-    if (typeof oldest !== "number" || !Number.isSafeInteger(oldest)) {
-      throw bindingError("QUEUE_DISPOSITION_INVALID");
-    }
-    output.oldestMessageTimestamp = new Date(oldest);
-  }
-  return { metrics: output };
 }
 
 async function customEventTarget(
@@ -394,8 +392,7 @@ async function customEventTarget(
   const snapshot = await resolveSnapshot(
     env,
     envelope,
-    false,
-    Boolean(entrypoint),
+    "runtime",
     internalToken,
   );
   const runtimeKey = envelope.runtimeKey;
@@ -406,11 +403,12 @@ async function customEventTarget(
       const built = modulesFor(snapshot, false, entrypoint);
       const versionId = envelope.loaderKey.split("/")[2]!;
       const code = {
-        ...snapshotWorkerCode(snapshot),
+        ...(await snapshotWorkerCode(env, snapshot, "runtime", internalToken)),
         mainModule: built.mainModule,
         modules: built.modules,
         ...tenantEnv(
           snapshot,
+          built.policy,
           ctx,
           env.WORKER_LOADER_FACTORY,
           versionId,
@@ -442,7 +440,9 @@ export async function handleQueue(
   ctx: ExecutionContext,
 ) {
   try {
-    const payload: unknown = await request.json();
+    const payload: unknown = await request.json().catch(() => {
+      throw bindingError("QUEUE_DISPOSITION_INVALID");
+    });
     if (
       !isRecord(payload) ||
       typeof payload.queueName !== "string" ||
@@ -469,23 +469,27 @@ export async function handleQueue(
       ) {
         throw bindingError("QUEUE_DISPOSITION_INVALID");
       }
-      const decoded = customEventMessageBody(message);
+      const decoded = customEventMessageBody(message, env.QUEUE_WIRE_CODEC);
       totalBytes += decoded.byteLength;
       if (totalBytes > MAX_QUEUE_BATCH_BYTES) {
         throw bindingError("QUEUE_DISPOSITION_INVALID");
       }
+      const timestamp = new Date(message.timestampMs);
+      if (!Number.isFinite(timestamp.getTime()))
+        throw bindingError("QUEUE_DISPOSITION_INVALID");
       return {
         id: message.id,
-        timestamp: new Date(message.timestampMs),
+        timestamp,
         attempts: message.attempts,
         body: decoded.body,
       };
     });
+    const metadata = queueBatchMetadata(payload.metadata);
     const loaded = await customEventTarget(request, env, ctx);
     const result = await loaded.target.queue(
       payload.queueName,
       messages,
-      queueBatchMetadata(payload.metadata),
+      metadata,
     );
     const response = Response.json(result);
     response.headers.set(
@@ -509,7 +513,9 @@ export async function handleScheduled(
   ctx: ExecutionContext,
 ) {
   try {
-    const payload: unknown = await request.json();
+    const payload: unknown = await request.json().catch(() => {
+      throw bindingError("CRON_EXPRESSION_INVALID");
+    });
     if (!isRecord(payload)) throw bindingError("CRON_EXPRESSION_INVALID");
     const workflowBindings: unknown = payload.workflowBindings;
     if (
@@ -535,6 +541,9 @@ export async function handleScheduled(
     ) {
       throw bindingError("CRON_EXPRESSION_INVALID");
     }
+    const scheduledTime = new Date(payload.scheduledTimeMs);
+    if (!Number.isFinite(scheduledTime.getTime()))
+      throw bindingError("CRON_EXPRESSION_INVALID");
     const loaded = await customEventTarget(request, env, ctx);
     const target = loaded.snapshot.scheduledTargets.find(
       (value) => value.cron === payload.cron,
@@ -550,7 +559,7 @@ export async function handleScheduled(
       throw bindingError("CRON_ACTIVATION_STALE");
     }
     const scheduledEvent = {
-      scheduledTime: new Date(payload.scheduledTimeMs),
+      scheduledTime,
       cron: payload.cron,
     };
     const result = await loaded.target.scheduled(scheduledEvent);
@@ -570,22 +579,6 @@ export async function handleScheduled(
   }
 }
 
-function moduleExportsDurableObjectClass(
-  modules: readonly RuntimeModule[],
-  className: string,
-): boolean {
-  const patterns = [
-    new RegExp(`export\\s+class\\s+${className}\\b`),
-    new RegExp(`export\\s+(?:const|let|var)\\s+${className}\\s*=\\s*class\\b`),
-    new RegExp(`export\\s*\\{[^}]*\\b${className}\\b[^}]*\\}`),
-  ];
-  return modules.some((module) => {
-    if (module.type !== "esModule") return false;
-    const source = new TextDecoder().decode(bytes(module.bytesBase64));
-    return patterns.some((pattern) => pattern.test(source));
-  });
-}
-
 export async function validateDurableObjectClass(
   request: Request,
   env: LoaderEnv,
@@ -596,27 +589,37 @@ export async function validateDurableObjectClass(
   const snapshot = await resolveSnapshot(
     env,
     envelope,
-    true,
-    false,
+    "validation",
     internalToken,
   );
-  if (!moduleExportsDurableObjectClass(snapshot.modules, className)) {
-    return stableError("DO_CLASS_NOT_FOUND", 422, null);
-  }
-  const built = modulesFor(snapshot, false, className, true);
-  const code = {
-    ...snapshotWorkerCode(snapshot),
-    mainModule: built.mainModule,
-    modules: built.modules,
-    env: validationEnv(snapshot, env.WORKER_LOADER_FACTORY),
-    globalOutbound: null,
-  };
   try {
     const loaded = env.LOADER.get(
       `validate-do/${envelope.runtimeKey}`,
-      () => code,
+      async () => {
+        const built = modulesFor(snapshot, true, className, true);
+        return {
+          ...(await snapshotWorkerCode(
+            env,
+            snapshot,
+            "validation",
+            internalToken,
+          )),
+          mainModule: built.mainModule,
+          modules: built.modules,
+          ...validationEnv(snapshot, built.policy, env.WORKER_LOADER_FACTORY),
+          globalOutbound: null,
+        };
+      },
     );
-    loaded.getDurableObjectClass(className);
+    // WorkerLoader class handles are lazy; a host probe must complete loading.
+    const response = await loaded
+      .getEntrypoint()
+      .fetch("https://validation.invalid/");
+    if (
+      response.status !== 200 ||
+      (await response.text()) !== "open-compute-validation-v1"
+    )
+      throw new Error("validation nonce mismatch");
     return new Response(null, { status: 204 });
   } catch {
     return stableError("DO_CLASS_NOT_FOUND", 422, null);

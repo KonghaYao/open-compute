@@ -74,7 +74,7 @@ function fixtureTreeDigest(): string {
   )
     .toString("utf8")
     .split("\0")
-    .filter(Boolean)
+    .filter((name) => name.length > 0 && existsSync(join(ROOT, name)))
     .sort();
   for (const name of names) {
     const path = join(ROOT, name);

@@ -17,6 +17,7 @@ import {
   validateSocketAuthorityWire,
   type SocketAuthorityWire,
 } from "../sockets/tunnel.js";
+import { sanitizeDoError } from "./errors.js";
 import {
   assertOrder,
   assertRpcMember,
@@ -51,6 +52,10 @@ export class DoHost extends DurableObject<DoHostEnv> {
   readonly #facetVersions = new Map<string, number>();
   readonly #orderStates = new Map<string, OrderState>();
   readonly #pendingConnects = new Map<string, PendingConnect>();
+  readonly #facetConnectWaiters = new Map<
+    string,
+    (pending: PendingConnect | undefined) => void
+  >();
   #nativeFacets: NativeHostFacets;
   constructor(ctx: DurableObjectState, env: DoHostEnv) {
     super(ctx, env);
@@ -61,7 +66,9 @@ export class DoHost extends DurableObject<DoHostEnv> {
         route_generation INTEGER NOT NULL,
         version_id TEXT NOT NULL,
         object_generation INTEGER NOT NULL,
-        data_format_version INTEGER NOT NULL
+        data_format_version INTEGER NOT NULL,
+        object_name TEXT,
+        jurisdiction TEXT
       )
     `);
     this.ctx.storage.sql.exec(`
@@ -75,7 +82,7 @@ export class DoHost extends DurableObject<DoHostEnv> {
   #meta() {
     const rows = this.ctx.storage.sql
       .exec(
-        "SELECT route_generation, version_id, object_generation, data_format_version " +
+        "SELECT route_generation, version_id, object_generation, data_format_version, object_name, jurisdiction " +
           "FROM open_compute_host_meta WHERE singleton = 1",
       )
       .toArray();
@@ -189,8 +196,7 @@ export class DoHost extends DurableObject<DoHostEnv> {
     const snapshot = await resolveSnapshot(
       this.env,
       envelope,
-      false,
-      false,
+      "runtime",
       this.env.INTERNAL_TOKEN,
     );
     if (snapshot.routeGeneration !== authority.routeGeneration) {
@@ -199,57 +205,63 @@ export class DoHost extends DurableObject<DoHostEnv> {
     const observabilityGeneration =
       snapshot.observability?.observabilityGeneration ?? 0;
     envelope.runtimeKey += `/o/${observabilityGeneration}`;
-    const built = modulesFor(snapshot, false, entrypoint, true);
-    const code = {
-      ...snapshotWorkerCode(snapshot),
-      mainModule: built.mainModule,
-      modules: built.modules,
-      ...tenantEnv(
-        snapshot,
-        this.ctx,
-        this.env.WORKER_LOADER_FACTORY,
-        authority.versionId,
-        doPolicy(this.env),
-        true,
-        entrypoint,
-      ),
-      globalOutbound: tenantGlobalOutbound(this.env, false),
-    };
-    Object.defineProperties(code.openComputePrivateEnv, {
-      __OPEN_COMPUTE_PRIVATE_ALARM_INDEX: {
-        value: this.ctx.exports.AlarmIndex({
-          props: {
-            namespaceResourceId: authority.namespaceResourceId,
-            objectId: authority.objectId,
-            objectGeneration: authority.objectGeneration,
-          },
-        }),
-        enumerable: true,
-      },
-      __OPEN_COMPUTE_PRIVATE_FACET_MANAGER: {
-        value: this.env.DO_HOST.get(this.ctx.id),
-        enumerable: true,
-      },
-      __OPEN_COMPUTE_PRIVATE_NATIVE_FACETS: {
-        value: this.#nativeFacets,
-        enumerable: true,
-      },
-      __OPEN_COMPUTE_PRIVATE_FACET_AUTHORITY: {
-        value: Object.freeze({ ...authority }),
-        enumerable: true,
-      },
-      __OPEN_COMPUTE_PRIVATE_FACET_PATH: {
-        value: Object.freeze([...logicalPath]),
-        enumerable: true,
-      },
-      __OPEN_COMPUTE_PRIVATE_FACET_PROPS: {
-        value: tenantProps,
-        enumerable: true,
-      },
+    const loaded = this.env.LOADER.get(envelope.runtimeKey, async () => {
+      const built = modulesFor(snapshot, false, entrypoint, true);
+      const code = {
+        ...(await snapshotWorkerCode(
+          this.env,
+          snapshot,
+          "runtime",
+          this.env.INTERNAL_TOKEN,
+        )),
+        mainModule: built.mainModule,
+        modules: built.modules,
+        ...tenantEnv(
+          snapshot,
+          built.policy,
+          this.ctx,
+          this.env.WORKER_LOADER_FACTORY,
+          authority.versionId,
+          doPolicy(this.env),
+          true,
+          entrypoint,
+        ),
+        globalOutbound: tenantGlobalOutbound(this.env, false),
+      };
+      Object.defineProperties(code.openComputePrivateEnv, {
+        __OPEN_COMPUTE_PRIVATE_ALARM_INDEX: {
+          value: this.ctx.exports.AlarmIndex({
+            props: {
+              namespaceResourceId: authority.namespaceResourceId,
+              objectId: authority.objectId,
+              objectGeneration: authority.objectGeneration,
+            },
+          }),
+          enumerable: true,
+        },
+        __OPEN_COMPUTE_PRIVATE_FACET_MANAGER: {
+          value: this.env.DO_HOST.get(this.ctx.id),
+          enumerable: true,
+        },
+        __OPEN_COMPUTE_PRIVATE_NATIVE_FACETS: {
+          value: this.#nativeFacets,
+          enumerable: true,
+        },
+        __OPEN_COMPUTE_PRIVATE_FACET_AUTHORITY: {
+          value: Object.freeze({ ...authority }),
+          enumerable: true,
+        },
+        __OPEN_COMPUTE_PRIVATE_FACET_PATH: {
+          value: Object.freeze([...logicalPath]),
+          enumerable: true,
+        },
+        __OPEN_COMPUTE_PRIVATE_FACET_PROPS: {
+          value: tenantProps,
+          enumerable: true,
+        },
+      });
+      return collectableWorkerCode(code, this.ctx, snapshot.observability);
     });
-    const loaded = this.env.LOADER.get(envelope.runtimeKey, () =>
-      collectableWorkerCode(code, this.ctx, snapshot.observability),
-    );
     return loaded.getDurableObjectClass<LoadedDurableObject>(entrypoint);
   }
 
@@ -333,16 +345,22 @@ export class DoHost extends DurableObject<DoHostEnv> {
     const cls = await this.#loadedClass(authority, authority.className, [], {});
     const facet = this.ctx.facets.get("tenant", () => ({
       class: cls,
-      id: authority.objectId,
+      id: this.env.NATIVE_DO_ID.create(
+        authority.objectId,
+        authority.objectName,
+        authority.jurisdiction,
+      ),
     }));
     if (!prior || authority.routeGeneration > Number(prior.route_generation)) {
       this.ctx.storage.sql.exec(
         "INSERT OR REPLACE INTO open_compute_host_meta " +
-          "(singleton, route_generation, version_id, object_generation, data_format_version) " +
-          "VALUES (1, ?, ?, ?, 1)",
+          "(singleton, route_generation, version_id, object_generation, data_format_version, object_name, jurisdiction) " +
+          "VALUES (1, ?, ?, ?, 1, ?, ?)",
         authority.routeGeneration,
         authority.versionId,
         authority.objectGeneration,
+        authority.objectName ?? null,
+        authority.jurisdiction ?? null,
       );
     }
     return facet;
@@ -358,6 +376,18 @@ export class DoHost extends DurableObject<DoHostEnv> {
     const authority = authorityFromHeaders(request.headers);
     if (operation === "alarm" || operation === "alarm-repair") {
       const payload: unknown = await request.json();
+      const retained = this.#meta();
+      if (retained) {
+        if (
+          (retained.object_name !== null &&
+            typeof retained.object_name !== "string") ||
+          (retained.jurisdiction !== null &&
+            typeof retained.jurisdiction !== "string")
+        )
+          throw bindingError("DO_INTERNAL_PROTOCOL_ERROR");
+        authority.objectName = retained.object_name ?? undefined;
+        authority.jurisdiction = retained.jurisdiction ?? undefined;
+      }
       const facet = await this.#tenant(authority);
       const result =
         operation === "alarm"
@@ -393,7 +423,13 @@ export class DoHost extends DurableObject<DoHostEnv> {
     if (tenantMethod === "GET" || tenantMethod === "HEAD") delete init.body;
     const facet = await this.#tenant(authority);
     const tenantRequest = new Request(tenantUrl, init);
-    return ordered(this.#orderStates, order, () => facet.fetch(tenantRequest));
+    return ordered(this.#orderStates, order, async () => {
+      try {
+        return await facet.fetch(tenantRequest);
+      } catch (error) {
+        throw sanitizeDoError(error, "DO_RUNTIME_EXCEPTION");
+      }
+    });
   }
 
   async dispatchTenantRpc(
@@ -414,8 +450,8 @@ export class DoHost extends DurableObject<DoHostEnv> {
     return ordered(this.#orderStates, order, async () => {
       try {
         return await Reflect.apply(target, facet, args);
-      } catch {
-        throw bindingError("DO_RUNTIME_EXCEPTION");
+      } catch (error) {
+        throw sanitizeDoError(error, "DO_RUNTIME_EXCEPTION");
       }
     });
   }
@@ -434,8 +470,8 @@ export class DoHost extends DurableObject<DoHostEnv> {
     return ordered(this.#orderStates, order, async () => {
       try {
         return await Reflect.get(facet, property);
-      } catch {
-        throw bindingError("DO_RUNTIME_EXCEPTION");
+      } catch (error) {
+        throw sanitizeDoError(error, "DO_RUNTIME_EXCEPTION");
       }
     });
   }
@@ -465,8 +501,8 @@ export class DoHost extends DurableObject<DoHostEnv> {
     if (typeof target !== "function") throw bindingError("DO_RPC_UNSUPPORTED");
     try {
       return await Reflect.apply(target, facet, args);
-    } catch {
-      throw bindingError("DO_RUNTIME_EXCEPTION");
+    } catch (error) {
+      throw sanitizeDoError(error, "DO_RUNTIME_EXCEPTION");
     }
   }
 
@@ -480,8 +516,8 @@ export class DoHost extends DurableObject<DoHostEnv> {
     const facet = await this.#tenantFacet(authority, logicalPath, descriptor);
     try {
       return await Reflect.get(facet, property);
-    } catch {
-      throw bindingError("DO_RUNTIME_EXCEPTION");
+    } catch (error) {
+      throw sanitizeDoError(error, "DO_RUNTIME_EXCEPTION");
     }
   }
 
@@ -495,8 +531,8 @@ export class DoHost extends DurableObject<DoHostEnv> {
     const facet = await this.#tenantFacet(authority, logicalPath, descriptor);
     try {
       return await facet.fetch(request);
-    } catch {
-      throw bindingError("DO_RUNTIME_EXCEPTION");
+    } catch (error) {
+      throw sanitizeDoError(error, "DO_RUNTIME_EXCEPTION");
     }
   }
 
@@ -570,14 +606,47 @@ export class DoHost extends DurableObject<DoHostEnv> {
     if (this.#pendingConnects.size >= 128 || this.#pendingConnects.has(token)) {
       throw bindingError("DO_STORAGE_LIMIT");
     }
-    this.#pendingConnects.set(token, {
+    const pending: PendingConnect = {
       kind: "facet",
       authority,
       logicalPath,
       descriptor,
       connectAuthority,
       expiresAt: Date.now() + 10_000,
-    });
+    };
+    this.#pendingConnects.set(token, pending);
+    this.#facetConnectWaiters.get(token)?.(pending);
+  }
+
+  async __openComputeCancelFacetConnect(token: string): Promise<void> {
+    if (!FACET_TOKEN.test(token))
+      throw bindingError("DO_INTERNAL_PROTOCOL_ERROR");
+    if (this.#pendingConnects.get(token)?.kind === "facet")
+      this.#pendingConnects.delete(token);
+    this.#facetConnectWaiters.get(token)?.(undefined);
+  }
+
+  async #waitForFacetConnect(
+    token: string,
+  ): Promise<PendingConnect | undefined> {
+    const pending = this.#pendingConnects.get(token);
+    if (pending) return pending;
+    if (this.#facetConnectWaiters.has(token))
+      throw bindingError("DO_RUNTIME_EXCEPTION");
+    if (this.#facetConnectWaiters.size >= 128)
+      throw bindingError("DO_STORAGE_LIMIT");
+    const ready = Promise.withResolvers<PendingConnect | undefined>();
+    this.#facetConnectWaiters.set(token, ready.resolve);
+    const timer = new AbortController();
+    try {
+      return await Promise.race([
+        ready.promise,
+        scheduler.wait(10_000, { signal: timer.signal }).then(() => undefined),
+      ]);
+    } finally {
+      timer.abort();
+      this.#facetConnectWaiters.delete(token);
+    }
   }
 
   async __openComputePrepareConnect(
@@ -633,7 +702,11 @@ export class DoHost extends DurableObject<DoHostEnv> {
       const match = /^([0-9a-f]{32})\.(do|facet)-connect\.invalid:1$/.exec(
         tokenAddress,
       );
-      const pending = match ? this.#pendingConnects.get(match[1]!) : undefined;
+      const pending = match
+        ? match[2] === "facet"
+          ? await this.#waitForFacetConnect(match[1]!)
+          : this.#pendingConnects.get(match[1]!)
+        : undefined;
       if (
         !match ||
         !pending ||

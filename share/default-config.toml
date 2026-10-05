@@ -165,7 +165,7 @@ external_control_origin = "http://127.0.0.1:8787"
 tail_session_ttl_ms = 3600000
 
 [workers]
-max_bundle_bytes = 17825792
+max_bundle_bytes = 35651584
 delete_drain_timeout_ms = 5000
 artifact_gc_grace_ms = 86400000
 artifact_gc_interval_ms = 60000

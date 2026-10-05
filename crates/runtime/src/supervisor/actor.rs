@@ -7,7 +7,6 @@ pub(super) struct Actor {
     pub(super) config: RuntimeConfig,
     pub(super) clock: Arc<dyn Clock>,
     pub(super) jitter: Arc<dyn JitterRng>,
-    pub(super) redactor: Redactor,
     pub(super) cmd_rx: mpsc::UnboundedReceiver<Command>,
     pub(super) watch_tx: watch::Sender<SupervisorSnapshot>,
     pub(super) snap: SupervisorSnapshot,
@@ -233,8 +232,6 @@ impl Actor {
                 return;
             }
         };
-        let mut redactor = self.redactor.clone();
-        redactor.register_secret_string(&token);
         self.begin_generation_watchdog_state(token.clone());
         let startup_id = StartupId::generate();
         let host_extension_fd = match &self.host_extension_broker {
@@ -259,12 +256,11 @@ impl Actor {
         let runtime = self.runtime.clone();
         let startup = Duration::from_millis(self.config.startup_timeout_ms);
         let task = tokio::spawn(run_attempt(
-            AttemptArgs {
-                compiler,
+            compiler,
+            startup_id,
+            ChildStartOptions {
                 runtime,
                 token,
-                redactor,
-                startup_id,
                 startup,
                 owners: self.owners.clone(),
                 external_services: self.external_services.clone(),

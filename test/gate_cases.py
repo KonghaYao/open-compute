@@ -36,7 +36,6 @@ ONCE = {
         'public-types-surface',
         'compile-fixtures',
         'conformance-self-tests',
-        'unsupported-config-rejection',
         'portable-fixture-inventory',
         'cloudflare-runner-safety',
     ),
@@ -94,12 +93,12 @@ ONCE = {
     'single-binary': ('readonly_commands_need_only_the_single_executable',),
     # Default Node builtins, process.env isolation, and fail-closed stubs.
     'p0-2': ('nodejs::p0_2_nodejs_default_surface_isolation_and_unsupported_stubs',),
-    'p6-wrangler-resources': (
-        'fixed_wrangler_resource_commands_use_live_v4_authorities',
-        'w2_wrangler_limits_settings_clone_and_restart',
+    'p6-cf-resources': (
+        'fixed_cf_resource_commands_use_live_v4_authorities',
+        'w2_cf_limits_settings_clone_and_restart',
     ),
     'p6-cloudflare-sdk': ('official_cloudflare_sdk_matches_live_ocd_contract',),
-    'p12-wrangler': ('target_commands_and_wrangler_wrapper_preserve_the_day1_boundary',),
+    'p20-cf-cli': ('target_commands_and_cf_wrapper_preserve_the_day1_boundary',),
     'p5-ai-provider-qualification': (
         'bailian-embedding-deepseek-chat',
         'bailian-embedding-cohere-rerank-deepseek-chat',
@@ -109,6 +108,17 @@ ONCE = {
 }
 
 TIMING = {
+    'p21-python-runtime': ('runtime::p21_python_runtime_ffi_stdlib_wait_until_network_restart_rollback',),
+    'p21-python-main': ('python_main::p21_python_main_upload_prepare_dispatch_restart_rollback',),
+    'p21-python-services': ('services::p21_python_services_fetch_named_rpc_callback_restart_rollback',),
+    'p21-python-queues': ('queues::p21_python_queues_produce_consume_retry_dlq_restart_rollback',),
+    'p21-python-durable-objects': ('durable_objects::p21_python_durable_objects_fetch_rpc_storage_alarm_restart_rollback',),
+    'p21-python-workflows': ('workflows::p21_python_workflows_steps_events_retry_pause_restart_rollback',),
+    'p21-python-frameworks': (
+        'frameworks::p21_python_django_framework_deploy_restart_rollback',
+        'frameworks::p21_python_flask_framework_deploy_restart_rollback',
+        'frameworks::p21_python_fastapi_framework_deploy_restart_rollback',
+    ),
     'p0-1': ('p0_1_process_gate', 'round_drop_recovers_orphan_without_platform_handle'),
     # Cohesive real-runtime matrices also own concurrent requests, stream cleanup,
     # generation changes or drain assertions. Do not demote the entire matrix.
@@ -153,7 +163,7 @@ TIMING = {
     'p3-cache-images': (
         'p3_cache_images_real_runtime_semantics_and_lifecycle_matrix',
     ),
-    'p6-wrangler-resources': (
+    'p6-cf-resources': (
         'worker_loader::worker_loader_native_binding_versions_delete_and_restart',
     ),
     'p5-search': ('p5_real_vectorize_ai_search_and_markdown_matrix',),
@@ -167,6 +177,8 @@ TIMING = {
         'drop_does_not_signal_or_double_wait_reaped_pid',
         'drop_reaps_child',
         'ignore_term_then_kill',
+        'isolated_python_preparation_owner_lifecycle',
+        'isolated_python_preparation_owner_rejection_matrix',
         'late_control_event_is_unhealthy_restart',
         'lease_persist_failure_reaps_child_and_never_runs',
         'logs_bounded_and_redacted',

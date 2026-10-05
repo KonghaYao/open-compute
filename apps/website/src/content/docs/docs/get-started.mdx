@@ -3,8 +3,6 @@ title: "Get started"
 description: "Install open-compute, start one local instance, and deploy a TypeScript Worker."
 ---
 
-import { Code, TabItem, Tabs } from "@astrojs/starlight/components";
-
 This path installs the current formal release, starts one local instance, and deploys a minimal Worker. Formal binaries are available for macOS on Apple silicon and Linux on ARM64 or x86-64.
 
 ## Set up with an AI coding agent
@@ -55,36 +53,39 @@ sudo ocd setup --system --yes
 
 ## 3. Create a Worker project
 
-Create an ordinary Wrangler project and keep Wrangler project-local:
+Use Node.js 22.18 or later. Bun manages dependencies; Node runs cf.
 
 ```sh
-mkdir hello-worker
-cd hello-worker
+mkdir hello-worker && cd hello-worker
+bun init -y
+bun add -d cf@1.0.0-beta.12 @cloudflare/vite-plugin@2.0.0-beta.sha-52b0dc0e9 vite typescript
+mkdir src
 ```
 
-<Tabs syncKey="package-manager">
-  <TabItem label="npm">
-    <Code
-      code={`npm init -y\nnpm install --save-dev wrangler@4.143.0 @cloudflare/workers-types@5.20260830.1`}
-      lang="sh"
-    />
-  </TabItem>
-  <TabItem label="pnpm">
-    <Code
-      code={`pnpm init\npnpm add --save-dev wrangler@4.143.0 @cloudflare/workers-types@5.20260830.1`}
-      lang="sh"
-    />
-  </TabItem>
-  <TabItem label="bun">
-    <Code
-      code={`bun init -y\nbun add --dev wrangler@4.143.0 @cloudflare/workers-types@5.20260830.1`}
-      lang="sh"
-    />
-  </TabItem>
-</Tabs>
+These versions match our internal CI baseline. User projects may choose another cf version: `1.0.x` does not warn; other versions warn and still execute.
 
-```sh
-mkdir src
+Create `cloudflare.config.ts`:
+
+```ts
+import { defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "hello-worker",
+    entrypoint: "src/index.ts",
+    compatibilityDate: "2026-09-08",
+    workersDev: false,
+  },
+});
+```
+
+Create `vite.config.ts`:
+
+```ts
+import { cloudflare } from "@cloudflare/vite-plugin";
+import { defineConfig } from "vite";
+
+export default defineConfig({ plugins: [cloudflare()] });
 ```
 
 Create `src/index.ts`:
@@ -100,44 +101,37 @@ export default {
 } satisfies ExportedHandler;
 ```
 
-Create `wrangler.jsonc`:
+Create `tsconfig.json` with strict checking and the official generated types:
 
 ```json
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "hello-worker",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-09-08",
-  "workers_dev": false
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2024"],
+    "types": [],
+    "strict": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", ".cloudflare/types/**/*.d.ts"]
 }
 ```
 
 ## 4. Develop and deploy
 
-Use Wrangler directly for the fast local loop:
-
-<Tabs syncKey="package-manager">
-  <TabItem label="npm">
-    <Code code="npm exec -- wrangler dev" lang="sh" />
-  </TabItem>
-  <TabItem label="pnpm">
-    <Code code="pnpm exec wrangler dev" lang="sh" />
-  </TabItem>
-  <TabItem label="bun">
-    <Code code="bun run wrangler dev" lang="sh" />
-  </TabItem>
-</Tabs>
-
-Then deploy through the selected open-compute instance:
+Add package scripts for `dev: cf dev` and `build: cf workers types --mode production && tsc --noEmit && cf build --mode production`, then run:
 
 ```sh
-ocd wrangler deploy
+bun run dev
+bun run build
+ocd cf deploy --prebuilt --mode production
 ```
 
-Use the canonical `.localhost` origin printed by Wrangler to call the Worker. To inspect live logs:
+`cf dev` uses official local simulations. Deployment uses the selected open-compute instance. Inspect logs through Dashboard Live Tail; cf currently has no equivalent terminal streaming command.
 
-```sh
-ocd wrangler tail
-```
+Migrate an existing Wrangler project explicitly with `cf migrate ./wrangler.jsonc --bundler vite`, finish its TODOs, and configure Vite. `ocd` only diagnoses old configuration files and never runs migration automatically.
 
-Next, read [Develop](/docs/develop/) for environments and remote targets, [Operate](/docs/operate/) for production configuration, or [Products](/docs/products/) for bindings.
+Continue with [Develop](/docs/develop/), [Operate](/docs/operate/), and [Products](/docs/products/).
+
+With npm use `npm install` and `npm run dev/build`; with pnpm use `pnpm install --frozen-lockfile` and `pnpm run dev/build`. Install development dependencies with `npm install --save-dev` / `pnpm add -D`.

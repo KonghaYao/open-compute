@@ -1,4 +1,8 @@
 use super::*;
+use open_compute_core::SecretBytes;
+use open_compute_runtime::GenerationCredential;
+
+const PYTHON_SNAPSHOT_PATH: &str = "/internal/runtime/v1/versions/python-snapshot";
 
 #[derive(Clone)]
 struct SourceState {
@@ -28,6 +32,7 @@ pub async fn serve_runtime_source(
     let state = SourceState { source, auth };
     let router = Router::new()
         .route(SOURCE_PATH, post(resolve))
+        .route(PYTHON_SNAPSHOT_PATH, post(resolve_python))
         .with_state(state);
     axum::serve(listener, router.into_make_service())
         .with_graceful_shutdown(shutdown)
@@ -48,15 +53,43 @@ struct ResolveRequest {
     scope: SourceScope,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ResolvePythonRequest {
+    key: String,
+    expected_worker_code_sha256: String,
+    scope: SourceScope,
+    expected_prepared_sha256: String,
+}
+
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum SourceScope {
     Runtime,
     Validation,
+    Preparation,
     Probe,
 }
 
-async fn resolve(State(state): State<SourceState>, request: Request) -> Response {
+impl From<SourceScope> for RuntimeScope {
+    fn from(scope: SourceScope) -> Self {
+        match scope {
+            SourceScope::Runtime => Self::Runtime,
+            SourceScope::Validation => Self::Validation,
+            SourceScope::Preparation => Self::Preparation,
+            SourceScope::Probe => Self::Probe,
+        }
+    }
+}
+
+async fn source_request<T: serde::de::DeserializeOwned>(
+    state: &SourceState,
+    request: Request,
+) -> Result<(T, GenerationCredential), Response> {
+    let credential = state
+        .auth
+        .credential()
+        .ok_or_else(|| StatusCode::NOT_FOUND.into_response())?;
     let token = request
         .headers()
         .get(TOKEN_HEADER)
@@ -68,7 +101,7 @@ async fn resolve(State(state): State<SourceState>, request: Request) -> Response
         .and_then(|value| value.to_str().ok())
         .unwrap_or("");
     if !state.auth.authorize(token, generation) {
-        return StatusCode::NOT_FOUND.into_response();
+        return Err(StatusCode::NOT_FOUND.into_response());
     }
     if request
         .headers()
@@ -77,23 +110,34 @@ async fn resolve(State(state): State<SourceState>, request: Request) -> Response
         .and_then(|value| value.parse::<usize>().ok())
         .is_some_and(|length| length > MAX_SOURCE_REQUEST)
     {
-        return source_error(ErrorCode::BundleTooLarge, StatusCode::PAYLOAD_TOO_LARGE);
+        return Err(source_error(
+            ErrorCode::BundleTooLarge,
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ));
     }
     let Ok(bytes) = to_bytes(request.into_body(), MAX_SOURCE_REQUEST).await else {
-        return source_error(ErrorCode::BundleTooLarge, StatusCode::PAYLOAD_TOO_LARGE);
+        return Err(source_error(
+            ErrorCode::BundleTooLarge,
+            StatusCode::PAYLOAD_TOO_LARGE,
+        ));
     };
-    let body: ResolveRequest = match serde_json::from_slice(&bytes) {
-        Ok(body) => body,
-        Err(_) => return source_error(ErrorCode::BundleInvalid, StatusCode::BAD_REQUEST),
-    };
-    let scope = match body.scope {
-        SourceScope::Runtime => RuntimeScope::Runtime,
-        SourceScope::Validation => RuntimeScope::Validation,
-        SourceScope::Probe => RuntimeScope::Probe,
+    let body = serde_json::from_slice(&bytes)
+        .map_err(|_| source_error(ErrorCode::BundleInvalid, StatusCode::BAD_REQUEST))?;
+    Ok((body, credential))
+}
+
+async fn resolve(State(state): State<SourceState>, request: Request) -> Response {
+    let (body, credential): (ResolveRequest, _) = match source_request(&state, request).await {
+        Ok(parsed) => parsed,
+        Err(response) => return response,
     };
     let snapshot = match state
         .source
-        .resolve(&body.key, &body.expected_worker_code_sha256, scope)
+        .resolve(
+            &body.key,
+            &body.expected_worker_code_sha256,
+            body.scope.into(),
+        )
         .await
     {
         Ok(snapshot) => snapshot,
@@ -103,12 +147,65 @@ async fn resolve(State(state): State<SourceState>, request: Request) -> Response
         Ok(payload) => payload,
         Err(error) => return source_platform_error(error),
     };
-    let mut response = Response::new(Body::from(payload.expose().to_vec()));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/json"),
-    );
-    response
+    state
+        .auth
+        .with_current(&credential, || {
+            let mut response = Response::new(Body::from(payload.expose().to_vec()));
+            response.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json"),
+            );
+            response
+                .headers_mut()
+                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            response
+        })
+        .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
+}
+
+// Bytes owns this zeroizing buffer until the final private response frame is released.
+struct SnapshotBody(SecretBytes);
+
+impl AsRef<[u8]> for SnapshotBody {
+    fn as_ref(&self) -> &[u8] {
+        self.0.expose()
+    }
+}
+
+async fn resolve_python(State(state): State<SourceState>, request: Request) -> Response {
+    let (body, credential): (ResolvePythonRequest, _) = match source_request(&state, request).await
+    {
+        Ok(parsed) => parsed,
+        Err(response) => return response,
+    };
+    let snapshot = match state
+        .source
+        .resolve_python_prepared(
+            &body.key,
+            &body.expected_worker_code_sha256,
+            body.scope.into(),
+            &body.expected_prepared_sha256,
+        )
+        .await
+    {
+        Ok(snapshot) => snapshot,
+        Err(error) => return source_platform_error(error),
+    };
+    state
+        .auth
+        .with_current(&credential, || {
+            let mut response =
+                Response::new(Body::from(bytes::Bytes::from_owner(SnapshotBody(snapshot))));
+            response.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/octet-stream"),
+            );
+            response
+                .headers_mut()
+                .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+            response
+        })
+        .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
 }
 
 #[allow(
@@ -137,3 +234,7 @@ fn source_error(code: ErrorCode, status: StatusCode) -> Response {
     }
     response
 }
+
+#[cfg(test)]
+#[path = "source_server_tests.rs"]
+mod tests;
