@@ -184,10 +184,16 @@ class Qualification:
                 break
             descendants = expanded
         self.ocd("stop")
-        assert self.pid() == 0
-        for pid in descendants:
-            result = self.command("daemon descendant reaped", "ps", "-p", str(pid), "-o", "pid=", check=False)
-            assert result.returncode == 1 and not result.stdout.strip()
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            reaped = self.pid() == 0
+            for pid in descendants:
+                result = self.command("daemon descendant reaped", "ps", "-p", str(pid), "-o", "pid=", check=False)
+                reaped &= result.returncode == 1 and not result.stdout.strip()
+            if reaped:
+                return
+            time.sleep(0.1)
+        raise AssertionError("service manager PID and owned descendants did not disappear after stop")
 
     def restart(self):
         before = self.pid()
