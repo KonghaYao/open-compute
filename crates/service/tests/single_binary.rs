@@ -14,7 +14,7 @@ use open_compute_storage::PlatformStorage;
 use rustix::process::{Pid, Signal, kill_process};
 use std::fs;
 use std::net::SocketAddr;
-use std::os::unix::fs::PermissionsExt as _;
+use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, SystemTime};
