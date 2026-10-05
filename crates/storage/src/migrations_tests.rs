@@ -447,7 +447,6 @@ fn published_account_rows_become_one_instance_or_fail_atomically() {
         drop(connection);
 
         let db = ControlDb::open(&path, 100).unwrap();
-        let result = apply(&db, &DeterministicClock::new(UNIX_EPOCH));
         if identity_mismatch
             || audit_mismatch
             || idempotency_mismatch
@@ -459,12 +458,28 @@ fn published_account_rows_become_one_instance_or_fail_atomically() {
             || artifact_mismatch
             || route_mismatch
         {
-            assert_eq!(result.unwrap_err().code(), ErrorCode::MigrationFailed);
+            assert_eq!(
+                apply(&db, &DeterministicClock::new(UNIX_EPOCH))
+                    .unwrap_err()
+                    .code(),
+                ErrorCode::MigrationFailed
+            );
             assert!(db.table_exists("accounts").unwrap());
             assert!(!db.table_exists("instance_identity").unwrap());
             assert_eq!(inspect_schema(&db).unwrap(), 8);
         } else {
-            result.unwrap();
+            db.with_connection_mut(|connection| {
+                schema_migrations::migrate_to_for_test(connection, DatabaseKind::Control, 13);
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(
+                apply(&db, &DeterministicClock::new(UNIX_EPOCH))
+                    .unwrap_err()
+                    .code(),
+                ErrorCode::MigrationFailed
+            );
+            assert_eq!(inspect_schema(&db).unwrap(), 13);
             assert!(!db.table_exists("accounts").unwrap());
             assert!(db.table_exists("instance_identity").unwrap());
             assert_eq!(

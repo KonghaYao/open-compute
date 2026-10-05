@@ -656,16 +656,9 @@ jobs:
           retention-days: 14
           compression-level: 0
 
+  # prettier-ignore
   publish:
-    needs:
-      [
-        failfast,
-        assemble,
-        coverage,
-        integration,
-        sdk-package,
-        install-lifecycle,
-      ]
+    needs: [failfast, assemble, coverage, integration, sdk-package, install-lifecycle]
     runs-on: ubuntu-24.04
     environment: release
     permissions:
