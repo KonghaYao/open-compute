@@ -8,6 +8,7 @@ node_modules
 !.temp/runtime-inputs
 !.temp/runtime-inputs/**
 third_party/workerd
+# crates/runtime/build.rs hashes these workerd sources into the runtime manifest check.
 !third_party/workerd/src/cloudflare/workers.ts
 !third_party/workerd/src/cloudflare/workflows.ts
 !third_party/workerd/src/node/async_hooks.ts

@@ -17,6 +17,19 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const COMMITTED = join(ROOT, "share/cloudflare-capabilities.json");
 const CATALOG = join(ROOT, "test/conformance/catalog.json");
 
+function hasCommit(repository, revision) {
+  try {
+    execFileSync("git", ["cat-file", "-e", `${revision}^{commit}`], {
+      cwd: repository,
+      stdio: "ignore",
+      timeout: 10_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const PINNED = {
   workers_types_version: "5.20260830.1",
   ast_sha256:
@@ -225,11 +238,15 @@ test("inventories KV union, R2 composite, D1 intersection, DurableObjectStub com
 
 test("pinned socket metadata distinguishes outbound peers from inbound connect authority", async () => {
   const workerdRoot = join(ROOT, "third_party/workerd");
-  // Archive-based builds do not require an initialized source submodule.
-  if (existsSync(join(workerdRoot, ".git"))) {
-    const { revision } = JSON.parse(
-      await readFile(join(ROOT, "packages/runtime/workerd.lock.json"), "utf8"),
-    );
+  const { revision } = JSON.parse(
+    await readFile(join(ROOT, "packages/runtime/workerd.lock.json"), "utf8"),
+  );
+  // Archive-based builds do not require an initialized source submodule, and
+  // shallow CI submodules may not contain the pinned release revision itself.
+  if (
+    existsSync(join(workerdRoot, ".git")) &&
+    hasCommit(workerdRoot, revision)
+  ) {
     const sockets = execFileSync(
       "git",
       ["show", `${revision}:src/workerd/api/sockets.c++`],
