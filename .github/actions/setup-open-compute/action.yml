@@ -69,19 +69,23 @@ runs:
       shell: bash
       run: bun install --frozen-lockfile --ignore-scripts
 
-    - name: Fetch the formally pinned workerd source revision
+    - name: Fetch pinned workerd source and workers-types revisions
       shell: bash
       run: |
         set -euo pipefail
-        revision="$(bun -e '
+        revisions="$(bun -e '
           const lock = await Bun.file("packages/runtime/workerd.lock.json").json();
-          if (!/^[0-9a-f]{40}$/.test(lock.revision)) throw new Error("invalid workerd source revision");
-          console.log(lock.revision);
+          const revisions = [lock.revision, lock.workersTypes.gitHead];
+          if (!revisions.every(revision => typeof revision === "string" && /^[0-9a-f]{40}$/.test(revision)))
+            throw new Error("invalid pinned workerd or workers-types revision");
+          console.log([...new Set(revisions)].join("\n"));
         ')"
-        if ! git -C third_party/workerd cat-file -e "${revision}^{commit}" 2>/dev/null; then
-          git -C third_party/workerd fetch --depth 1 origin "$revision"
-        fi
-        git -C third_party/workerd cat-file -e "${revision}^{commit}"
+        while IFS= read -r revision; do
+          if ! git -C third_party/workerd cat-file -e "${revision}^{commit}" 2>/dev/null; then
+            git -C third_party/workerd fetch --depth 1 origin "$revision"
+          fi
+          git -C third_party/workerd cat-file -e "${revision}^{commit}"
+        done <<< "$revisions"
 
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@master

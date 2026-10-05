@@ -156,6 +156,13 @@ class Qualification:
         self.command("install.sh", *self.prefix, "env", f"OPEN_COMPUTE_RELEASE_TAG={tag}",
                      f"OPEN_COMPUTE_RELEASE_DOWNLOAD_BASE={self.mirror}/download", "sh", str(self.args.installer))
         assert tag[1:] == self.command("installed version", str(self.binary), "--no-update-check", "--version").stdout.split()[1]
+        if self.system and tag == self.inputs["previous"]:
+            # The published previous binary rejects its installer's service-user
+            # temp owner under sudo. Bootstrap this historical fixture through
+            # manual setup; remove only the empty temp directory we just created.
+            temporary = self.root / "tmp"
+            assert temporary.is_dir() and not temporary.is_symlink() and not any(temporary.iterdir())
+            self.command("previous system manual setup preparation", "rmdir", "--", str(temporary))
         self.ocd("setup", "--yes")
         self.ready()
         assert stat.S_IMODE(self.unit.stat().st_mode) == 0o600
@@ -184,10 +191,16 @@ class Qualification:
                 break
             descendants = expanded
         self.ocd("stop")
-        assert self.pid() == 0
-        for pid in descendants:
-            result = self.command("daemon descendant reaped", "ps", "-p", str(pid), "-o", "pid=", check=False)
-            assert result.returncode == 1 and not result.stdout.strip()
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            reaped = self.pid() == 0
+            for pid in descendants:
+                result = self.command("daemon descendant reaped", "ps", "-p", str(pid), "-o", "pid=", check=False)
+                reaped &= result.returncode == 1 and not result.stdout.strip()
+            if reaped:
+                return
+            time.sleep(0.1)
+        raise AssertionError("service manager PID and owned descendants did not disappear after stop")
 
     def restart(self):
         before = self.pid()
@@ -201,7 +214,11 @@ class Qualification:
         self.verify_data()
         assert self.identity() == self.initial_identity
         self.stop()
-        self.ocd("--config", str(self.config), "doctor", "--json")
+        # Storage integrity is checked as its actual owner; only service-manager
+        # operations require sudo in system scope.
+        self.command("service-owner doctor", str(self.binary), "--no-update-check",
+                     *(["--system"] if self.system else []),
+                     "--config", str(self.config), "doctor", "--json")
         self.ocd("start")
         self.ready()
 

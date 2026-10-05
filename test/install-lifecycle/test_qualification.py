@@ -4,11 +4,31 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from prepare import digest, previous_release, verify_migrations, verify_release
+from run import Qualification
 
 
 class QualificationInputs(unittest.TestCase):
+    def test_stop_waits_for_manager_and_descendants_and_enforces_deadline(self):
+        qualification = object.__new__(Qualification)
+        tree = SimpleNamespace(stdout="41 1\n42 41\n", returncode=0)
+        alive = SimpleNamespace(stdout="42\n", returncode=0)
+        gone = SimpleNamespace(stdout="", returncode=1)
+        with patch.object(qualification, "command", side_effect=[tree, gone, alive, gone, gone]), \
+             patch.object(qualification, "pid", side_effect=[41, 41, 0]), \
+             patch.object(qualification, "ocd") as stop, \
+             patch("run.time.sleep"):
+            qualification.stop()
+            stop.assert_called_once_with("stop")
+        with patch.object(qualification, "command", return_value=tree), \
+             patch.object(qualification, "pid", return_value=41), \
+             patch.object(qualification, "ocd"), \
+             patch("run.time.monotonic", side_effect=[0, 31]):
+            with self.assertRaisesRegex(AssertionError, "did not disappear"):
+                qualification.stop()
+
     def test_previous_is_latest_lower_official_stable(self):
         releases = [{"tagName": tag, "isDraft": draft, "isPrerelease": pre}
                     for tag, draft, pre in [("v0.2.2", False, False), ("v0.2.3", False, False),

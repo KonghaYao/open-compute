@@ -493,7 +493,7 @@ fn crashed_setup_staging_recovery_only_removes_verified_private_entries() {
     let linked = stage(Uuid::now_v7());
     std::os::unix::fs::symlink(&valid, &linked).unwrap();
 
-    recover_setup_staging(&root).unwrap();
+    recover_setup_staging(&root, rustix::process::getuid().as_raw()).unwrap();
     assert!(!valid.exists());
     assert!(unmarked.exists());
     assert!(poisoned.exists());
@@ -506,7 +506,9 @@ fn crashed_setup_staging_recovery_only_removes_verified_private_entries() {
     );
     fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!(
-        recover_setup_staging(&root).unwrap_err().code(),
+        recover_setup_staging(&root, rustix::process::getuid().as_raw())
+            .unwrap_err()
+            .code(),
         ErrorCode::PathInvalid
     );
 }

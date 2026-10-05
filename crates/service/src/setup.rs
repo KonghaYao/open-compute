@@ -245,11 +245,16 @@ fn execute_plan(
     let plan = &plan;
     ensure_dir_tree(registry.root_for(plan.scope), plan.scope)?;
     let scope_lock = crate::run::DaemonLock::acquire(registry.root_for(plan.scope))?;
-    recover_setup_staging(registry.root_for(plan.scope))?;
     let service_user = match plan.scope {
         ServiceScope::System => Some(crate::service_manager::system_service_user()?),
         ServiceScope::User => None,
     };
+    recover_setup_staging(
+        registry.root_for(plan.scope),
+        service_user
+            .as_ref()
+            .map_or(rustix::process::getuid().as_raw(), |user| user.uid),
+    )?;
     let config_parent = plan.config_path.parent().ok_or_else(|| {
         PlatformError::new(
             ErrorCode::ConfigPathInvalid,
@@ -452,12 +457,19 @@ fn execute_plan(
 }
 
 /// Remove only verified setup staging left by a crashed owner while the caller holds the scope lock.
-pub(crate) fn recover_setup_staging(root: &Path) -> Result<(), PlatformError> {
+pub(crate) fn recover_setup_staging(root: &Path, service_uid: u32) -> Result<(), PlatformError> {
     let tmp = root.join("tmp");
     if fs::symlink_metadata(&tmp).is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound) {
         return Ok(());
     }
-    if !owned_setup_dir(&tmp) {
+    // install.sh assigns the private scope temp directory to the verified
+    // service user. Sudo-created staging contents still require caller ownership.
+    if !fs::symlink_metadata(&tmp).is_ok_and(|metadata| {
+        metadata.is_dir()
+            && (metadata.uid() == rustix::process::getuid().as_raw()
+                || metadata.uid() == service_uid)
+            && metadata.permissions().mode() & 0o777 == 0o700
+    }) {
         return Err(PlatformError::new(
             ErrorCode::PathInvalid,
             "OCD temporary directory has invalid ownership or permissions",

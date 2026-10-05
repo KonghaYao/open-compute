@@ -78,7 +78,7 @@ impl Fixture {
             PlatformConfig::from_toml_str(&source).unwrap();
             fs::write(&config, source).unwrap();
         }
-        let log = root.join("ocd.stderr.log");
+        let log = root.join("ocd.log");
         let mut process = platform_process::spawn(&config, &log);
         let client =
             hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
@@ -254,7 +254,13 @@ impl Fixture {
                 RequestTarget::Worker(script),
             )
             .await;
-        assert_eq!(status, 200, "Worker {script} invocation {path} failed");
+        let filesystem = (status != 200).then(|| {
+            rustix::fs::statvfs(&self.data).map(|stat| (stat.f_blocks, stat.f_bfree, stat.f_bavail))
+        });
+        assert_eq!(
+            status, 200,
+            "Worker {script} invocation {path} failed; filesystem (blocks, free, available)={filesystem:?}"
+        );
         serde_json::from_slice(&bytes).unwrap()
     }
 
