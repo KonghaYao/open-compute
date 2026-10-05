@@ -13,7 +13,8 @@
 - Dashboard 只显示正式版本检查结果和主机 CLI 指引；升级执行只在 `ocd upgrade`，不建立持久 update job。
 - 普通管理 CLI 可异步刷新有界 release metadata cache；daemon startup、`--help`、`--version` 和 `--no-update-check` 不联网。
 
-Worker 项目与 Wrangler target workflow 属于 [P12](p12-wrangler-project-workflow.md)，不在 P11 复制。
+target registry 与安全边界见 [P12](p12-wrangler-project-workflow.md)；当前 Worker 项目、CLI 与构建入口由
+[P20 cf 工作流](p20-cf-cli-migration.md) 拥有，不在 P11 复制。
 
 ## 历史验证与限制
 

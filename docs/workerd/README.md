@@ -4,7 +4,7 @@
 
 W1 的逐 surface 复核见[兼容审查记录](../implemented/w1-worker-loader-compatibility-review.md)。
 
-状态：**W1/W2/W3 与正式 pin 均已完成产品 qualification**。W2 的 Wrangler/v4 配置、Dynamic Worker ceiling、原生执行、公开错误、
+状态：**W1/W2/W3 与正式 pin 均已完成产品 qualification**。W2 的 limits/v4 配置、Dynamic Worker ceiling、原生执行、公开错误、
 isolate 摘除与 supervisor 自恢复已在同一 Day1 路径完成资格化。四个平台的源码 revision、二进制与 digest
 由 formal lock 固定。2026-09-05 用户确认接受维护自己的 workerd fork 并重新编译。
 W1/W2/W3 不再以“等待上游合并后才能开发”为实施前提；public Loader 已接入原生 fork。W2 同时交付原生
@@ -14,7 +14,9 @@ ResourceLimits、超限 isolate 摘除，以及 generation-fenced supervisor 功
 CPU/内存/subrequest enforcement 或 custom limits；显式 limits 必须由原生 API 拒绝，不能静默忽略。
 W1 已完成 namespace/权限隔离、结构大小限制、in-flight 计数、缓存与生命周期及正式 pin 验收。
 W2 通过请求限额、isolate 摘除和执行器自恢复三层机制消除失控代码影响同进程邻居的已知故障，并完成
-Wrangler、v4 Settings、Dynamic Worker ceiling、官方错误分类和完整产品验收。
+当时的固定部署客户端、v4 Settings、Dynamic Worker ceiling、官方错误分类和完整产品验收。
+当前应用侧配置与部署由 [P20](../implemented/p20-cf-cli-migration.md) 的 cf/config 和 Build Output 拥有；
+旧 W2 客户端输入仅是历史证据，不能替代当前 cf 与正式 pin 的资格检查。
 
 ## 源码与运行时基线
 

@@ -6,7 +6,7 @@
 
 - 普通 Worker 获得原生 `WorkerLoader` binding，支持 `load()`、`get()`、同步 `WorkerStub`、
   entrypoint/RPC 和动态 Durable Object facets；七类模块仍由 workerd 编译和验证。
-- Wrangler binding 进入 closed v4 schema、immutable Version descriptor、SQLite authority 和 RuntimeSource；
+- 当前 cf Worker Loader binding 进入 closed v4 schema、immutable Version descriptor、SQLite authority 和 RuntimeSource；
   不存在第二套 JavaScript Loader、源码重写器或 stock/fork 运行时分支。
 - namespace 由 account、不可复用 Script UUID 和 binding name 派生。Version 升级/回滚共享 namespace，
   Script 删除排空后撤销历史 Version；重建同名 Script 获得新身份。

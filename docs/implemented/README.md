@@ -3,6 +3,9 @@
 本目录保存每项已完成需求的精简方案与当时验证结果。历史 PASS 只适用于文档记录的输入；当前支持面以
 [兼容矩阵](../references/cloudflare-compatibility.md)和源码为准。明确接受的限制直接记录在对应实现或维护文档中。
 
+当前 CLI、应用配置与构建合同统一由 [P20 Cloudflare CLI](p20-cf-cli-migration.md) 拥有。P12 的 Wrangler launcher
+已移除；本目录旧客户端版本、命令、fixture 和验收结果仅保留其历史身份，不能作为当前 cf 的资格证据。
+
 ## 平台能力
 
 | 范围                     | 文档                                                                                                                                                                                                                                                                                    |
@@ -25,7 +28,7 @@
 | P7 Logs/Tail             | [p7-workers-logs-realtime-tail.md](p7-workers-logs-realtime-tail.md)                                                                                                                                                                                                                    |
 | P8 Local/S3              | [p8-local-s3-object-backend.md](p8-local-s3-object-backend.md)                                                                                                                                                                                                                          |
 | P11 运维体验             | [p11-ocd-operator-experience.md](p11-ocd-operator-experience.md)                                                                                                                                                                                                                        |
-| P12 Wrangler 项目体验    | [p12-wrangler-project-workflow.md](p12-wrangler-project-workflow.md)                                                                                                                                                                                                                    |
+| P12 target 管理（CLI 已由 P20 替代）    | [p12-wrangler-project-workflow.md](p12-wrangler-project-workflow.md)                                                                                                                                                                                                                    |
 | P14 Cloudflare Artifacts | [p14-cloudflare-artifacts.md](p14-cloudflare-artifacts.md)                                                                                                                                                                                                                              |
 | P15 SQLite migrations    | [p15-sqlite-refinery-migrations.md](p15-sqlite-refinery-migrations.md)                                                                                                                                                                                                                  |
 | P16 TypeScript SDK       | [p16-capability-scoped-typescript-sdk.md](p16-capability-scoped-typescript-sdk.md)                                                                                                                                                                                                      |

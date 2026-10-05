@@ -1,5 +1,8 @@
 # I87、I103–116：Cloudflare 上传、Queue 与上游闭环
 
+当前 CLI/应用配置与构建入口由 [P20](p20-cf-cli-migration.md) 拥有：`ocd cf`、`cloudflare.config.ts`、官方 Vite 插件 v2 与 Build Output。
+本文旧客户端命令、版本、fixture 与 PASS 保留为当时证据，不要求恢复旧入口，也不证明当前 cf 的资格。
+
 状态：**implemented（2026-09-25）**。本批按 Day1 模型直接更新当前 authority、wire、SDK 与文档，不保留旧 pin、旧上传格式、旧 Service descriptor 或 migration 兼容路径。
 
 ## 用户结果

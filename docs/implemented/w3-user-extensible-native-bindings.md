@@ -26,19 +26,28 @@ executable = "native/files-provider"
 `ocd` 启动时以 no-follow 路径遍历打开 manifest、UTF-8 facade 与 executable，限制文件大小并固定已打开 executable 的
 SHA-256/FD 身份。错误使启动失败；没有 cwd fallback、网络下载、动态库加载、热更新或历史实现 fallback。
 
-Worker 继续使用 Wrangler `services + props`，没有新的公开 Binding 类型：
+Worker 使用当前 cf/config 的标准 Service binding，v4 wire 仍是 `service + props`，没有新的公开 Binding 类型：
 
-```json
-{
-  "services": [
-    {
-      "binding": "FILES",
-      "service": "local-files",
-      "props": { "directory": "invoices" }
-    }
-  ]
-}
+```ts
+import { bindings, defineConfig } from "cf/config";
+
+export default defineConfig({
+  worker: {
+    name: "files-app",
+    entrypoint: "./src/index.ts",
+    compatibilityDate: "2026-09-08",
+    workersDev: false,
+    env: {
+      FILES: bindings.worker({
+        worker: "local-files",
+        props: { directory: "invoices" },
+      }),
+    },
+  },
+});
 ```
+
+应用配置与构建链由 [P20](p20-cf-cli-migration.md) 拥有；此配置更新不改写 W3 当时的 runtime 验收输入。
 
 facade 从 `this.ctx.props` 读取不可变 Binding 参数并调用唯一新增的私有能力：
 
