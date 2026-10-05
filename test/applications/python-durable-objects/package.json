@@ -1,0 +1,14 @@
+{
+  "name": "@open-compute/python-durable-objects-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run typecheck && node ../../../scripts/build-python.ts .",
+    "build:retire": "bun run typecheck && node ../../../scripts/build-python.ts . retire",
+    "typecheck": "WRANGLER_CACHE_DIR=../../../.temp/cf-cli-cache/python-durable-objects MINIFLARE_CACHE_DIR=../../../.temp/cf-cli-cache/python-durable-objects cf workers types && tsc --project tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "cf": "catalog:",
+    "typescript": "catalog:"
+  }
+}

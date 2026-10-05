@@ -39,11 +39,11 @@ impl Default for BundleLimits {
 impl BundleLimits {
     /// Default structural limits shared by bundle admission and bounded upload wires.
     pub const DEFAULT: Self = Self {
-        max_manifest_bytes: 256 * 1024,
-        max_modules: 128,
-        max_module_bytes: 4 * 1024 * 1024,
-        max_total_module_bytes: 16 * 1024 * 1024,
-        max_artifact_bytes: 17 * 1024 * 1024,
+        max_manifest_bytes: 1024 * 1024,
+        max_modules: 4096,
+        max_module_bytes: 8 * 1024 * 1024,
+        max_total_module_bytes: 32 * 1024 * 1024,
+        max_artifact_bytes: 34 * 1024 * 1024,
     };
 }
 
@@ -55,6 +55,8 @@ pub enum ModuleType {
     EsModule,
     /// `CommonJS` module gated by compatibility policy.
     CommonJsModule,
+    /// UTF-8 Python source loaded by workerd's official Python entrypoint.
+    Python,
     /// UTF-8 text module.
     Text,
     /// Arbitrary data module.
@@ -197,7 +199,7 @@ impl StagedBundle {
             let mut module_hasher = Sha256::new();
             let needs_text = matches!(
                 module.module_type,
-                ModuleType::Text | ModuleType::Json | ModuleType::SourceMap
+                ModuleType::Python | ModuleType::Text | ModuleType::Json | ModuleType::SourceMap
             );
             let mut text = if needs_text {
                 Vec::with_capacity(usize::try_from(module.size).map_err(|_| too_large())?)
@@ -224,7 +226,7 @@ impl StagedBundle {
                 ));
             }
             if needs_text && std::str::from_utf8(&text).is_err() {
-                return Err(invalid("text and JSON modules must be valid UTF-8"));
+                return Err(invalid("Python, text and JSON modules must be valid UTF-8"));
             }
             if matches!(module.module_type, ModuleType::Json | ModuleType::SourceMap)
                 && serde_json::from_slice::<serde_json::Value>(&text).is_err()
@@ -301,10 +303,10 @@ impl CanonicalBundle {
             }
             if matches!(
                 module.module_type,
-                ModuleType::Text | ModuleType::Json | ModuleType::SourceMap
+                ModuleType::Python | ModuleType::Text | ModuleType::Json | ModuleType::SourceMap
             ) && std::str::from_utf8(&module.bytes).is_err()
             {
-                return Err(invalid("text and JSON modules must be valid UTF-8"));
+                return Err(invalid("Python, text and JSON modules must be valid UTF-8"));
             }
             if matches!(module.module_type, ModuleType::Json | ModuleType::SourceMap)
                 && serde_json::from_slice::<serde_json::Value>(&module.bytes).is_err()
@@ -329,12 +331,7 @@ impl CanonicalBundle {
             .iter()
             .find(|module| module.name == canonical_main)
             .ok_or_else(|| invalid("main module was not found"))?;
-        if !matches!(
-            main.module_type,
-            ModuleType::EsModule | ModuleType::CommonJsModule
-        ) {
-            return Err(invalid("main module must be JavaScript"));
-        }
+        validate_main_module(&main.name, main.module_type)?;
 
         let mut offset = 0_u64;
         let mut manifest_modules = Vec::with_capacity(normalized.len());
@@ -449,10 +446,10 @@ impl CanonicalBundle {
             }
             if matches!(
                 module.module_type,
-                ModuleType::Text | ModuleType::Json | ModuleType::SourceMap
+                ModuleType::Python | ModuleType::Text | ModuleType::Json | ModuleType::SourceMap
             ) && std::str::from_utf8(raw).is_err()
             {
-                return Err(invalid("text and JSON modules must be valid UTF-8"));
+                return Err(invalid("Python, text and JSON modules must be valid UTF-8"));
             }
             if matches!(module.module_type, ModuleType::Json | ModuleType::SourceMap)
                 && serde_json::from_slice::<serde_json::Value>(raw).is_err()
@@ -460,12 +457,7 @@ impl CanonicalBundle {
                 return Err(invalid("JSON module is invalid"));
             }
             if module.name == manifest.main_module {
-                if !matches!(
-                    module.module_type,
-                    ModuleType::EsModule | ModuleType::CommonJsModule
-                ) {
-                    return Err(invalid("main module must be JavaScript"));
-                }
+                validate_main_module(&module.name, module.module_type)?;
                 saw_main = true;
             }
             expected_offset = expected_offset
@@ -572,12 +564,7 @@ fn parse_manifest(
             return Err(too_large());
         }
         if module.name == manifest.main_module {
-            if !matches!(
-                module.module_type,
-                ModuleType::EsModule | ModuleType::CommonJsModule
-            ) {
-                return Err(invalid("main module must be JavaScript"));
-            }
+            validate_main_module(&module.name, module.module_type)?;
             saw_main = true;
         }
         expected_offset = expected_offset
@@ -599,6 +586,19 @@ fn read_exact_bundle(
     message: &'static str,
 ) -> Result<(), PlatformError> {
     reader.read_exact(bytes).map_err(|_| invalid(message))
+}
+
+fn validate_main_module(name: &str, module_type: ModuleType) -> Result<(), PlatformError> {
+    if !matches!(
+        module_type,
+        ModuleType::EsModule | ModuleType::CommonJsModule | ModuleType::Python
+    ) || name.ends_with(".py") != (module_type == ModuleType::Python)
+    {
+        return Err(invalid(
+            "main module must be JavaScript or a Python .py module",
+        ));
+    }
+    Ok(())
 }
 
 fn canonical_module_name(name: &str) -> Result<String, PlatformError> {

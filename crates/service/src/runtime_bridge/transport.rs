@@ -7,12 +7,15 @@ pub struct WorkerdTransport {
     pub(super) body_client: Client<HttpConnector, Body>,
     pub(super) auth: GenerationAuthRegistry,
     pub(super) supervisor: Arc<Mutex<Option<Arc<WorkerdSupervisor>>>>,
+    pub(super) python_preparation: Arc<Mutex<Option<Arc<python_preparation::PythonPreparation>>>>,
     pub(super) max_request_body: usize,
     pub(super) version_pins: Option<VersionPins>,
     pub(super) service_invocations: Option<crate::service_invocations::ServiceInvocationRegistry>,
     pub(super) workflow_quarantine: Arc<Mutex<Option<open_compute_runtime::GenerationCredential>>>,
     #[cfg(test)]
     pub(super) test_endpoint: Option<u16>,
+    #[cfg(test)]
+    pub(super) test_generation: Option<open_compute_core::StartupId>,
 }
 
 impl std::fmt::Debug for WorkerdTransport {
@@ -37,12 +40,15 @@ impl WorkerdTransport {
                 .build(connector),
             auth,
             supervisor,
+            python_preparation: Arc::new(Mutex::new(None)),
             max_request_body: MAX_TENANT_BODY_BYTES,
             version_pins: None,
             service_invocations: None,
             workflow_quarantine: Arc::new(Mutex::new(None)),
             #[cfg(test)]
             test_endpoint: None,
+            #[cfg(test)]
+            test_generation: None,
         }
     }
 
@@ -76,6 +82,21 @@ impl WorkerdTransport {
     ) -> Self {
         self.service_invocations = Some(registry);
         self
+    }
+
+    pub(crate) fn configure_python_preparation(
+        &self,
+        preparation: python_preparation::PythonPreparation,
+    ) -> Result<(), PlatformError> {
+        let mut slot = self
+            .python_preparation
+            .lock()
+            .map_err(|_| runtime_unavailable())?;
+        if slot.is_some() {
+            return Err(runtime_unavailable());
+        }
+        *slot = Some(Arc::new(preparation));
+        Ok(())
     }
 
     /// Rotate the single supervised runtime generation and wait for readiness.
@@ -309,7 +330,7 @@ impl WorkerdTransport {
             return Ok(EndpointSnapshot {
                 port,
                 credential,
-                startup_id: None,
+                startup_id: self.test_generation,
             });
         }
         let supervisor = self
@@ -536,7 +557,17 @@ impl RuntimeValidator for WorkerdTransport {
         &self,
         candidate: ValidationCandidate,
     ) -> Pin<Box<dyn Future<Output = Result<(), PlatformError>> + Send + '_>> {
-        Box::pin(async move { self.validate_candidate(candidate, None, false).await })
+        Box::pin(async move {
+            let preparation = self
+                .python_preparation
+                .lock()
+                .map_err(|_| runtime_unavailable())?
+                .clone();
+            if let Some(preparation) = preparation {
+                preparation.prepare(candidate.clone(), self.clone()).await?;
+            }
+            self.validate_candidate(candidate, None, false).await
+        })
     }
 
     fn validate_deployment(
@@ -564,6 +595,11 @@ impl RuntimeValidator for WorkerdTransport {
     }
 
     fn current_generation(&self) -> Option<open_compute_core::StartupId> {
+        #[cfg(test)]
+        if self.test_endpoint.is_some() {
+            return self.test_generation;
+        }
+
         self.supervisor
             .lock()
             .ok()

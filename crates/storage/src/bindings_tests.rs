@@ -109,6 +109,13 @@ fn binding_insert_referrer_authorize_and_worker_release_are_atomic() {
         ErrorCode::ResourceReferenced
     );
     workers.begin_validation(version_id).unwrap();
+    assert_eq!(
+        BindingRepository::new(storage.db())
+            .authorize(binding_id, version_id, &descriptor)
+            .unwrap_err()
+            .code(),
+        ErrorCode::BindingTypeMismatch
+    );
     workers.mark_ready(version_id, 22).unwrap();
     let authorized = BindingRepository::new(storage.db())
         .authorize(binding_id, version_id, &descriptor)

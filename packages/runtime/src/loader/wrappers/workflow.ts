@@ -9,14 +9,12 @@ import {
   trackExecutionContext,
   trustedContextExports,
   type Environment,
-  type EnvironmentWrapper,
   type TrackedContext,
 } from "./runtime.js";
 
 /** Select the matching runner/controller contract without exposing either in tenant env. */
 export function createWorkflowEntrypoint<Controller>(
   target: unknown,
-  wrapEnv: EnvironmentWrapper,
   run: (
     target: unknown,
     ctx: ExecutionContext,
@@ -37,9 +35,9 @@ export function createWorkflowEntrypoint<Controller>(
       event: WorkflowEventWire,
       controller: Controller,
     ): Promise<WorkflowRunResult> {
-      cache?.bind(this.env);
+      cache?.bind();
       const trustedExports = trustedContextExports(this.ctx);
-      const wrapped = wrapEnv(this.env);
+      const wrapped = this.env;
       const tracked = (this.#tracked ??= trackExecutionContext(
         this.ctx,
         undefined,

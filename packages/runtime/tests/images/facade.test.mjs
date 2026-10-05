@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { importRuntime } from "../compiled-runtime.mjs";
 
-const { ImagesBinding } = await importRuntime("images/facade.ts");
+const { ImagesBindingImpl } = await importRuntime("images/facade.ts");
 
 test("Images binding preserves official synchronous chaining and result response shape", async () => {
   const calls = [];
-  const binding = new ImagesBinding({
+  const binding = new ImagesBindingImpl({
     async input(input) {
       calls.push(["input", input]);
       return "session";
@@ -27,6 +27,7 @@ test("Images binding preserves official synchronous chaining and result response
       });
     },
   });
+  assert.equal(binding.constructor.name, "ImagesBindingImpl");
   const source = new ReadableStream({
     start(controller) {
       controller.close();
@@ -59,7 +60,7 @@ test("Images binding preserves official synchronous chaining and result response
 
 test("Images facade rejects unsupported public options before transport execution", async () => {
   let calls = 0;
-  const binding = new ImagesBinding({
+  const binding = new ImagesBindingImpl({
     async input() {
       calls += 1;
       return "session";
@@ -114,7 +115,7 @@ test("Images facade rejects malformed info and output protocol values", async ()
         controller.close();
       },
     });
-  const malformedInfo = new ImagesBinding({
+  const malformedInfo = new ImagesBindingImpl({
     async input() {
       return "session";
     },
@@ -129,7 +130,7 @@ test("Images facade rejects malformed info and output protocol values", async ()
   });
   await assert.rejects(malformedInfo.info(source()), /IMAGE_PROTOCOL_ERROR/);
 
-  const wrongOutput = new ImagesBinding({
+  const wrongOutput = new ImagesBindingImpl({
     async input() {
       return "session";
     },

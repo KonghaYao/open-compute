@@ -84,6 +84,7 @@ fn run_invariants(tx: &Transaction<'_>) -> Result<(), PlatformError> {
         "instance_identity",
         "workers",
         "worker_versions",
+        "version_python_prepared",
         "version_vars",
         "version_secrets",
         "hostname_claims",
@@ -206,6 +207,19 @@ fn run_invariants(tx: &Transaction<'_>) -> Result<(), PlatformError> {
         )
         .map_err(|_| migration_failed())?;
     if invalid_origins {
+        return Err(migration_failed());
+    }
+    let missing_python_artifacts: bool = tx
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM worker_versions v
+             WHERE v.state='ready' AND v.content_kind='worker'
+               AND substr(v.main_module,-3)='.py'
+               AND NOT EXISTS(SELECT 1 FROM version_python_prepared p WHERE p.version_id=v.id))",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|_| migration_failed())?;
+    if missing_python_artifacts {
         return Err(migration_failed());
     }
     crate::workflows::integrity::verify_catalog(tx).map_err(|_| migration_failed())?;

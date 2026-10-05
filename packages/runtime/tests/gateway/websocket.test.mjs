@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { importRuntime } from "../compiled-runtime.mjs";
-
-const { default: gateway } = await importRuntime("gateway/ingress.ts");
+import { Ingress } from "./runtime.mjs";
 
 test("private ingress forwards authenticated WebSocket upgrades only on dispatch", async () => {
   const forwarded = [];
@@ -15,6 +13,7 @@ test("private ingress forwards authenticated WebSocket upgrades only on dispatch
       },
     },
   };
+  const gateway = new Ingress({}, env);
   const make = (path, token, upgrade = "websocket") =>
     new Request(`http://private${path}`, {
       headers: { "x-open-compute-internal-token": token, upgrade },
@@ -25,11 +24,10 @@ test("private ingress forwards authenticated WebSocket upgrades only on dispatch
     make("/internal/validate", "test-generation"),
     make("/internal/dispatch", "test-generation", "other"),
   ])
-    assert.equal((await gateway.fetch(request, env)).status, 404);
+    assert.equal((await gateway.fetch(request)).status, 404);
   assert.equal(forwarded.length, 0);
   assert.equal(
-    (await gateway.fetch(make("/internal/dispatch", "test-generation"), env))
-      .status,
+    (await gateway.fetch(make("/internal/dispatch", "test-generation"))).status,
     200,
   );
   assert.equal(forwarded[0].method, "GET");

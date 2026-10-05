@@ -425,6 +425,8 @@ async fn consumer_routes_cover_create_read_update_delete_and_validation() {
         .unwrap();
     assert_eq!(created.status(), StatusCode::OK);
     let created = json(created).await;
+    assert_eq!(created["result"]["script_name"], "consumer-worker");
+    assert!(created["result"].get("script").is_none());
     let consumer_id = created["result"]["consumer_id"]
         .as_str()
         .unwrap()
@@ -525,7 +527,10 @@ async fn exercise_consumer_lifecycle(app: &Router, prefix: &str, consumer_id: &s
         .await
         .unwrap();
     assert_eq!(listed.status(), StatusCode::OK);
-    assert_eq!(json(listed).await["result"].as_array().unwrap().len(), 1);
+    let listed = json(listed).await;
+    assert_eq!(listed["result"].as_array().unwrap().len(), 1);
+    assert_eq!(listed["result"][0]["script_name"], "consumer-worker");
+    assert!(listed["result"][0].get("script").is_none());
 
     let detail = format!("{prefix}/{consumer_id}");
     let fetched = app
@@ -540,6 +545,9 @@ async fn exercise_consumer_lifecycle(app: &Router, prefix: &str, consumer_id: &s
         .await
         .unwrap();
     assert_eq!(fetched.status(), StatusCode::OK);
+    let fetched = json(fetched).await;
+    assert_eq!(fetched["result"]["script_name"], "consumer-worker");
+    assert!(fetched["result"].get("script").is_none());
 
     let updated = app
         .clone()
@@ -555,7 +563,10 @@ async fn exercise_consumer_lifecycle(app: &Router, prefix: &str, consumer_id: &s
         .await
         .unwrap();
     assert_eq!(updated.status(), StatusCode::OK);
-    assert_eq!(json(updated).await["result"]["settings"]["batch_size"], 5);
+    let updated = json(updated).await;
+    assert_eq!(updated["result"]["settings"]["batch_size"], 5);
+    assert_eq!(updated["result"]["script_name"], "consumer-worker");
+    assert!(updated["result"].get("script").is_none());
 
     let bad_query = app
         .clone()

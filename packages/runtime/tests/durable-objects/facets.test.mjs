@@ -17,7 +17,19 @@ const runtime = moduleUrl(`
 const tunnel = moduleUrl(`
   export function socketAuthorityWire(value) { return { kind: "test", value }; }
 `);
+const privateControls = new WeakMap();
+globalThis.__openComputeFacetPrivateControls = privateControls;
+globalThis.__openComputeFacetAdmission = () => {};
+const wrapped = moduleUrl(`
+  export default {
+    createPrivateTransport(raw) {
+      return globalThis.__openComputeFacetPrivateControls.get(raw) ?? raw;
+    },
+    admitSubrequest() { globalThis.__openComputeFacetAdmission(); }
+  };
+`);
 const { TenantFacets } = await importRuntime("durable-objects/facets.ts", {
+  "cloudflare-internal:wrapped-binding": wrapped,
   "cloudflare:workers": cloudflare,
   "../loader/wrappers/runtime.js": runtime,
   "../sockets/tunnel.js": tunnel,
@@ -81,6 +93,9 @@ function fixture() {
     ) {
       calls.push({ kind: "prepare-connect", path, descriptor, token, socket });
     },
+    async __openComputeCancelFacetConnect(token) {
+      calls.push({ kind: "cancel-connect", token });
+    },
     connect(address, options) {
       calls.push({ kind: "connect", address, options });
       return {
@@ -96,6 +111,7 @@ function fixture() {
     facets: new TenantFacets(manager, authority, [], "root-id", nativeFacets),
     manager,
     nativeClasses,
+    nativeFacets,
   };
 }
 
@@ -104,6 +120,65 @@ function loopback(entrypoint, props) {
   metadata.set(value, { entrypoint, props });
   return value;
 }
+
+test("public facet calls share native admission while startup and lifecycle stay private", async () => {
+  const { calls, manager, nativeClasses, nativeFacets } = fixture();
+  const control = { ...manager };
+  privateControls.set(manager, control);
+  for (const name of [
+    "__openComputePrepareNativeFacet",
+    "__openComputeFacetCall",
+    "__openComputeFacetGet",
+    "__openComputeFacetFetch",
+    "__openComputeFacetAbort",
+    "__openComputeFacetDelete",
+    "__openComputeFacetClone",
+  ])
+    manager[name] = () => {
+      throw Error("unexpected public control dispatch");
+    };
+  let admitted = 0;
+  globalThis.__openComputeFacetAdmission = () => {
+    if (admitted >= 2) throw Error("Too many subrequests.");
+    admitted++;
+  };
+  try {
+    const facets = new TenantFacets(
+      manager,
+      authority,
+      [],
+      "root-id",
+      nativeFacets,
+    );
+    const actorClass = Object.freeze({});
+    nativeClasses.add(actorClass);
+    const stub = facets.get("dynamic", () => ({ class: actorClass }));
+    assert.equal(await stub.increment(), 1);
+    assert.equal(await stub.label, "facet-label");
+    assert.throws(() => stub.increment(), /Too many subrequests/);
+    facets.clone("dynamic", "copy");
+    facets.delete("copy");
+    facets.abort("dynamic", "stop");
+    await Promise.all(background.splice(0));
+    assert.equal(admitted, 2);
+    assert.deepEqual(
+      calls.map((call) => call.kind),
+      [
+        "prepare-native",
+        "native-create",
+        "call",
+        "prepare-native",
+        "native-create",
+        "get",
+        "clone",
+        "delete",
+        "abort",
+      ],
+    );
+  } finally {
+    globalThis.__openComputeFacetAdmission = () => {};
+  }
+});
 
 test("logical facets forward methods, properties, fetch, props, and inherited ids", async () => {
   const { calls, facets } = fixture();
@@ -132,6 +207,62 @@ test("logical facets forward methods, properties, fetch, props, and inherited id
     id: "root-id",
     props: { marker: "value" },
   });
+});
+
+for (const failure of ["throw", "opened", "closed"]) {
+  test(`facet CONNECT ${failure} cleans up after late private preparation`, async () => {
+    const { facets, manager } = fixture();
+    const entered = Promise.withResolvers();
+    const released = Promise.withResolvers();
+    const pending = new Set();
+    const events = [];
+    manager.__openComputePrepareFacetConnect = async (
+      _authority,
+      _path,
+      _descriptor,
+      token,
+    ) => {
+      entered.resolve();
+      await released.promise;
+      pending.add(token);
+      events.push("prepared");
+    };
+    manager.__openComputeCancelFacetConnect = async (token) => {
+      pending.delete(token);
+      events.push("cancelled");
+    };
+    const error = new TypeError("native socket option failure");
+    const socket = {
+      opened: failure === "opened" ? Promise.reject(error) : Promise.resolve(),
+      closed: failure === "opened" ? Promise.reject(error) : Promise.resolve(),
+    };
+    manager.connect = () => {
+      if (failure === "throw") throw error;
+      return socket;
+    };
+    const stub = facets.get("socket", () => ({ class: loopback("Child") }));
+    if (failure === "throw")
+      assert.throws(
+        () => stub.connect("example.com:443"),
+        (value) => value === error,
+      );
+    else assert.equal(stub.connect("example.com:443"), socket);
+    await entered.promise;
+    assert.deepEqual(events, []);
+    released.resolve();
+    await Promise.all(background.splice(0));
+    assert.deepEqual(events, ["prepared", "cancelled"]);
+    assert.equal(pending.size, 0);
+  });
+}
+
+test("facet startup callbacks receive no arguments", async () => {
+  const { facets } = fixture();
+  const facet = facets.get("child", function (...args) {
+    assert.deepEqual(args, []);
+    return { class: loopback("Child") };
+  });
+  assert.equal(await facet.increment(), 1);
 });
 
 test("clone and delete are ordered before destination startup and clear cached callbacks", async () => {

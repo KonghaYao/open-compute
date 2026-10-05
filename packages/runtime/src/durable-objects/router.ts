@@ -12,6 +12,11 @@ import {
   validateSocketAuthorityWire,
   type SocketAuthorityWire,
 } from "../sockets/tunnel.js";
+import {
+  encodeObjectIdentity,
+  identityFromHeaders,
+  OBJECT_IDENTITY_HEADER,
+} from "./identity.js";
 import type {
   DoHostEnv,
   DoOrder,
@@ -24,7 +29,7 @@ export { DoHost } from "./host.js";
 
 export { AiSearchTransport } from "../ai-search/host.js";
 export { AiTransport } from "../ai/host.js";
-export { CacheTransport } from "../cache/host.js";
+export { CacheTransport, CacheWriteTransport } from "../cache/host.js";
 export { ImageTransport } from "../images/host.js";
 export { KVNamespace } from "../kv/transport.js";
 export {
@@ -240,7 +245,12 @@ async function authorize(
   }
   const authority: unknown = await response.json();
   assertAuthority(authority);
-  return authority;
+  const identity = identityFromHeaders(request.headers, authority.objectId);
+  return {
+    ...authority,
+    objectName: identity.name,
+    jurisdiction: identity.jurisdiction,
+  };
 }
 
 async function acknowledge(
@@ -277,6 +287,14 @@ function hostHeaders(
   authority: ResolvedDoAuthority,
 ): Headers {
   const headers = new Headers(request.headers);
+  headers.set(
+    OBJECT_IDENTITY_HEADER,
+    encodeObjectIdentity({
+      value: authority.objectId,
+      name: authority.objectName,
+      jurisdiction: authority.jurisdiction,
+    }),
+  );
   headers.set("x-open-compute-instance-id", authority.instanceId);
   headers.set("x-open-compute-worker-id", authority.workerId);
   headers.set("x-open-compute-version-id", authority.versionId);

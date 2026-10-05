@@ -1,6 +1,7 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { BindingEnv, ResourceBindingProps } from "../bindings/protocol.js";
 import { bindingError, currentStartupGeneration } from "../loader/shared.js";
+import { nativeKvFetch } from "./native-adapter.js";
 
 const BINDING_TOKEN_HEADER = "x-open-compute-binding-token";
 const BINDING_FRAME_CONTENT_TYPE = "application/vnd.open-compute.kv.v1+frame";
@@ -571,7 +572,7 @@ export class KVNamespace extends WorkerEntrypoint<
 
   async #request(
     operation: string,
-    body: BodyInit,
+    body: BodyInit | (() => BodyInit),
     permission: "read" | "write",
   ) {
     const props = this.#props();
@@ -590,7 +591,7 @@ export class KVNamespace extends WorkerEntrypoint<
           "x-open-compute-descriptor-sha256": props.descriptorSha256,
           "x-open-compute-request-id": crypto.randomUUID(),
         },
-        body,
+        body: typeof body === "function" ? body() : body,
       },
     );
     if (!response.ok) {
@@ -702,7 +703,7 @@ export class KVNamespace extends WorkerEntrypoint<
       metadata: normalized.metadata,
       metadataPresent: normalized.metadataPresent,
     };
-    await this.#request("put", framedPutBody(header, value), "write");
+    await this.#request("put", () => framedPutBody(header, value), "write");
   }
 
   async delete(key: string) {
@@ -779,7 +780,7 @@ export class KVNamespace extends WorkerEntrypoint<
     };
   }
 
-  async fetch(): Promise<never> {
-    throw bindingError("BINDING_PERMISSION_DENIED");
+  async fetch(request: Request): Promise<Response> {
+    return nativeKvFetch(request, this);
   }
 }

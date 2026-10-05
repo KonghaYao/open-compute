@@ -31,9 +31,9 @@ export function encodeWorkflowValue(
   tooLarge = "WORKFLOW_RESULT_TOO_LARGE",
 ): Uint8Array<ArrayBuffer> {
   try {
-    return encodeDurableValue(value, "workflow");
+    return encodeDurableValue(value);
   } catch (error) {
-    const code = durableValueErrorCode(error, "workflow");
+    const code = durableValueErrorCode(error);
     if (code === "WORKFLOW_RESULT_TOO_LARGE" && tooLarge !== code) {
       throw workflowError(tooLarge);
     }
@@ -42,11 +42,11 @@ export function encodeWorkflowValue(
 }
 
 export function decodeWorkflowValue(value: unknown): unknown {
-  return decodeDurableValue(value, "workflow");
+  return decodeDurableValue(value);
 }
 
 export function workflowSerializationCode(error: unknown): string {
-  const code = durableValueErrorCode(error, "workflow");
+  const code = durableValueErrorCode(error);
   return code === "WORKFLOW_RESULT_TOO_LARGE"
     ? code
     : "WORKFLOW_SERIALIZATION_UNSUPPORTED";

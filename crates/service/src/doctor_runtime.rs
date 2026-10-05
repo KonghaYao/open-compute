@@ -280,7 +280,6 @@ pub(super) async fn run_full_extras(
             config: loaded.config.runtime.clone(),
             clock: Arc::new(SystemClock),
             jitter: Arc::new(OsJitter),
-            redactor: Redactor::new(),
             lease_path: Some(lease_path),
         },
         vec![runtime_external, binding_external, observability_external],

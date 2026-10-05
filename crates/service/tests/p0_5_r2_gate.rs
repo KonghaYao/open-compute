@@ -102,7 +102,7 @@ async fn p0_5_real_r2_facade_matrix() {
     assert_eq!(cold.status, 200, "{}", cold.body);
     assert_eq!(cold.loader_outcome, Some(LoaderOutcome::Cold));
     let matrix: serde_json::Value = serde_json::from_str(&cold.body).unwrap();
-    assert_eq!(matrix["localFacade"], true);
+    assert_eq!(matrix["nativeBinding"], true);
     assert_eq!(matrix["rawHidden"], true);
     assert_eq!(
         matrix["envKeys"],
@@ -121,6 +121,8 @@ async fn p0_5_real_r2_facade_matrix() {
     assert_eq!(matrix["pageSeparated"], true);
     assert_eq!(matrix["typedArray"], serde_json::json!([1, 2]));
     assert_eq!(matrix["streamJson"]["ok"], true);
+    assert_eq!(matrix["unknownLengthRejected"], true);
+    assert_eq!(matrix["unknownLengthMissing"], true);
     assert_eq!(matrix["aliasVisible"], true);
     assert_eq!(matrix["checksumMd5"], "5d41402abc4b2a76b9719d911017c592");
     assert_eq!(matrix["versionOk"], true);
@@ -151,7 +153,7 @@ async fn p0_5_real_r2_facade_matrix() {
         object_worker.id,
         &object,
         None,
-        ("/fake-cancel", ""),
+        ("/cancel", ""),
     )
     .await;
     assert_eq!(
@@ -403,10 +405,9 @@ fn request(
 
 fn object_source() -> &'static str {
     r#"import { WorkerEntrypoint } from "cloudflare:workers";
-import { R2Bucket as ImportableR2Bucket } from "./__open_compute__/r2/facade.js";
 
-function wrapped(bucket) {
-  return bucket instanceof ImportableR2Bucket
+function nativeBucket(bucket) {
+  return bucket.constructor.name === "R2Bucket"
     && typeof bucket.put === "function"
     && typeof bucket.fetch === "undefined";
 }
@@ -414,10 +415,10 @@ function wrapped(bucket) {
 export class Named extends WorkerEntrypoint {
   constructor(ctx, env) {
     super(ctx, env);
-    this.constructorSawWrapped = wrapped(env.BUCKET);
+    this.constructorSawNative = nativeBucket(env.BUCKET);
   }
   async fetch() {
-    return new Response(`named:${this.constructorSawWrapped}:${wrapped(this.env.BUCKET)}`);
+    return new Response(`named:${this.constructorSawNative}:${nativeBucket(this.env.BUCKET)}`);
   }
 }
 
@@ -428,28 +429,13 @@ export default {
     };
     const path = new URL(request.url).pathname;
     if (path === "/head") return new Response(await (await env.BUCKET.get("hello.txt")).text());
-    if (path === "/fake-cancel") {
-      let cancelled = false;
-      const unexpected = () => { throw new Error("unexpected R2 transport call"); };
-      const bucket = new ImportableR2Bucket({
-        head: unexpected, put: unexpected, delete: unexpected, list: unexpected,
-        createMultipartUpload: unexpected, uploadPart: unexpected, completeMultipartUpload: unexpected, abortMultipartUpload: unexpected,
-        async get() {
-          return {
-            meta: { key: "fake", version: "00000000-0000-7000-8000-000000000001", size: 1,
-              etag: "0".repeat(32), httpEtag: `"${"0".repeat(32)}"`,
-              uploaded: 0, httpMetadata: {}, customMetadata: {}, checksums: {}, storageClass: "Standard" },
-            body: new ReadableStream({
-              start(controller) { controller.enqueue(new Uint8Array([1])); },
-              cancel() { cancelled = true; },
-            }),
-          };
-        }
-      });
-      const reader = (await bucket.get("fake")).body.getReader();
-      await reader.read();
+    if (path === "/cancel") {
+      const object = await env.BUCKET.get("hello.txt");
+      const reader = object.body.getReader();
+      const first = await reader.read();
+      if (first.done || first.value.byteLength === 0) throw new Error("missing R2 body");
       await reader.cancel("tenant cancelled");
-      return new Response(cancelled ? "cancelled" : "not-cancelled");
+      return new Response("cancelled");
     }
     if (path === "/cleanup") {
       await env.BUCKET.delete(["hello.txt", "typed.bin", "stream.json", "ia.bin", "ssec.bin", "mpu.txt"]);
@@ -458,7 +444,7 @@ export default {
     if (path !== "/matrix") return new Response("missing", { status: 404 });
     let phase = "start";
     try {
-    const localFacade = wrapped(env.BUCKET);
+    const nativeBinding = nativeBucket(env.BUCKET);
     const rawHidden = !Reflect.ownKeys(env.BUCKET).some((key) => String(key).includes("raw"));
     const envKeys = Object.keys(env).sort();
     phase = "put-hello";
@@ -470,14 +456,33 @@ export default {
     const view = new Uint8Array([9, 1, 2, 9]).subarray(1, 3);
     phase = "put-typed";
     await mark("put-typed", env.BUCKET.put("typed.bin", view));
+    phase = "unknown-length";
+    let unknownLengthRejected = false;
+    try {
+      await env.BUCKET.put("unknown-length.json", new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"ok":true}'));
+          controller.close();
+        }
+      }));
+    } catch (error) {
+      unknownLengthRejected = error instanceof TypeError
+        && error.message.includes("must have a known length");
+    }
+    const unknownLengthMissing = await env.BUCKET.head("unknown-length.json") === null;
     phase = "put-stream";
-    await mark("put-stream", env.BUCKET.put("stream.json", new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode('{"ok":'));
-        controller.enqueue(new TextEncoder().encode("true}"));
-        controller.close();
-      }
-    }), { httpMetadata: new Headers({ "content-type": "application/json" }) }));
+    const fixed = new FixedLengthStream(11);
+    const writer = fixed.writable.getWriter();
+    const written = (async () => {
+      await writer.write(new TextEncoder().encode('{"ok":'));
+      await writer.write(new TextEncoder().encode("true}"));
+      await writer.close();
+    })();
+    await mark("put-stream", Promise.all([
+      env.BUCKET.put("stream.json", fixed.readable,
+        { httpMetadata: new Headers({ "content-type": "application/json" }) }),
+      written,
+    ]));
     phase = "head";
     const head = await mark("head", env.BUCKET.head("hello.txt"));
     const headers = new Headers();
@@ -511,7 +516,7 @@ export default {
     phase = "stream-get";
     const streamJson = await (await env.BUCKET.get("stream.json")).json();
     const aliasVisible = (await env.BUCKET_ALIAS.head("hello.txt")).size === 5
-      && wrapped(env.BUCKET_ALIAS);
+      && nativeBucket(env.BUCKET_ALIAS);
     phase = "checksums";
     const checksumJson = first.checksums.toJSON();
     const versionOk = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(head.version);
@@ -534,12 +539,12 @@ export default {
     phase = "start-after";
     const after = await env.BUCKET.list({ startAfter: "hello.txt", limit: 1000 });
     return Response.json({
-      localFacade, rawHidden, envKeys, httpMetadata,
+      nativeBinding, rawHidden, envKeys, httpMetadata,
       headCustom: head.customMetadata.greeting,
       firstBodyUsed, secondBodyUsed, secondConsumeRejected, body, blobType,
       range, rangeSize, conditionHasBody: "body" in condition,
       pageSeparated: page1.truncated && page1.objects[0].key !== page2.objects[0].key,
-      typedArray, streamJson, aliasVisible,
+      typedArray, streamJson, unknownLengthRejected, unknownLengthMissing, aliasVisible,
       checksumMd5: checksumJson.md5, versionOk, storageClass: ia.storageClass,
       ssecGetDenied, ssecBody, ssecMd5: ssecHead.ssecKeyMd5, onlyIfSkipped: skipped === null,
       multipartKey: completed.key, startAfterOmitsHello: after.objects.every((item) => item.key !== "hello.txt"),
@@ -563,11 +568,11 @@ fn class_source() -> &'static str {
 export default class extends WorkerEntrypoint {
   constructor(ctx, env) {
     super(ctx, env);
-    this.constructorSawWrapped = typeof env.BUCKET.put === "function" && typeof env.BUCKET.fetch === "undefined";
+    this.constructorSawNative = typeof env.BUCKET.put === "function" && typeof env.BUCKET.fetch === "undefined";
   }
   async fetch() {
-    const methodSawWrapped = typeof this.env.BUCKET.get === "function" && typeof this.env.BUCKET.fetch === "undefined";
-    return new Response(`class:${this.constructorSawWrapped}:${methodSawWrapped}`);
+    const methodSawNative = typeof this.env.BUCKET.get === "function" && typeof this.env.BUCKET.fetch === "undefined";
+    return new Response(`class:${this.constructorSawNative}:${methodSawNative}`);
   }
 }"#
 }

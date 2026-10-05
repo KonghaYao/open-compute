@@ -184,7 +184,14 @@ fn parse_parts(
     }
     validate_metadata(&metadata)?;
     let entrypoint = match (&metadata.main_module, &metadata.body_part) {
-        (Some(main), None) => Some((main.as_str(), ModuleType::EsModule)),
+        (Some(main), None) => Some((
+            main.as_str(),
+            if main.ends_with(".py") {
+                ModuleType::Python
+            } else {
+                ModuleType::EsModule
+            },
+        )),
         (None, Some(main)) => Some((main.as_str(), ModuleType::CommonJsModule)),
         (None, None) if metadata.assets.is_some() => None,
         _ => return Err(invalid()),
@@ -382,6 +389,7 @@ fn module_type(content_type: Option<&str>) -> Result<ModuleType, PlatformError> 
             Ok(ModuleType::EsModule)
         }
         Some("application/javascript" | "text/javascript") => Ok(ModuleType::CommonJsModule),
+        Some("text/x-python") => Ok(ModuleType::Python),
         Some("application/wasm") => Ok(ModuleType::Wasm),
         Some("application/octet-stream") => Ok(ModuleType::Data),
         Some("application/source-map") => Ok(ModuleType::SourceMap),

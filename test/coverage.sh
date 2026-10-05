@@ -4,6 +4,7 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 report_dir="$root/target/llvm-cov"
+latest_report_dir="$report_dir"
 # Dedicated tests, explicit test-support fixtures, vendored dependencies, and
 # the release-only search benchmark are not workspace production Rust.
 # Production modules must never be placed behind one of these filename rules.
@@ -45,15 +46,20 @@ cd "$root"
 # Do not `cargo llvm-cov clean --workspace`; that cargo-cleans the target.
 # Profile names include process/module identity, so parallel processes cannot collide.
 export CARGO_TARGET_DIR="$root/target/llvm-cov-target"
-mkdir -p "$CARGO_TARGET_DIR"
-find "$CARGO_TARGET_DIR" \( -name '*.profraw' -o -name '*.profdata' \) -delete
+mkdir -p "$CARGO_TARGET_DIR" "$root/.temp/coverage"
+# Keep profiles, merged data and exact objects immutable in a fresh run directory.
+# Earlier failed runs and their objects remain available for diagnosis.
+OPEN_COMPUTE_COVERAGE_RUN_DIR=$(mktemp -d "$root/.temp/coverage/run-XXXXXXXX")
+export OPEN_COMPUTE_COVERAGE_RUN_DIR
+mkdir -p "$OPEN_COMPUTE_COVERAGE_RUN_DIR/profiles"
+report_dir="$OPEN_COMPUTE_COVERAGE_RUN_DIR/reports"
 # Use cargo-llvm-cov's external-runner contract in its own existing build cache.
 ./test/gate.py --workspace --list "$@" >/dev/null
 coverage_env=$("$cargo_bin" llvm-cov show-env --sh)
 eval "$coverage_env"
 # Merge child-process profiles into LLVM's bounded pool instead of creating one
 # full-size profile per PID; the latter exhausts hosted-runner disks.
-export LLVM_PROFILE_FILE="$CARGO_TARGET_DIR/open-compute-%12m.profraw"
+export LLVM_PROFILE_FILE="$OPEN_COMPUTE_COVERAGE_RUN_DIR/profiles/open-compute-%12m.profraw"
 # show-env exports CARGO_LLVM_COV_SHOW_ENV=1 for printing; leave it set and the
 # RUSTC_WRAPPER re-enters show-env. Prefer direct rustc flags over the wrapper:
 # under macOS maxproc pressure the wrapper fan-out fails with EAGAIN on rustc -vV.
@@ -70,7 +76,7 @@ export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-1}"
 mkdir -p "$report_dir"
 # External-runner caches retain prior hashed executables. cargo-llvm-cov's
 # report subcommand discovers every executable in that cache, so invoke the
-# matching Rust toolchain's LLVM tools directly with the exact hard-linked
+# matching Rust toolchain's LLVM tools directly with the exact copied
 # object set emitted by this Gate build.
 rustc_bin=${RUSTC:-rustc}
 toolchain=$($rustc_bin --print sysroot)
@@ -82,16 +88,16 @@ if [ ! -x "$llvm_cov" ] || [ ! -x "$llvm_profdata" ]; then
   exit 1
 fi
 
-profile_list="$CARGO_TARGET_DIR/current-profraw-list"
-profdata="$CARGO_TARGET_DIR/current.profdata"
-find "$CARGO_TARGET_DIR" -type f -name '*.profraw' -print > "$profile_list"
+profile_list="$OPEN_COMPUTE_COVERAGE_RUN_DIR/profraw-list"
+profdata="$OPEN_COMPUTE_COVERAGE_RUN_DIR/merged.profdata"
+find "$OPEN_COMPUTE_COVERAGE_RUN_DIR/profiles" -type f -name '*.profraw' -print > "$profile_list"
 if [ ! -s "$profile_list" ]; then
   echo "coverage Gate produced no profile data" >&2
   exit 1
 fi
 "$llvm_profdata" merge -sparse -f "$profile_list" -o "$profdata"
 
-object_dir="$CARGO_TARGET_DIR/current-objects"
+object_dir="$OPEN_COMPUTE_COVERAGE_RUN_DIR/objects"
 set -- "$object_dir"/*
 if [ "$1" = "$object_dir/*" ] || [ ! -f "$1" ]; then
   echo "coverage Gate produced no current object inventory" >&2
@@ -134,6 +140,20 @@ if lines['percent'] < minimum:
 print(f"workspace line coverage: {lines['percent']:.2f}%")
 PY
 
+# Keep this run's report with its exact inputs. Preserve the previous conventional
+# reports before publishing the newly qualified reports to the documented path.
+if [ -e "$latest_report_dir" ] || [ -L "$latest_report_dir" ]; then
+  if [ -L "$latest_report_dir" ] || [ ! -d "$latest_report_dir" ]; then
+    echo "coverage report path is not an owned directory: $latest_report_dir" >&2
+    exit 1
+  fi
+  cp -pR "$latest_report_dir" "$OPEN_COMPUTE_COVERAGE_RUN_DIR/previous-reports"
+fi
+mkdir -p "$latest_report_dir"
+cp -pR "$report_dir/." "$latest_report_dir/"
+report_dir="$latest_report_dir"
+
+echo "retained coverage inputs and reports: $OPEN_COMPUTE_COVERAGE_RUN_DIR"
 echo "coverage reports:"
 if [ "$coverage_html" = 1 ]; then
   echo "  HTML: $report_dir/html/index.html"

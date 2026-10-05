@@ -1,7 +1,7 @@
 {
   "schemaVersion": 4,
-  "release": "v1.20260930.0-open-compute-r3.e3bdb07f5",
-  "revision": "e3bdb07f52affc6a618f02ed2b731a581b0b2f69",
+  "release": "v1.20260930.0-open-compute-r4.e98a3e843",
+  "revision": "e98a3e8433979356047a202d3e0d1b0e2e2c4b8c",
   "expectedVersionOutput": "workerd 2026-09-30",
   "systemCompatibilityDate": "2026-09-08",
   "systemCompatibilityFlags": [
@@ -28,62 +28,68 @@
     "astSha256": "da29f5ec1d9a81cc0094bd083ed3b28013573fcb2d4febd9fd62aecbfb53c6b3"
   },
   "workersSdk": {
-    "revision": "968d629c9f4978d6842b0e11af511ef59a51cd79",
-    "wranglerVersion": "4.143.0",
-    "vitePluginVersion": "1.54.2"
+    "revision": "52b0dc0e99b5bbdb86c06ed53fb703048efc36cf",
+    "cfVersion": "1.0.0-beta.12",
+    "vitePluginVersion": "2.0.0-beta.sha-52b0dc0e9"
   },
   "targets": {
     "darwin-arm64": {
       "archiveName": "workerd-darwin-arm64.gz",
-      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-darwin-arm64.gz",
-      "archiveSha256": "632d2ee13c684e70200bacd0bf1583360d430ad1054ef3cb29e0c20ef52481e0",
-      "binarySha256": "d489faf23b0ecf7bfa8edccac5e6d5295f262f7f02f392c7ae92b06d95f55ddf"
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r4.e98a3e843/workerd-darwin-arm64.gz",
+      "archiveSha256": "35866787c114955cf321761495eeefa21ec6dfcf6969f6960ab8b5abb853d78a",
+      "binarySha256": "5fcc34038f37c5a42668193f31bc1a9eeb4355f42f8188b312d03c77f3efb788"
     },
     "darwin-x64": {
       "archiveName": "workerd-darwin-64.gz",
-      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-darwin-64.gz",
-      "archiveSha256": "cd7c543b688120ccb5fdc57706c0e0bddbdde6ee140b55fd7f30cc3e3524c015",
-      "binarySha256": "9149f00c2f2b7bd576f6b164e924ed306562845ca72a8207d99ff6774c58753e"
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r4.e98a3e843/workerd-darwin-64.gz",
+      "archiveSha256": "c7342e5579d798f184e7d0320087686060fc8819f00c096aa4d45b155941c675",
+      "binarySha256": "ced654c8982520783a29f23cdb0d159cd3290ce07b2a30d5fa739741a8d08050"
     },
     "linux-arm64": {
       "archiveName": "workerd-linux-arm64.gz",
-      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-arm64.gz",
-      "archiveSha256": "76d00935975e38c1b114771903cac54644dc1cde9a9c1b68a1afbd6829822f6b",
-      "binarySha256": "744a56e9b28728ead237765abc6cbded98560acc4bbfb5339d21e184394839d5"
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r4.e98a3e843/workerd-linux-arm64.gz",
+      "archiveSha256": "e8e1eda68ca7058cce04f6ac07fad123a1de967565fa284bb1d8c88507b62cb2",
+      "binarySha256": "7f23d3fceb6ea9406e33d1acc1105d67ddbc25941a3498dd6f33c574b716ca0f"
     },
     "linux-x64": {
       "archiveName": "workerd-linux-64.gz",
-      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-64.gz",
-      "archiveSha256": "5145314dbd608857bbd765cc479a609619f0cf380bb91d9704303d218816fa48",
-      "binarySha256": "40424924678782e02d6a68a1af512b1a9dacdf93b16e47c2d7f4825a09f5e336"
+      "archiveUrl": "https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r4.e98a3e843/workerd-linux-64.gz",
+      "archiveSha256": "22a6b617c8ed4fd2e577cf19111d842b4e596ca2137cfafb082b25bcdcf9d87b",
+      "binarySha256": "5f9f5152df987be874e6092dbc56b28023d00e6c54b361617618d32071606ce5"
     }
   },
   "source": {
     "repository": "https://github.com/elliothux/workerd",
-    "upstreamBase": "cb26acc62e64f64487a78e3f73d0a08e9926c690",
+    "upstreamBase": "d99bc6b777e35d72d71c2f1fe2fd1db53284528a",
     "buildInputs": {
       "bazel": "9.2.0",
       "target": "//src/workerd/server:workerd",
       "mode": "opt",
       "strip": "always",
       "macosExecRustStrip": "none",
-      "workflowRun": "https://github.com/elliothux/workerd/actions/runs/36668461686",
-      "sourceTreeSha256": "d3a2b9f7bc182c25f8c72d0a0b6209043b6aeaedc940823de53b778b912d19bb",
+      "workflowRun": "https://github.com/elliothux/workerd/actions/runs/37175389986",
+      "sourceTreeSha256": "6a1d4f41c74a7569052922db1a62382cca82d16382eedd5353ce95cd35225577",
       "darwinArm64Config": "release_macos",
       "darwinX64Config": "release_macos_cross_x86_64",
       "linuxConfig": "release_linux",
       "macosRunner": "macos-15",
-      "macosCompiler": "Apple clang 17.0.0 (clang-1700.0.13.3)",
-      "macosLinker": "Homebrew LLD 23.1.0",
-      "macosSdk": "15.4",
       "linuxArm64Runner": "ubuntu-24.04-arm",
       "linuxX64Runner": "ubuntu-24.04",
       "linuxCompiler": "/usr/lib/llvm-22/bin/clang via setup-runner Linux config",
       "linuxLinker": "/usr/lib/llvm-22/bin/ld.lld via setup-runner Linux config",
-      "linuxRecordedRunnerCompiler": "Ubuntu clang 18.1.3 (runner default; Bazel uses configured LLVM 22)",
-      "archive": "Bun 1.3.14 node:zlib gzipSync level 9; mtime 0; no filename; OS 255",
+      "archive": "/usr/bin/gzip -9n -c on macOS; mtime 0; no filename",
       "pyodideBundleTarget": "//src/pyodide:pyodide.capnp.bin@rule@314.0.6",
-      "pyodideBundleArchive": "Bun 1.3.14 node:zlib gzipSync level 9; mtime 0; no filename; OS 255"
+      "pyodideBundleArchive": "Bun 1.3.14 node:zlib gzipSync level 9; mtime 0; no filename; OS 255",
+      "sourceArchiveTarSha256": "2e63b0ceee6fbe00751405f99edbf6555cb29f6338956490ff7ed6ae48e4d1ff",
+      "sourceArchiveMethod": "git archive --format=tar e98a3e8433979356047a202d3e0d1b0e2e2c4b8c",
+      "publicationRecovery": "Original four successful build artifacts; publish job failed on nested binary path; no rebuild",
+      "publicationRecoveryScriptSha256": "bd4d1d34d8c009fcf5d202b06b5263e11e342b1cadcca675cf2473b19ec9c082",
+      "publicationRecoveryToolVersion": "Apple gzip 487.0.1",
+      "darwinArm64BuildInputsSha256": "0e5ac6cfdd321e2da7cf1020ae5e40f982a8f66a72a28820d80f54f5f64ece35",
+      "darwinX64BuildInputsSha256": "288cadf63bd420abc4a8f409a6032133a28f909305217d49678c2858680ad7dc",
+      "linuxArm64BuildInputsSha256": "9aa8c0f9f85222ebc5c2f640472f9fbb71f671adb655bc34497115905ca02738",
+      "linuxX64BuildInputsSha256": "b6cf30d39ca05928a8534335063133b5283585d1269ad83f993b6b2d1edba5e8",
+      "recordedToolchains": "See per-target build-inputs digests; configured compiler/linker from exact workflow source"
     }
   }
 }

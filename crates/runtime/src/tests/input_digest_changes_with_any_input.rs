@@ -108,6 +108,7 @@ fn input_digest_changes_with_any_input() {
     )
     .unwrap();
     let d_lock2 = config_input_digest(&DigestInputs {
+        role: crate::ConfigRole::Runtime,
         config_template: &fs::read(dir.path().join("config.capnp")).unwrap(),
         workers: &workers,
         lock_bytes: &lock_bytes2,
@@ -116,6 +117,21 @@ fn input_digest_changes_with_any_input() {
         rendered: rendered.as_bytes(),
     });
     assert_ne!(d_lock, d_lock2);
+    let prepare_digest = config_input_digest(&DigestInputs {
+        role: crate::ConfigRole::PythonPreparation,
+        config_template: &fs::read(dir.path().join("config.capnp")).unwrap(),
+        workers: &workers,
+        lock_bytes: &lock_bytes,
+        runtime: &runtime,
+        platform: &platform_meta(),
+        rendered: rendered.as_bytes(),
+    });
+    assert_ne!(d_lock, prepare_digest);
+    assert_eq!(crate::ConfigRole::Runtime.constant(), "config");
+    assert_eq!(
+        crate::ConfigRole::PythonPreparation.constant(),
+        "prepareConfig"
+    );
 
     let runtime2 = runtime.clone().with_binary_sha256("cd".repeat(32));
     let (d_bin, _, _) = digest_for(

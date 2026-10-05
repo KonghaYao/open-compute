@@ -1,3 +1,5 @@
+import wrappedBinding from "cloudflare-internal:wrapped-binding";
+
 interface ImageTransport {
   input(stream: ReadableStream<Uint8Array>): Promise<string>;
   info(stream: ReadableStream<Uint8Array>): Promise<ImageInfo>;
@@ -254,15 +256,18 @@ class Transformer {
   }
 }
 
-/** Strict public Images chain over one version-scoped native transport. */
-export class ImagesBinding {
+/** Strict public Images chain over one version-scoped native transport.
+ * The upstream class name enables Python SDK argument conversion.
+ */
+export class ImagesBindingImpl extends wrappedBinding.WrappedBinding {
   readonly #transport: ImageTransport;
   constructor(raw: unknown) {
+    super(raw);
     if (
       raw === null ||
       typeof raw !== "object" ||
-      typeof Reflect.get(raw, "input") !== "function" ||
-      typeof Reflect.get(raw, "info") !== "function"
+      typeof (raw as Partial<ImageTransport>).input !== "function" ||
+      typeof (raw as Partial<ImageTransport>).info !== "function"
     )
       throw new TypeError("IMAGE_UNAVAILABLE");
     this.#transport = raw as ImageTransport;
@@ -305,4 +310,11 @@ export class ImagesBinding {
     }
     return { format, fileSize, width, height };
   }
+}
+
+/** Construct the config-owned Images binding from its scoped native Fetcher. */
+export default function imagesBinding(env: {
+  fetcher: unknown;
+}): ImagesBindingImpl {
+  return new ImagesBindingImpl(env.fetcher);
 }

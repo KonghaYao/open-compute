@@ -37,9 +37,9 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Initialize pinned gitserver-core submodule
+    - name: Initialize pinned build source submodules
       shell: bash
-      run: git submodule update --init --depth 1 third_party/gitserver
+      run: git submodule update --init --depth 1 third_party/gitserver third_party/workerd
 
     - name: Set up Python
       if: ${{ inputs.python == 'true' }}

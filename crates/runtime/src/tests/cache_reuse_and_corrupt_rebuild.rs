@@ -50,6 +50,7 @@ async fn cache_reuse_and_corrupt_rebuild() {
     assert!(request_debug.contains("CompileRequest"));
     assert!(!request_debug.contains(TOKEN));
     let first = compile_static_config(first_request).await.expect("compile");
+    assert_eq!(first.role(), crate::ConfigRole::Runtime);
     let n1 = fs::read(&counter).unwrap().len();
     assert!(n1 >= 1);
     let debug = format!("{first:?}");
@@ -57,6 +58,10 @@ async fn cache_reuse_and_corrupt_rebuild() {
     assert!(!debug.contains(first.path().to_string_lossy().as_ref()));
     let args_text = fs::read_to_string(&args).unwrap();
     assert!(!args_text.contains(TOKEN));
+    assert_eq!(
+        args_text.lines().rev().take(2).collect::<Vec<_>>(),
+        ["--config-only", "config"]
+    );
     first.open().expect("revalidate compiled handle");
 
     let _second = compile_static_config(compile_req(
@@ -123,4 +128,41 @@ async fn cache_reuse_and_corrupt_rebuild() {
     .await
     .expect("rebuild after symlink");
     assert!(rebuilt.path().is_file());
+    let mut request = compile_req(
+        &runtime,
+        &lock_path,
+        dir.path(),
+        &data,
+        &platform,
+        &token,
+        &redactor,
+        Duration::from_secs(5),
+    );
+    request.role = crate::ConfigRole::PythonPreparation;
+    let prepared = compile_static_config(request).await.unwrap();
+    assert_eq!(prepared.role(), crate::ConfigRole::PythonPreparation);
+    assert_ne!(prepared.digest(), rebuilt.digest());
+    assert_ne!(prepared.path(), rebuilt.path());
+    let args_text = fs::read_to_string(&args).unwrap();
+    assert_eq!(
+        args_text.lines().rev().take(2).collect::<Vec<_>>(),
+        ["--config-only", "prepareConfig"]
+    );
+    let count = fs::read(&counter).unwrap().len();
+    let mut request = compile_req(
+        &runtime,
+        &lock_path,
+        dir.path(),
+        &data,
+        &platform,
+        &token,
+        &redactor,
+        Duration::from_secs(5),
+    );
+    request.role = crate::ConfigRole::PythonPreparation;
+    let reused = compile_static_config(request).await.unwrap();
+    assert_eq!(reused.role(), crate::ConfigRole::PythonPreparation);
+    assert_eq!(reused.digest(), prepared.digest());
+    assert_eq!(fs::read(&counter).unwrap().len(), count);
+    rebuilt.open().unwrap();
 }

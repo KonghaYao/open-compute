@@ -3,6 +3,7 @@ import { routeDefaultHttp } from "../assets/router.js";
 import type { BindingEnv, ServiceBindingProps } from "../bindings/protocol.js";
 import { tenantEnv } from "../loader/bindings.js";
 import { modulesFor } from "../loader/modules.js";
+import { PRIVATE_POLICY, type WorkerPolicy } from "../loader/policy.js";
 import type {
   LoaderEnv,
   NativeHostExtensionPort,
@@ -24,12 +25,20 @@ import {
   inboundSocketTargetAddress,
   tunnelSockets,
 } from "../sockets/tunnel.js";
+import {
+  activateCapabilities,
+  retainServiceCapability,
+  retryServiceControl,
+  ServiceCompletionReporter,
+  serviceControl,
+  serviceFrame,
+  type CapabilityAdmission,
+  type ServiceRetentionController,
+} from "./control.js";
+import { serviceDeadline, serviceDeadlineAt } from "./deadline.js";
 import { appendServiceWebSocketHandoff } from "./facade.js";
+import type { ServiceFrame } from "./scope.js";
 
-interface ServiceFrame {
-  readonly scopeId: string;
-  readonly parentFrame: string | null;
-}
 interface ServiceAdmission {
   handle: string;
   frame: string;
@@ -59,16 +68,6 @@ interface ServiceAdmission {
         sessionIdentity: string;
       };
 }
-interface CapabilityAdmission {
-  handle: string;
-  frame: string;
-  deadlineMs: number;
-}
-interface CapabilityEnvelope {
-  __openComputeServiceCapability: 1;
-  kind: "function" | "target";
-  handle: object;
-}
 interface ServiceDispatchEnvelope {
   ok: boolean;
   value?: unknown;
@@ -76,11 +75,87 @@ interface ServiceDispatchEnvelope {
   background: ReadableStream<Uint8Array>;
 }
 
-const serviceRoots = new Map<string, { frame: string; expiresAt: number }>();
-const SERVICE_METHOD = /^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/;
+interface ServiceRoot {
+  frame: string | null;
+  expiresAt: number;
+  pending: Promise<void>;
+  closing: boolean;
+  completion?: Promise<void>;
+}
+const serviceRoots = new Map<string, ServiceRoot>();
+
+/** Keep root cleanup in the host when the caller's native execution context ends. */
+class ServiceRootLease extends RpcTarget {
+  readonly #transport: ServiceTransport;
+  readonly #scopeId: string;
+  readonly #released: () => void;
+  #closed = false;
+  #pending = 0;
+
+  constructor(
+    transport: ServiceTransport,
+    scopeId: string,
+    released: () => void,
+  ) {
+    super();
+    this.#transport = transport;
+    this.#scopeId = scopeId;
+    this.#released = released;
+  }
+
+  #check(frame: ServiceFrame): void {
+    if (
+      this.#closed ||
+      !serviceFrame(frame) ||
+      frame.scopeId !== this.#scopeId ||
+      frame.parentFrame !== null
+    )
+      throw bindingError("SERVICE_BINDING_DENIED");
+  }
+
+  async #run<T>(action: () => Promise<T>): Promise<T> {
+    this.#pending++;
+    try {
+      return await action();
+    } finally {
+      try {
+        // A canceled caller may leave an admission already in flight on the host.
+        if (this.#closed) await this.#transport.completeRoot(this.#scopeId);
+      } finally {
+        this.#pending--;
+        this.#finish();
+      }
+    }
+  }
+
+  #finish(): void {
+    if (this.#closed && this.#pending === 0) this.#released();
+  }
+
+  rpc(frame: ServiceFrame, method: string, args: unknown[]): Promise<unknown> {
+    this.#check(frame);
+    return this.#run(() => this.#transport.rpc(frame, method, args));
+  }
+
+  get(frame: ServiceFrame, property: string): Promise<unknown> {
+    this.#check(frame);
+    return this.#run(() => this.#transport.get(frame, property));
+  }
+
+  ready(): void {
+    if (this.#closed) throw bindingError("SERVICE_BINDING_DENIED");
+  }
+
+  [Symbol.dispose](): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    waitUntil(
+      this.#transport.completeRoot(this.#scopeId).finally(() => this.#finish()),
+    );
+  }
+}
 const SERVICE_RESERVED = new Set([
   "constructor",
-  "prototype",
   "__proto__",
   "then",
   "dup",
@@ -103,70 +178,6 @@ function serviceCallable(
   value: unknown,
 ): value is (...args: unknown[]) => unknown {
   return typeof value === "function";
-}
-
-function serviceFrame(value: unknown): value is ServiceFrame {
-  return (
-    record(value) &&
-    typeof value.scopeId === "string" &&
-    (value.parentFrame === null || typeof value.parentFrame === "string") &&
-    /^[0-9a-f-]{36}$/.test(value.scopeId) &&
-    (value.parentFrame === null || /^[0-9a-f-]{36}$/.test(value.parentFrame))
-  );
-}
-
-function serviceCapability(value: unknown): value is CapabilityEnvelope {
-  return (
-    record(value) &&
-    value.__openComputeServiceCapability === 1 &&
-    (value.kind === "function" || value.kind === "target") &&
-    serviceObject(value.handle)
-  );
-}
-
-async function serviceControl<T>(
-  env: BindingEnv,
-  path: string,
-  body: unknown,
-): Promise<T> {
-  const response = await env.BINDING_BACKEND.fetch(
-    `http://binding-backend${path}`,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        [BINDING_TOKEN_HEADER]: env.BINDING_BACKEND_TOKEN,
-        "x-open-compute-startup-generation": currentStartupGeneration(),
-      },
-      body: JSON.stringify(body),
-    },
-  );
-  if (!response.ok) {
-    throw bindingError(
-      response.headers.get("x-open-compute-error-code") ||
-        "SERVICE_UNAVAILABLE",
-    );
-  }
-  const value: unknown = await response.json();
-  return value as T;
-}
-
-/** Retry one idempotent lifecycle mutation across a transient private-hop failure. */
-export async function retryServiceControl<T>(
-  env: BindingEnv,
-  path: string,
-  body: unknown,
-): Promise<T> {
-  let lastFailure: unknown;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await serviceControl(env, path, body);
-    } catch (error) {
-      lastFailure = error;
-      if (attempt < 2) await scheduler.wait(10 * (attempt + 1));
-    }
-  }
-  throw lastFailure;
 }
 
 async function finalizeServiceConnect(
@@ -245,166 +256,20 @@ function startServiceBackground(
   waitUntil(completion.catch(() => undefined));
 }
 
-function unwrapServiceDispatch(value: unknown, drain: ServiceDrain): unknown {
-  if (!serviceDispatchEnvelope(value))
+async function unwrapServiceDispatch(
+  value: unknown,
+  drain: ServiceDrain,
+): Promise<unknown> {
+  try {
+    if (!serviceDispatchEnvelope(value))
+      throw bindingError("SERVICE_UNAVAILABLE");
+    startServiceBackground(value, drain);
+  } catch {
+    await drain.forceDone();
     throw bindingError("SERVICE_UNAVAILABLE");
-  startServiceBackground(value, drain);
+  }
   if (!value.ok) throw value.error;
   return value.value;
-}
-
-class ServiceCompletionReporter extends RpcTarget {
-  readonly #env: BindingEnv;
-  readonly #rootFrame: () => string | null;
-
-  constructor(env: BindingEnv, rootFrame: () => string | null) {
-    super();
-    this.#env = env;
-    this.#rootFrame = rootFrame;
-  }
-
-  beginCapability(
-    retention: string,
-    frame: ServiceFrame,
-  ): Promise<CapabilityAdmission> {
-    if (!serviceFrame(frame)) throw bindingError("SERVICE_BINDING_DENIED");
-    return serviceControl(
-      this.#env,
-      "/internal/services/v1/capabilities/begin",
-      {
-        retention,
-        parentFrame: frame.parentFrame ?? this.#rootFrame(),
-      },
-    );
-  }
-
-  releaseRetention(retention: string): Promise<unknown> {
-    return serviceControl(this.#env, "/internal/services/v1/release", {
-      handle: retention,
-    });
-  }
-
-  completeOperation(handle: string): Promise<unknown> {
-    return serviceControl(this.#env, "/internal/services/v1/complete", {
-      handle,
-    });
-  }
-
-  async retainCapability(
-    handle: string,
-    owner: "caller" | "target",
-  ): Promise<ServiceRetentionController> {
-    if (!/^[0-9a-f-]{36}$/.test(handle))
-      throw bindingError("SERVICE_BINDING_DENIED");
-    const retained = await serviceControl<{ retention: string }>(
-      this.#env,
-      "/internal/services/v1/retain",
-      { handle, owner },
-    );
-    return new ServiceRetentionController(
-      this.#env,
-      retained.retention,
-      this.#rootFrame,
-    );
-  }
-}
-
-class ServiceRetentionController extends RpcTarget {
-  readonly #env: BindingEnv;
-  #retention: string | undefined;
-  readonly #rootFrame: () => string | null;
-
-  constructor(
-    env: BindingEnv,
-    retention: string,
-    rootFrame: () => string | null,
-  ) {
-    super();
-    this.#env = env;
-    this.#retention = retention;
-    this.#rootFrame = rootFrame;
-  }
-
-  begin(frame: ServiceFrame): Promise<CapabilityAdmission> {
-    const retention = this.#retention;
-    if (!retention || !serviceFrame(frame))
-      throw bindingError("SERVICE_BINDING_DENIED");
-    return serviceControl(
-      this.#env,
-      "/internal/services/v1/capabilities/begin",
-      {
-        retention,
-        parentFrame: frame.parentFrame ?? this.#rootFrame(),
-      },
-    );
-  }
-
-  complete(handle: string): Promise<unknown> {
-    if (!this.#retention || !/^[0-9a-f-]{36}$/.test(handle)) {
-      throw bindingError("SERVICE_BINDING_DENIED");
-    }
-    return serviceControl(this.#env, "/internal/services/v1/complete", {
-      handle,
-    });
-  }
-
-  async release(): Promise<void> {
-    const retention = this.#retention;
-    this.#retention = undefined;
-    if (retention) {
-      await serviceControl(this.#env, "/internal/services/v1/release", {
-        handle: retention,
-      });
-    }
-  }
-}
-
-async function activateCapabilities(
-  env: BindingEnv,
-  value: unknown,
-  operationHandle: string,
-  owner: "caller" | "target",
-  seen = new WeakSet<object>(),
-): Promise<void> {
-  if (!serviceObject(value) || seen.has(value)) return;
-  seen.add(value);
-  if (serviceCapability(value)) {
-    const retained = await serviceControl<{ retention: string }>(
-      env,
-      "/internal/services/v1/retain",
-      { handle: operationHandle, owner },
-    );
-    const controller = new ServiceRetentionController(
-      env,
-      retained.retention,
-      () => null,
-    );
-    const activate = Reflect.get(value.handle, "activate");
-    if (!serviceCallable(activate)) {
-      await controller.release();
-      throw bindingError("SERVICE_BINDING_DENIED");
-    }
-    try {
-      await Reflect.apply(activate, value.handle, [controller]);
-    } catch (error) {
-      await controller.release();
-      throw error;
-    }
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value)
-      await activateCapabilities(env, item, operationHandle, owner, seen);
-    return;
-  }
-  if (
-    Object.getPrototypeOf(value) !== Object.prototype &&
-    Object.getPrototypeOf(value) !== null
-  )
-    return;
-  for (const item of Object.values(value)) {
-    await activateCapabilities(env, item, operationHandle, owner, seen);
-  }
 }
 
 function drainedStream(
@@ -519,51 +384,29 @@ function trackServiceResult(value: unknown, drain: ServiceDrain): unknown {
   return value;
 }
 
-function serviceDeadlineAt(deadlineMs: number): number {
-  if (
-    !Number.isSafeInteger(deadlineMs) ||
-    deadlineMs < 1 ||
-    deadlineMs > 30_000
-  ) {
-    throw bindingError("SERVICE_UNAVAILABLE");
-  }
-  return Date.now() + deadlineMs;
-}
-
-function serviceDeadline<T>(
-  promise: Promise<T>,
-  deadlineAt: number,
-): Promise<T> {
-  const remaining = deadlineAt - Date.now();
-  if (remaining < 1) throw bindingError("SERVICE_TIMEOUT");
-  return Promise.race([
-    promise,
-    scheduler.wait(remaining).then(() => {
-      throw bindingError("SERVICE_TIMEOUT");
-    }),
-  ]);
-}
-
 function extensionEnvironment(
   host: NativeHostExtensionPort,
   entrypoint: string | undefined,
   cache: object,
-): Record<string, unknown> {
-  const environment: Record<string, unknown> = { HOST: host };
-  Object.defineProperty(environment, "__OPEN_COMPUTE_PRIVATE_CACHE", {
-    value: Object.freeze({ [entrypoint ?? "default"]: cache }),
-    enumerable: true,
-    configurable: true,
-    writable: false,
-  });
-  return environment;
+  policy: WorkerPolicy,
+) {
+  return {
+    env: { HOST: host },
+    openComputePrivateEnv: {
+      [PRIVATE_POLICY]: policy,
+      __OPEN_COMPUTE_PRIVATE_CACHE: Object.freeze({
+        [entrypoint ?? "default"]: cache,
+      }),
+    },
+    openComputeHostPolicy: true as const,
+  };
 }
 
 async function loadedServiceTarget(
   env: LoaderEnv,
   ctx: ExecutionContext,
   admission: ServiceAdmission,
-  fetchContext?: { scopeId: string; frame: string; completion: Fetcher },
+  serviceContext?: { scopeId: string; frame: string; completion?: Fetcher },
 ): Promise<{ snapshot: RuntimeSnapshot; target: Fetcher }> {
   if (admission.target.kind === "private_http") {
     return {
@@ -637,13 +480,19 @@ async function loadedServiceTarget(
     const stub = env.LOADER.get(extension.loaderKey, async () => {
       const built = modulesFor(snapshot, false, entrypoint);
       return {
-        ...snapshotWorkerCode(snapshot),
+        ...(await snapshotWorkerCode(
+          env,
+          snapshot,
+          "runtime",
+          env.INTERNAL_TOKEN,
+        )),
         mainModule: built.mainModule,
         modules: built.modules,
-        env: extensionEnvironment(
+        ...extensionEnvironment(
           env.HOST_EXTENSION_FACTORY.get(extension.sessionIdentity),
           entrypoint,
           ctx.exports.ExtensionCacheTransport({ props: {} }),
+          built.policy,
         ),
         globalOutbound: null,
       };
@@ -654,13 +503,13 @@ async function loadedServiceTarget(
         stub,
         [],
         entrypoint ?? "__OpenComputeDefaultService",
-        fetchContext === undefined
+        serviceContext === undefined
           ? extension.props === undefined
             ? undefined
             : { props: extension.props }
           : {
               props: {
-                __OPEN_COMPUTE_SERVICE_FETCH: fetchContext,
+                __OPEN_COMPUTE_SERVICE_CONTEXT: serviceContext,
                 userProps: extension.props,
               },
             },
@@ -676,8 +525,7 @@ async function loadedServiceTarget(
   const snapshot = await resolveSnapshot(
     env,
     envelope,
-    false,
-    Boolean(worker.entrypoint),
+    "runtime",
     env.INTERNAL_TOKEN,
   );
   if (
@@ -697,11 +545,17 @@ async function loadedServiceTarget(
       const built = modulesFor(snapshot, false, entrypoint);
       const versionId = worker.loaderKey.split("/")[2]!;
       return {
-        ...snapshotWorkerCode(snapshot),
+        ...(await snapshotWorkerCode(
+          env,
+          snapshot,
+          "runtime",
+          env.INTERNAL_TOKEN,
+        )),
         mainModule: built.mainModule,
         modules: built.modules,
         ...tenantEnv(
           snapshot,
+          built.policy,
           ctx,
           env.WORKER_LOADER_FACTORY,
           versionId,
@@ -723,13 +577,13 @@ async function loadedServiceTarget(
       ctx,
       snapshot.observability,
       runtimeEntrypoint,
-      fetchContext === undefined
+      serviceContext === undefined
         ? worker.props === undefined
           ? undefined
           : { props: worker.props }
         : {
             props: {
-              __OPEN_COMPUTE_SERVICE_FETCH: fetchContext,
+              __OPEN_COMPUTE_SERVICE_CONTEXT: serviceContext,
               userProps: worker.props,
             },
           },
@@ -805,6 +659,16 @@ export class ServiceTransport extends WorkerEntrypoint<
   LoaderEnv,
   ServiceBindingProps
 > {
+  root(scopeId: string): ServiceRootLease {
+    this.#props();
+    if (!/^[0-9a-f-]{36}$/.test(scopeId))
+      throw bindingError("SERVICE_BINDING_DENIED");
+    const released = Promise.withResolvers<void>();
+    // RPC disconnect cancels a callee context unless its cleanup owns waitUntil work.
+    this.ctx.waitUntil(released.promise);
+    return new ServiceRootLease(this, scopeId, released.resolve);
+  }
+
   #props(): ServiceBindingProps {
     const props = this.ctx.props;
     if (
@@ -818,15 +682,16 @@ export class ServiceTransport extends WorkerEntrypoint<
     return props;
   }
 
-  #parent(frame: ServiceFrame): string | null {
+  async #parent(frame: ServiceFrame): Promise<string | null> {
     if (!serviceFrame(frame)) throw bindingError("SERVICE_BINDING_DENIED");
     if (frame.parentFrame) return frame.parentFrame;
     const root = serviceRoots.get(frame.scopeId);
     if (!root) return null;
-    if (Date.now() >= root.expiresAt) {
-      serviceRoots.delete(frame.scopeId);
-      throw bindingError("SERVICE_TIMEOUT");
-    }
+    await root.pending;
+    if (root.closing || root.frame === null)
+      throw bindingError("SERVICE_BINDING_DENIED");
+    // Keep the deadline fence until event completion; absence would admit a fresh root.
+    if (Date.now() >= root.expiresAt) throw bindingError("SERVICE_TIMEOUT");
     return root.frame;
   }
 
@@ -835,33 +700,56 @@ export class ServiceTransport extends WorkerEntrypoint<
     operation: "default_fetch" | "named_fetch" | "rpc" | "connect",
   ): Promise<ServiceAdmission> {
     const props = this.#props();
-    const parentFrame = this.#parent(frame);
-    const admitted = await serviceControl<ServiceAdmission>(
-      this.env,
-      "/internal/services/v1/resolve",
-      {
-        callerVersionId: props.versionId,
-        bindingName: props.bindingName,
-        descriptorSha256: props.descriptorSha256,
-        parentFrame,
-        operation,
-      },
-    );
-    if (
-      !record(admitted) ||
-      typeof admitted.handle !== "string" ||
-      typeof admitted.frame !== "string" ||
-      typeof admitted.callerFrame !== "string" ||
-      !record(admitted.target)
-    )
-      throw bindingError("SERVICE_UNAVAILABLE");
-    if (frame.parentFrame === null && parentFrame === null) {
-      serviceRoots.set(frame.scopeId, {
-        frame: admitted.callerFrame,
-        expiresAt: Date.now() + admitted.deadlineMs,
-      });
+    if (!serviceFrame(frame)) throw bindingError("SERVICE_BINDING_DENIED");
+    let root =
+      frame.parentFrame === null ? serviceRoots.get(frame.scopeId) : undefined;
+    let first: ReturnType<typeof Promise.withResolvers<void>> | undefined;
+    if (frame.parentFrame === null && !root) {
+      first = Promise.withResolvers<void>();
+      root = {
+        frame: null,
+        expiresAt: 0,
+        pending: first.promise,
+        closing: false,
+      };
+      // Publish before awaiting the private hop so siblings cannot create a second root.
+      serviceRoots.set(frame.scopeId, root);
     }
-    return admitted;
+    try {
+      const parentFrame = first ? null : await this.#parent(frame);
+      const admitted = await serviceControl<ServiceAdmission>(
+        this.env,
+        "/internal/services/v1/resolve",
+        {
+          callerVersionId: props.versionId,
+          bindingName: props.bindingName,
+          descriptorSha256: props.descriptorSha256,
+          parentFrame,
+          operation,
+        },
+      );
+      if (
+        !record(admitted) ||
+        typeof admitted.handle !== "string" ||
+        typeof admitted.frame !== "string" ||
+        typeof admitted.callerFrame !== "string" ||
+        !record(admitted.target)
+      )
+        throw bindingError("SERVICE_UNAVAILABLE");
+      if (first && root) {
+        root.frame = admitted.callerFrame;
+        root.expiresAt = Date.now() + admitted.deadlineMs;
+      }
+      if (root?.closing) {
+        await retryServiceControl(this.env, "/internal/services/v1/complete", {
+          handle: admitted.handle,
+        });
+        throw bindingError("SERVICE_BINDING_DENIED");
+      }
+      return admitted;
+    } finally {
+      first?.resolve();
+    }
   }
 
   rpc(frame: ServiceFrame, method: string, args: unknown[]): Promise<unknown> {
@@ -881,27 +769,43 @@ export class ServiceTransport extends WorkerEntrypoint<
 
   async #connect(socket: Socket): Promise<void> {
     let admitted: ServiceAdmission | undefined;
+    let target: Socket | undefined;
     const frame = Object.freeze({
       scopeId: crypto.randomUUID(),
       parentFrame: null,
     });
     try {
       const address = await inboundSocketTargetAddress(socket);
-      admitted = await this.#admit(frame, "connect");
-      const loaded = await loadedServiceTarget(this.env, this.ctx, admitted);
+      const admission = await this.#admit(frame, "connect");
+      admitted = admission;
+      const deadlineAt = serviceDeadlineAt(admission.deadlineMs);
+      const loaded = await serviceDeadline(
+        () =>
+          loadedServiceTarget(this.env, this.ctx, admission, {
+            scopeId: frame.scopeId,
+            frame: admission.frame,
+          }),
+        deadlineAt,
+      );
       if (
         !serviceObject(loaded.target) ||
         !serviceCallable(Reflect.get(loaded.target, "connect"))
       ) {
         throw bindingError("SERVICE_ENTRYPOINT_NOT_FOUND");
       }
-      const target = (loaded.target as Fetcher).connect(address, {
-        allowHalfOpen: true,
-      });
-      await target.opened;
-      await tunnelSockets(socket, target);
+      const connected = await serviceDeadline(async () => {
+        const opened = (loaded.target as Fetcher).connect(address, {
+          allowHalfOpen: true,
+        });
+        target = opened;
+        await opened.opened;
+        return opened;
+      }, deadlineAt);
+      // The startup deadline does not limit an established TCP tunnel's lifetime.
+      await tunnelSockets(socket, connected);
     } catch {
       await socket.close().catch(() => undefined);
+      await target?.close().catch(() => undefined);
       throw bindingError("SERVICE_UNAVAILABLE");
     } finally {
       if (admitted) {
@@ -910,7 +814,7 @@ export class ServiceTransport extends WorkerEntrypoint<
         } finally {
           serviceRoots.delete(frame.scopeId);
         }
-      }
+      } else await this.completeRoot(frame.scopeId);
     }
   }
 
@@ -921,14 +825,13 @@ export class ServiceTransport extends WorkerEntrypoint<
     getter: boolean,
   ): Promise<unknown> {
     if (
-      !SERVICE_METHOD.test(method) ||
+      typeof method !== "string" ||
       SERVICE_RESERVED.has(method) ||
       !Array.isArray(args)
     ) {
       throw bindingError("SERVICE_BINDING_DENIED");
     }
     const admitted = await this.#admit(frame, "rpc");
-    const deadlineAt = serviceDeadlineAt(admitted.deadlineMs);
     const drain = new ServiceDrain(this.env, admitted.handle);
     const reporter = new ServiceCompletionReporter(
       this.env,
@@ -936,34 +839,60 @@ export class ServiceTransport extends WorkerEntrypoint<
     );
     let dispatched = false;
     try {
-      await activateCapabilities(this.env, args, admitted.handle, "caller");
-      const loaded = await loadedServiceTarget(this.env, this.ctx, admitted);
+      const deadlineAt = serviceDeadlineAt(admitted.deadlineMs);
+      await activateCapabilities(
+        this.env,
+        args,
+        admitted.handle,
+        "caller",
+        deadlineAt,
+      );
+      const loaded = await serviceDeadline(
+        () =>
+          loadedServiceTarget(this.env, this.ctx, admitted, {
+            scopeId: frame.scopeId,
+            frame: admitted.frame,
+          }),
+        deadlineAt,
+      );
       const call = Reflect.get(
         loaded.target,
         getter ? "__openComputeServiceGet" : "__openComputeServiceRpc",
       );
       if (!serviceCallable(call))
         throw bindingError("SERVICE_ENTRYPOINT_NOT_FOUND");
-      dispatched = true;
-      const invocation = getter
-        ? Reflect.apply(call, loaded.target, [
-            frame.scopeId,
-            admitted.frame,
-            reporter,
-            method,
-          ])
-        : Reflect.apply(call, loaded.target, [
-            frame.scopeId,
-            admitted.frame,
-            reporter,
-            method,
-            args,
-          ]);
-      const dispatch = Promise.resolve(invocation).then((value) =>
-        unwrapServiceDispatch(value, drain),
+      const value = await serviceDeadline(() => {
+        const invocation = getter
+          ? Reflect.apply(call, loaded.target, [
+              frame.scopeId,
+              admitted.frame,
+              reporter,
+              method,
+            ])
+          : Reflect.apply(call, loaded.target, [
+              frame.scopeId,
+              admitted.frame,
+              reporter,
+              method,
+              args,
+            ]);
+        dispatched = true;
+        const dispatch = Promise.resolve(invocation).then(
+          (value) => unwrapServiceDispatch(value, drain),
+          async (error: unknown) => {
+            await drain.forceDone();
+            throw error;
+          },
+        );
+        return dispatch;
+      }, deadlineAt);
+      await activateCapabilities(
+        this.env,
+        value,
+        admitted.handle,
+        "target",
+        deadlineAt,
       );
-      const value = await serviceDeadline(dispatch, deadlineAt);
-      await activateCapabilities(this.env, value, admitted.handle, "target");
       return trackServiceResult(value, drain);
     } catch (error) {
       drain.resultDone();
@@ -972,7 +901,14 @@ export class ServiceTransport extends WorkerEntrypoint<
     }
   }
 
-  override async fetch(request: Request): Promise<Response> {
+  override fetch(request: Request): Promise<Response> {
+    const completion = this.#fetch(request);
+    // As with CONNECT, caller cancellation must not discard in-flight admission cleanup.
+    this.ctx.waitUntil(completion);
+    return completion;
+  }
+
+  async #fetch(request: Request): Promise<Response> {
     const raw: unknown = JSON.parse(
       request.headers.get("x-open-compute-service-frame") ?? "null",
     );
@@ -986,40 +922,46 @@ export class ServiceTransport extends WorkerEntrypoint<
     );
     let dispatched = false;
     try {
+      const deadlineAt = serviceDeadlineAt(admitted.deadlineMs);
       const headers = new Headers(request.headers);
       for (const name of INTERNAL_HEADERS) headers.delete(name);
       request = new Request(request, { headers });
+      const target = admitted.target;
       const snapshot =
-        admitted.target.kind === "worker"
-          ? await resolveSnapshot(
-              this.env,
-              {
-                loaderKey: admitted.target.loaderKey,
-                expected: admitted.target.workerCodeSha256,
-                routeGeneration: admitted.target.routeGeneration,
-              },
-              false,
-              Boolean(admitted.target.entrypoint),
-              this.env.INTERNAL_TOKEN,
+        target.kind === "worker"
+          ? await serviceDeadline(
+              () =>
+                resolveSnapshot(
+                  this.env,
+                  {
+                    loaderKey: target.loaderKey,
+                    expected: target.workerCodeSha256,
+                    routeGeneration: target.routeGeneration,
+                  },
+                  "runtime",
+                  this.env.INTERNAL_TOKEN,
+                ),
+              deadlineAt,
             )
           : undefined;
       if (
-        admitted.target.kind === "worker" &&
+        target.kind === "worker" &&
         snapshot !== undefined &&
-        !admitted.target.entrypoint &&
+        !target.entrypoint &&
         routeDefaultHttp(snapshot, request) === "asset"
       ) {
         try {
           return await serviceDeadline(
-            this.ctx.exports
-              .AssetTransport({
-                props: Object.freeze({
-                  versionId: admitted.target.loaderKey.split("/")[2]!,
-                  descriptorSha256: admitted.target.workerCodeSha256,
-                }),
-              })
-              .fetch(request),
-            serviceDeadlineAt(admitted.deadlineMs),
+            () =>
+              this.ctx.exports
+                .AssetTransport({
+                  props: Object.freeze({
+                    versionId: target.loaderKey.split("/")[2]!,
+                    descriptorSha256: target.workerCodeSha256,
+                  }),
+                })
+                .fetch(request),
+            deadlineAt,
           );
         } finally {
           // The Rust-owned asset body retains its own version pin.
@@ -1034,16 +976,19 @@ export class ServiceTransport extends WorkerEntrypoint<
       const completion = this.ctx.exports.ServiceFetchCompletion({
         props: { handle: admitted.handle },
       });
-      const loaded = await loadedServiceTarget(this.env, this.ctx, admitted, {
-        scopeId: raw.scopeId,
-        frame: admitted.frame,
-        completion,
-      });
-      dispatched = true;
-      const response = await serviceDeadline(
-        loaded.target.fetch(request),
-        serviceDeadlineAt(admitted.deadlineMs),
+      const loaded = await serviceDeadline(
+        () =>
+          loadedServiceTarget(this.env, this.ctx, admitted, {
+            scopeId: raw.scopeId,
+            frame: admitted.frame,
+            completion,
+          }),
+        deadlineAt,
       );
+      const response = await serviceDeadline(() => {
+        dispatched = true;
+        return loaded.target.fetch(request);
+      }, deadlineAt);
       if (!response.webSocket) return response;
       try {
         return appendServiceWebSocketHandoff(response, admitted.handle);
@@ -1062,7 +1007,7 @@ export class ServiceTransport extends WorkerEntrypoint<
     }
   }
 
-  beginCapability(
+  async beginCapability(
     retention: string,
     frame: ServiceFrame,
   ): Promise<CapabilityAdmission> {
@@ -1071,7 +1016,7 @@ export class ServiceTransport extends WorkerEntrypoint<
       "/internal/services/v1/capabilities/begin",
       {
         retention,
-        parentFrame: this.#parent(frame),
+        parentFrame: await this.#parent(frame),
       },
     );
   }
@@ -1091,18 +1036,16 @@ export class ServiceTransport extends WorkerEntrypoint<
   async retainCapability(
     handle: string,
     owner: "caller" | "target",
+    deadlineAt: number,
   ): Promise<ServiceRetentionController> {
     if (!/^[0-9a-f-]{36}$/.test(handle))
       throw bindingError("SERVICE_BINDING_DENIED");
-    const retained = await serviceControl<{ retention: string }>(
+    return retainServiceCapability(
       this.env,
-      "/internal/services/v1/retain",
-      { handle, owner },
-    );
-    return new ServiceRetentionController(
-      this.env,
-      retained.retention,
+      handle,
+      owner,
       () => null,
+      deadlineAt,
     );
   }
 
@@ -1111,9 +1054,23 @@ export class ServiceTransport extends WorkerEntrypoint<
       throw bindingError("SERVICE_BINDING_DENIED");
     const root = serviceRoots.get(scopeId);
     if (!root) return;
-    await serviceControl(this.env, "/internal/services/v1/root/complete", {
-      frame: root.frame,
-    });
-    serviceRoots.delete(scopeId);
+    root.closing = true;
+    root.completion ??= (async () => {
+      try {
+        await root.pending;
+        if (root.frame !== null)
+          await retryServiceControl(
+            this.env,
+            "/internal/services/v1/root/complete",
+            {
+              frame: root.frame,
+            },
+          );
+        serviceRoots.delete(scopeId);
+      } finally {
+        delete root.completion;
+      }
+    })();
+    await root.completion;
   }
 }

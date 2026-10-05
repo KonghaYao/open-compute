@@ -10,6 +10,9 @@ const source = (path) => readFileSync(resolve(root, path), "utf8");
 const sharedUrl = moduleUrl(
   await compileRuntime("loader/shared.ts", {
     "./snapshot.js": moduleUrl("export function assertSnapshot() {}"),
+    "./python-snapshot.js": moduleUrl(
+      'export function resolvePythonSnapshot() { throw Error("unexpected prepared snapshot read"); }',
+    ),
   }),
 );
 const { tenantGlobalOutbound } = await import(sharedUrl);
@@ -29,10 +32,19 @@ test("tenant outbound selects one host-only capability and validation stays offl
 
 test("every dynamic event source uses OUTBOUND_NETWORK and the HTTP-only gateway is gone", () => {
   const config = source("packages/runtime/config.capnp");
-  assert.equal(
-    (config.match(/name = "outbound-network", network/g) ?? []).length,
-    1,
-  );
+  for (const name of ["config", "prepareConfig"]) {
+    const profile = config.match(
+      new RegExp(
+        `const ${name} :Workerd\\.Config = ([\\s\\S]*?)(?=\\nconst |$)`,
+      ),
+    )?.[1];
+    assert.ok(profile, `${name} profile must exist`);
+    assert.equal(
+      (profile.match(/name = "outbound-network", network/g) ?? []).length,
+      1,
+      `${name} must own exactly one outbound network capability`,
+    );
+  }
   assert.match(
     config,
     /allow = \["network", "local"\][\s\S]*deny = \["unix", "unix-abstract"\][\s\S]*tlsOptions = \(trustBrowserCas = true\)/,

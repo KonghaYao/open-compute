@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { privateWeakMap } from "../private-weak-map.js";
 
 /** Cross-module publisher hook used only for committed Durable Object output recovery. */
 export const FLUSH_OUTPUT = Symbol.for("open-compute.flush-output");
@@ -10,12 +11,26 @@ export interface OutputPublisher {
   [FINALIZE_OUTPUT]?(operationId: string): Promise<void>;
 }
 
+const publishers = privateWeakMap<object, OutputPublisher>();
+
+/** Register the private recovery publisher before tenant module evaluation. */
+export function registerOutputPublisher(
+  binding: object,
+  target: OutputPublisher,
+): void {
+  if (publishers.has(binding))
+    throw gateFailure("DO_OUTPUT_GATE_UNPUBLISHABLE");
+  publishers.set(binding, target);
+}
+
 const TABLE = "__open_compute_do_output";
 const OPERATION_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const INTENT_TOKEN = /^[A-Za-z_$][A-Za-z0-9_$-]{0,127}$/;
 const ERROR_CODE = /^[A-Z][A-Z0-9_]{0,127}$/;
 const als = new AsyncLocalStorage<DoOutputGate>();
+const nativeGetStore = als.getStore.bind(als);
+const nativeRun = als.run.bind(als);
 type TransactionOutcome = "committed" | "explicit-rollback" | "failed";
 interface PendingOutput {
   kind: string;
@@ -64,12 +79,12 @@ function payloadBytes(raw: unknown): Uint8Array | undefined {
 
 /** Current Durable Object output gate, if the caller is inside a prepared object. */
 export function currentOutputGate(): DoOutputGate | undefined {
-  return als.getStore();
+  return nativeGetStore();
 }
 
-/** Run work with the object-local output gate visible to Queue/Workflow facades. */
+/** Run work with the object-local output gate visible to Queue/Workflow publishers. */
 export function runWithOutputGate<T>(gate: DoOutputGate, fn: () => T): T {
-  return als.run(gate, fn);
+  return nativeRun(gate, fn);
 }
 
 /**
@@ -359,7 +374,12 @@ export class DoOutputGate {
       const operationId = String(row.operation_id);
       const kind = String(row.kind);
       const publisherName = String(row.publisher);
-      const target = env[publisherName];
+      const binding = env[publisherName];
+      const target =
+        binding !== null &&
+        (typeof binding === "object" || typeof binding === "function")
+          ? publishers.get(binding)
+          : undefined;
       const payload = payloadBytes(row.payload);
       const state = String(row.state);
       if (

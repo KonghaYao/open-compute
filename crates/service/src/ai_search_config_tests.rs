@@ -73,6 +73,63 @@ fn create_config_resolves_default_model_and_canonical_contract() {
 }
 
 #[test]
+fn disabled_rewrite_accepts_a_chat_only_default_but_validates_explicit_models() {
+    use open_compute_core::{
+        AiAuthConfig, AiBackendConfig, AiBackendProtocol, AiGenerationModelConfig,
+    };
+
+    let mut catalog = catalog();
+    catalog.backends.insert(
+        "chat".to_owned(),
+        AiBackendConfig {
+            protocol: AiBackendProtocol::OpenAiChatCompletionsV1,
+            endpoint: "http://127.0.0.1:8080/v1/chat/completions".to_owned(),
+            auth: AiAuthConfig::None,
+            headers: BTreeMap::new(),
+        },
+    );
+    catalog.generation_models.insert(
+        "fixture/chat-only".to_owned(),
+        AiGenerationModelConfig {
+            backend: "chat".to_owned(),
+            remote_model: "fixture/chat-only".to_owned(),
+            provider_revision: None,
+            max_context_tokens: 4096,
+            capabilities: BTreeSet::from([AiGenerationCapability::Chat]),
+        },
+    );
+    catalog.default_generation_model = Some("fixture/chat-only".to_owned());
+    let input: AiSearchCreateInput =
+        serde_json::from_value(serde_json::json!({"id":"ordinary"})).unwrap();
+    let prepared = input.prepare(&catalog).unwrap();
+    let public: Value = serde_json::from_slice(&prepared.public_config_json).unwrap();
+    assert_eq!(public["ai_search_model"], "fixture/chat-only");
+    assert_eq!(public["rewrite_query"], false);
+    for fields in [
+        serde_json::json!({"id":"rewrite", "rewrite_query":true}),
+        serde_json::json!({"id":"explicit", "rewrite_model":"fixture/chat-only"}),
+        serde_json::json!({"id":"missing", "rewrite_model":"missing"}),
+    ] {
+        let input: AiSearchCreateInput = serde_json::from_value(fields).unwrap();
+        assert_eq!(
+            input.prepare(&catalog).unwrap_err().code(),
+            ErrorCode::BindingCapabilityUnsupported
+        );
+    }
+    catalog
+        .generation_models
+        .get_mut("fixture/chat-only")
+        .unwrap()
+        .capabilities
+        .insert(AiGenerationCapability::Rewrite);
+    let input: AiSearchCreateInput =
+        serde_json::from_value(serde_json::json!({"id":"enabled", "rewrite_query":true})).unwrap();
+    let prepared = input.prepare(&catalog).unwrap();
+    let public: Value = serde_json::from_slice(&prepared.public_config_json).unwrap();
+    assert_eq!(public["rewrite_query"], true);
+}
+
+#[test]
 fn keyword_only_and_fail_closed_options_are_explicit() {
     let keyword: AiSearchCreateInput = serde_json::from_value(serde_json::json!({
         "id": "keyword-only",

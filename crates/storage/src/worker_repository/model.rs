@@ -542,6 +542,8 @@ pub struct VersionSnapshot {
     pub worker: WorkerRecord,
     /// Version row.
     pub version: VersionRecord,
+    /// Dedicated Python artifact authority, read in the same Version snapshot.
+    pub python_prepared: Option<PythonPreparedArtifactRecord>,
     /// Immutable closed Cloudflare Version annotations.
     pub annotations: BTreeMap<String, String>,
     /// Static-asset authority when the version declares assets.

@@ -264,9 +264,12 @@ fn version_request(
     let source = r#"export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
+    if (path === "/uncaught-put") { await env.KV.put("gate", await request.text()); return new Response("put"); }
+    try {
     if (path === "/put") { await env.KV.put("gate", await request.text()); return new Response("put"); }
     if (path === "/get") return new Response((await env.KV.get("gate")) ?? "null");
     if (path === "/stream") { await env.KV.put("stream", request.body); return new Response(await env.KV.get("stream", "stream")); }
+    } catch (error) { return new Response(error.message, { status: 500 }); }
     if (path === "/props") return Response.json({ own: Reflect.ownKeys(env.KV).map(String), backend: "BINDING_BACKEND" in env });
     return new Response("plain");
   }

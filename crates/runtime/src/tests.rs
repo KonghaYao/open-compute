@@ -138,7 +138,7 @@ fn lock_json(binary_sha: &str, extra_target: &str) -> String {
   }},
   "workersSdk": {{
     "revision": "f8085545bcaa2c639f171c25e4424685036a0e10",
-    "wranglerVersion": "4.143.0",
+    "cfVersion": "1.0.0-beta.12",
     "vitePluginVersion": "1.54.2"
   }},
   "targets": {{
@@ -238,6 +238,7 @@ fn compile_req<'a>(
     deadline: Duration,
 ) -> CompileRequest<'a> {
     CompileRequest {
+        role: crate::ConfigRole::Runtime,
         runtime,
         lock_path,
         assets_dir: assets,

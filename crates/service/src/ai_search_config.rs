@@ -356,12 +356,14 @@ impl AiSearchCreateInput {
             AiGenerationCapability::Chat,
             false,
         )?;
-        validate_generation_model(
-            catalog,
-            self.rewrite_model.as_deref().or(ai_search_model.as_deref()),
-            AiGenerationCapability::Rewrite,
-            self.rewrite_query,
-        )?;
+        if self.rewrite_query || self.rewrite_model.is_some() {
+            validate_generation_model(
+                catalog,
+                self.rewrite_model.as_deref().or(ai_search_model.as_deref()),
+                AiGenerationCapability::Rewrite,
+                self.rewrite_query,
+            )?;
+        }
         let reranking_model = self.reranking_model.or_else(|| {
             self.reranking
                 .then(|| catalog.default_reranking_model.clone())

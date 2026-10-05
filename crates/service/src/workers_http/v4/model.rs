@@ -340,7 +340,7 @@ pub(crate) enum WorkerUploadBinding {
     Queue {
         name: String,
         queue_name: String,
-        /// Deprecated Wrangler field retained in upload metadata but ignored by the server.
+        /// Queue delay metadata still emitted by the pinned cf producer; it does not update Queue settings.
         #[serde(rename = "delivery_delay")]
         _delivery_delay: Option<serde_json::Number>,
         raw: Option<bool>,

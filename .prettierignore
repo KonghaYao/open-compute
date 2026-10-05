@@ -10,3 +10,7 @@ packages/runtime/dist
 packages/docs/.vitepress/dist
 packages/sdk/surface.json
 openapi/open-compute-sdk.json
+# Retained Python capture manifests and original cf asset request bytes.
+test/fixtures/python-*/**/manifest.json
+test/fixtures/python-runtime/assets-session.json
+test/fixtures/python-runtime/assets-upload.json

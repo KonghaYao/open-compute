@@ -52,14 +52,10 @@ pub(super) fn cursor_page<T: Serialize>(
     result: Vec<T>,
     limit: Option<usize>,
     cursor: Option<&str>,
-    page: Option<usize>,
 ) -> Response {
     let limit = limit.unwrap_or(50);
-    if !(1..=200).contains(&limit) || (cursor.is_some() && page.is_some()) {
+    if !(1..=200).contains(&limit) {
         return invalid_response(context.request_id());
-    }
-    if let Some(page) = page {
-        return offset_page(context, result, Some(limit), Some(page));
     }
     let start = match cursor.map(decode_cursor).transpose() {
         Ok(value) => value.unwrap_or(0),

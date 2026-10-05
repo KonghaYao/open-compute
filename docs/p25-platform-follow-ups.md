@@ -4,6 +4,8 @@
 
 ## 待办
 
+- [ ] cf 原生 Python builder 可用并通过资格检查后，删除 `scripts/build-python.ts` 的临时 PyWrangler/Wrangler 构建桥接，更新 Python 用户文档和构建测试。当前仅 Python 构建调用用户安装的 PyWrangler，不安装、不校验版本；上传、部署、开发与资源管理统一使用 cf。
+- [ ] 跟进 [cloudflare/workers-py#287](https://github.com/cloudflare/workers-py/issues/287)。官方 SDK 发布修复后，重新验证 Flask 流式 body、并发 request/app context 和 cancellation cleanup，再恢复支持声明。当前按已知上游问题暂缓，原始 SDK 与失败证据保留。
 - [ ] 支持从显式 `.env` 输入读取 instance 配置值，不隐式发现 cwd 或用户目录。
 - [ ] 完成 operator-facing logger 合同，包括输出、级别、敏感信息清理和持久化边界。
 - [ ] 评估并实现 lazy Worker startup，同时保持 readiness、首请求失败语义和受监督进程恢复合同。

@@ -159,8 +159,13 @@ impl Harness {
         let (shutdown, mut source_shutdown) = tokio::sync::watch::channel(false);
         let mut binding_shutdown = shutdown.subscribe();
         let source_task = tokio::spawn({
-            let source =
-                RuntimeSource::new(storage.clone(), artifacts.clone(), BundleLimits::default());
+            let source = RuntimeSource::new(
+                storage.clone(),
+                artifacts.clone(),
+                BundleLimits::default(),
+                open_compute_service::runtime_bridge::python_runtime_pin(&runtime),
+            )
+            .unwrap();
             let auth = source_auth.clone();
             async move {
                 serve_runtime_source(source_listener, source, auth, async move {
@@ -247,7 +252,6 @@ impl Harness {
             config: runtime_config(),
             clock: Arc::new(SystemClock),
             jitter: Arc::new(OsJitter),
-            redactor: Redactor::new(),
             lease_path: Some(
                 storage
                     .data_dir()

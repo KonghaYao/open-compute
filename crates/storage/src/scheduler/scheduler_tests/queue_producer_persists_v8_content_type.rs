@@ -15,7 +15,7 @@ fn queue_producer_persists_v8_content_type() {
         updated_at_ms: 1,
     };
     store.create_queue_projection(&projection).unwrap();
-    let body = b"OCDVv8-body".to_vec();
+    let body = b"\xff\x0f\x22\x04body".to_vec();
     store
         .enqueue_queue(
             &QueueEnqueueRequest {

@@ -24,7 +24,7 @@ impl LogTail {
 
 pub(crate) struct LogCollector {
     inner: Arc<Mutex<LogTail>>,
-    redactor: Redactor,
+    redactor: Option<Redactor>,
 }
 
 impl Clone for LogCollector {
@@ -37,7 +37,7 @@ impl Clone for LogCollector {
 }
 
 impl LogCollector {
-    pub(crate) fn new(redactor: Redactor) -> Self {
+    pub(crate) fn new(redactor: Option<Redactor>) -> Self {
         Self {
             inner: Arc::new(Mutex::new(LogTail::default())),
             redactor,
@@ -52,7 +52,11 @@ impl LogCollector {
     }
 
     pub(crate) fn ingest(&self, chunk: &[u8]) {
-        let redacted = redact_secret_like(&self.redactor, chunk);
+        let Some(redactor) = &self.redactor else {
+            // Workerd can emit tenant source and native tracebacks. Drain without retention.
+            return;
+        };
+        let redacted = redact_secret_like(redactor, chunk);
         let mut guard = self
             .inner
             .lock()

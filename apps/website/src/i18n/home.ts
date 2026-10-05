@@ -151,7 +151,7 @@ const en = {
       heading: "Cloudflare platform coverage.",
       supportHeading: "Works with your ecosystem",
       statusBefore:
-        "Keep your Worker code, Wrangler configuration, framework adapters, and bindings. See the",
+        "Use your Worker code, cloudflare.config.ts, framework adapters, and bindings. See the",
       statusLink: "current product status",
       statusAfter: "before deploying.",
       notesAriaLabel: "Product notes",
@@ -170,10 +170,10 @@ const en = {
     features: {
       deploy: {
         label: "Deploy + Gateway",
-        eyebrow: "WRANGLER + GATEWAY",
+        eyebrow: "CF CLI + GATEWAY",
         title: "Deploy once. Serve locally or over HTTPS.",
         bullets: [
-          "Same wrangler.jsonc",
+          "cloudflare.config.ts with cf CLI",
           "Immutable deployments and rollback",
           "Shared Gateway with local and optional public routes",
         ],
@@ -205,7 +205,7 @@ const en = {
         bullets: [
           "Cloudflare-style product workflows",
           "Switch between registered instances",
-          "Same /client/v4 API as Wrangler and the official SDK",
+          "Same /client/v4 API as cf CLI and the official SDK",
         ],
       },
       operate: {
@@ -359,7 +359,7 @@ const zh = {
       heading: "Cloudflare 平台能力支持一览。",
       supportHeading: "无缝兼容你熟悉的技术栈",
       statusBefore:
-        "Worker 代码、Wrangler 配置、框架适配器和 Bindings 都能继续使用。部署前请先查看",
+        "使用 Worker 代码、cloudflare.config.ts、框架适配器和 Bindings。部署前请先查看",
       statusLink: "当前产品状态",
       statusAfter: "。",
       notesAriaLabel: "产品说明",
@@ -378,10 +378,10 @@ const zh = {
     features: {
       deploy: {
         label: "部署与网关",
-        eyebrow: "WRANGLER + GATEWAY",
+        eyebrow: "CF CLI + GATEWAY",
         title: "一次部署，通过本地或 HTTPS 对外服务。",
         bullets: [
-          "沿用现有的 wrangler.jsonc",
+          "使用 cloudflare.config.ts 与 cf CLI",
           "每次部署都可追溯、可回滚",
           "共享 Gateway 提供本地入口与可选公网路由",
         ],
@@ -413,7 +413,7 @@ const zh = {
         bullets: [
           "复刻 Cloudflare 的产品操作流程",
           "在已登记的 instance 之间切换",
-          "与 Wrangler 和官方 SDK 共用 /client/v4 API",
+          "与 cf CLI 和官方 SDK 共用 /client/v4 API",
         ],
       },
       operate: {

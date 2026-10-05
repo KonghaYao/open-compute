@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { codec, decode, encode, format } from "./load.mjs";
 
-function header(profile = "workflow") {
+function header() {
   return Uint8Array.of(
     ...codec.DURABLE_VALUE_MAGIC,
     codec.DURABLE_VALUE_SCHEMA,
-    codec.DURABLE_VALUE_PROFILE_ID[profile],
+    codec.DURABLE_VALUE_KIND,
   );
 }
 
@@ -33,16 +33,14 @@ function str(value) {
   return concat(u32(encoded.byteLength), encoded);
 }
 
-function malformed(bytes, profile = "workflow") {
-  const code =
-    profile === "queue-v8"
-      ? "QUEUE_V8_MALFORMED"
-      : "WORKFLOW_SERIALIZATION_MALFORMED";
-  assert.throws(() => decode(bytes, profile), { message: code });
+function malformed(bytes) {
+  assert.throws(() => decode(bytes), {
+    message: "WORKFLOW_SERIALIZATION_MALFORMED",
+  });
 }
 
-test("magic, schema, profile, truncation, and trailing bytes fail closed", () => {
-  const valid = encode({ a: 1 }, "workflow");
+test("magic, schema, value kind, truncation, and trailing bytes fail closed", () => {
+  const valid = encode({ a: 1 });
   malformed(valid.subarray(0, 0));
   malformed(valid.subarray(0, 5));
   malformed(valid.subarray(0, valid.byteLength - 1));
@@ -53,19 +51,17 @@ test("magic, schema, profile, truncation, and trailing bytes fail closed", () =>
   const badSchema = Uint8Array.from(valid);
   badSchema[4] = 2;
   malformed(badSchema);
-  malformed(valid, "queue-v8");
-  malformed(encode(1, "queue-v8"), "workflow");
+  const badKind = Uint8Array.from(valid);
+  badKind[5] = 0xff;
+  malformed(badKind);
   assert.deepEqual(
-    decode(
-      new Uint8Array(valid.buffer, valid.byteOffset, valid.byteLength),
-      "workflow",
-    ),
+    decode(new Uint8Array(valid.buffer, valid.byteOffset, valid.byteLength)),
     { a: 1 },
   );
-  assert.throws(() => decode(valid.buffer, "workflow"), {
+  assert.throws(() => decode(valid.buffer), {
     message: "WORKFLOW_SERIALIZATION_MALFORMED",
   });
-  assert.throws(() => decode("OCDV", "workflow"), {
+  assert.throws(() => decode("OCDV"), {
     message: "WORKFLOW_SERIALIZATION_MALFORMED",
   });
 });
@@ -171,8 +167,8 @@ test("unknown tags, bad references, duplicate keys, and invalid lengths are reje
 
 test("decode does not execute payload text or repair trailing/truncated input", () => {
   const payload = "throw new Error('executed')";
-  const bytes = encode(payload, "workflow");
-  assert.equal(decode(bytes, "workflow"), payload);
+  const bytes = encode(payload);
+  assert.equal(decode(bytes), payload);
   malformed(concat(bytes, new TextEncoder().encode(";throw 1")));
   const object = concat(
     header(),

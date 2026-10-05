@@ -84,7 +84,7 @@ Endpoint API 从 hostname authority 和各自 transport capability 独立投影 
 已完成资格且有效证书仍能服务的 renewal degraded 不撤销既有 public endpoint；新增 public binding 仍要求 namespace active。
 故障不删除持久化 binding，也不阻止 Worker deployment 建立本机可用状态。endpoint 不是另一套路由 authority。
 
-OpenAPI、生成 SDK、CLI/Wrangler 与 Dashboard 同步消费两种 kind/scope，不把所有 route 当成 local origin。具体改动与验收由 P18 拥有。
+OpenAPI、生成 SDK、CLI/cf 与 Dashboard 同步消费两种 kind/scope，不把所有 route 当成 local origin。具体改动与验收由 P18 拥有。
 
 ## 实施归属
 

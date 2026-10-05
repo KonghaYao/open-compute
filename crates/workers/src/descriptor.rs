@@ -13,8 +13,8 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 
-/// Namespace reserved for all platform-owned loaded-isolate modules.
-pub const SYSTEM_MODULE_PREFIX: &str = "__open_compute__/";
+/// Namespace reserved for platform-owned internal extension modules.
+pub const SYSTEM_MODULE_PREFIX: &str = "cloudflare-internal:";
 const SYSTEM_WORKER_MANIFEST: &[u8] =
     include_bytes!("../../../packages/runtime/dist/manifest.json");
 

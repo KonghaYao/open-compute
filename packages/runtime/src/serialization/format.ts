@@ -1,31 +1,16 @@
-import type { DurableValueLimits, DurableValueProfile } from "./protocol.js";
+import type { DurableValueLimits } from "./protocol.js";
 
 /** Current schema tag. This is a Day1 format, not a negotiated version. */
 export const DURABLE_VALUE_SCHEMA = 1;
 /** Magic `OCDV`. */
 export const DURABLE_VALUE_MAGIC = new Uint8Array([0x4f, 0x43, 0x44, 0x56]);
-export const DURABLE_VALUE_PROFILES = Object.freeze([
-  "queue-v8",
-  "workflow",
-] as const);
-export const DURABLE_VALUE_PROFILE_ID = Object.freeze({
-  "queue-v8": 1,
-  workflow: 2,
+/** Workflow value kind in the current durable envelope. */
+export const DURABLE_VALUE_KIND = 2;
+export const DURABLE_VALUE_LIMITS: DurableValueLimits = Object.freeze({
+  maxBytes: 1_048_576,
+  maxNodes: 262_144,
+  maxDepth: 128,
 });
-export const DURABLE_VALUE_LIMITS: {
-  readonly [K in DurableValueProfile]: DurableValueLimits;
-} = {
-  "queue-v8": Object.freeze({
-    maxBytes: 128_000,
-    maxNodes: 32_768,
-    maxDepth: 128,
-  }),
-  workflow: Object.freeze({
-    maxBytes: 1_048_576,
-    maxNodes: 262_144,
-    maxDepth: 128,
-  }),
-};
 export const TAG = Object.freeze({
   NULL: 0x00,
   UNDEFINED: 0x01,
@@ -194,60 +179,29 @@ const hostCtors: readonly Function[] = [
   ...(typeof File === "function" ? [File] : []),
 ];
 
-export function durableValueLimits(
-  profile: DurableValueProfile,
-): DurableValueLimits {
-  return DURABLE_VALUE_LIMITS[assertProfile(profile)];
-}
+const CODES = Object.freeze({
+  unsupported: "WORKFLOW_SERIALIZATION_UNSUPPORTED",
+  tooLarge: "WORKFLOW_RESULT_TOO_LARGE",
+  malformed: "WORKFLOW_SERIALIZATION_MALFORMED",
+});
 
-export function assertProfile(profile: unknown): DurableValueProfile {
-  if (profile === "queue-v8" || profile === "workflow") return profile;
-  throw Object.assign(new TypeError("DURABLE_VALUE_PROFILE_UNSUPPORTED"), {
-    stableCode: "DURABLE_VALUE_PROFILE_UNSUPPORTED",
-  });
-}
-
-export function durableValueErrorCode(
-  error: unknown,
-  profile: DurableValueProfile,
-): string | undefined {
+export function durableValueErrorCode(error: unknown): string | undefined {
   if (
     error === null ||
     (typeof error !== "object" && typeof error !== "function")
   )
     return undefined;
   const code = readFailure(error);
-  const expected = codes(assertProfile(profile));
-  return code === expected.unsupported ||
-    code === expected.tooLarge ||
-    code === expected.malformed
+  return code === CODES.unsupported ||
+    code === CODES.tooLarge ||
+    code === CODES.malformed
     ? code
     : undefined;
 }
 
-export function codes(profile: DurableValueProfile) {
-  return profile === "queue-v8"
-    ? {
-        unsupported: "QUEUE_V8_UNSUPPORTED",
-        tooLarge: "QUEUE_V8_TOO_LARGE",
-        malformed: "QUEUE_V8_MALFORMED",
-      }
-    : {
-        unsupported: "WORKFLOW_SERIALIZATION_UNSUPPORTED",
-        tooLarge: "WORKFLOW_RESULT_TOO_LARGE",
-        malformed: "WORKFLOW_SERIALIZATION_MALFORMED",
-      };
-}
-
-export function fail(
-  profile: DurableValueProfile,
-  kind: "unsupported" | "tooLarge" | "malformed",
-): never {
-  const code = codes(profile)[kind];
-  const error = Object.assign(
-    new (profile === "queue-v8" ? TypeError : Error)(code),
-    { stableCode: code },
-  );
+export function fail(kind: keyof typeof CODES): never {
+  const code = CODES[kind];
+  const error = Object.assign(new Error(code), { stableCode: code });
   error.stack = `${error.name}: ${code}`;
   rememberFailure(error, code);
   throw error;

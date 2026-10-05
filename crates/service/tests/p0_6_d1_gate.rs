@@ -92,8 +92,13 @@ async fn p0_6_real_d1_facade_and_backend_matrix() {
     let (shutdown_tx, mut source_shutdown) = tokio::sync::watch::channel(false);
     let mut binding_shutdown = shutdown_tx.subscribe();
     let source_task = tokio::spawn({
-        let source =
-            RuntimeSource::new(storage.clone(), artifacts.clone(), BundleLimits::default());
+        let source = RuntimeSource::new(
+            storage.clone(),
+            artifacts.clone(),
+            BundleLimits::default(),
+            open_compute_service::runtime_bridge::python_runtime_pin(&runtime),
+        )
+        .unwrap();
         let auth = source_auth.clone();
         async move {
             serve_runtime_source(source_listener, source, auth, async move {
@@ -162,7 +167,6 @@ async fn p0_6_real_d1_facade_and_backend_matrix() {
             config: runtime_config(),
             clock: Arc::new(SystemClock),
             jitter: Arc::new(OsJitter),
-            redactor: Redactor::new(),
             lease_path: Some(storage.data_dir().runtime_dir().join("p0-6-gate.lease")),
         },
         vec![
@@ -266,6 +270,7 @@ async fn p0_6_real_d1_facade_and_backend_matrix() {
         "rawNamed",
         "rawPlain",
         "metaShape",
+        "runRows",
     ] {
         assert_eq!(session_json[key], true, "{key}: {session_json}");
     }
@@ -573,18 +578,16 @@ fn matrix_source() -> &'static str {
 }
 
 fn function_source() -> &'static str {
-    r#"import { D1Database } from "./__open_compute__/d1/facade.js";
-export default async function(request, env) {
-  return new Response(`function:${env.DB instanceof D1Database && typeof env.DB.prepare === "function"}`);
+    r#"export default async function(request, env) {
+  return new Response(`function:${env.DB.constructor.name === "D1Database" && typeof env.DB.prepare === "function"}`);
 }"#
 }
 
 fn class_source() -> &'static str {
     r#"import { WorkerEntrypoint } from "cloudflare:workers";
-import { D1Database } from "./__open_compute__/d1/facade.js";
 export default class extends WorkerEntrypoint {
-  constructor(ctx, env) { super(ctx, env); this.wrapped = env.DB instanceof D1Database; }
-  async fetch() { return new Response(`class:${this.wrapped}:${this.env.DB instanceof D1Database}`); }
+  constructor(ctx, env) { super(ctx, env); this.wrapped = env.DB.constructor.name === "D1Database"; }
+  async fetch() { return new Response(`class:${this.wrapped}:${this.env.DB.constructor.name === "D1Database"}`); }
 }"#
 }
 

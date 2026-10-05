@@ -12,6 +12,7 @@ mkdirSync(moduleRoot, { recursive: true });
 const modules = mkdtempSync(join(moduleRoot, "run-"));
 let moduleOrdinal = 0;
 let privateWeakMapUrl;
+let wrappedBindingUrl;
 
 export const moduleUrl = (source) => {
   const path = join(modules, `module-${moduleOrdinal++}.mjs`);
@@ -39,6 +40,19 @@ export async function compileRuntime(name, imports = {}) {
       await compileRuntime("private-weak-map.ts"),
     );
     code = code.replaceAll(quoted, JSON.stringify(privateWeakMapUrl));
+  }
+  if (
+    code.includes('"cloudflare-internal:wrapped-binding"') &&
+    !Object.hasOwn(imports, "cloudflare-internal:wrapped-binding")
+  ) {
+    // Node tests cover the maintained class methods; real workerd tests own native construction/serialization.
+    wrappedBindingUrl ??= moduleUrl(
+      "export default { WrappedBinding: class WrappedBinding {} };",
+    );
+    code = code.replaceAll(
+      '"cloudflare-internal:wrapped-binding"',
+      JSON.stringify(wrappedBindingUrl),
+    );
   }
   for (const [specifier, replacement] of Object.entries(imports)) {
     assert.ok(

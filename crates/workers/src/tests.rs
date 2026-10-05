@@ -20,6 +20,16 @@ use std::fs;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+fn python_runtime_pin() -> python_artifact::PythonRuntimePin {
+    python_artifact::PythonRuntimePin {
+        workerd_revision: "a".repeat(40),
+        workerd_binary_sha256: "b".repeat(64),
+        process_flags: vec!["--experimental".to_owned()],
+        pyodide_bundle_sha256: "c".repeat(64),
+        runtime_assets_sha256: "d".repeat(64),
+    }
+}
+
 #[path = "environment_storage_tests.rs"]
 mod environment_storage_tests;
 
@@ -116,6 +126,10 @@ mod staged_bundle_rejects_filesystem_framing_and_module_corruption;
 mod bundle_rejects_path_digest_offset_and_trailing_attacks;
 
 mod bundle_limits_and_main_type_are_enforced;
+
+mod prepared_python;
+mod python_bundle;
+mod python_preparation_scope;
 
 mod bundle_build_and_parse_cover_structural_validation_matrix;
 

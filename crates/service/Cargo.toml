@@ -75,6 +75,8 @@ url.workspace = true
 uuid.workspace = true
 webpki-root-certs.workspace = true
 
+zeroize.workspace = true
+
 [build-dependencies]
 hex.workspace = true
 sha2.workspace = true
@@ -160,6 +162,41 @@ required-features = ["test-support"]
 [[test]]
 name = "p6_cf_resource_gate"
 path = "tests/p6_cf_resource_gate/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_main"
+path = "tests/p21_python_main/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_frameworks"
+path = "tests/p21_python_frameworks/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_services"
+path = "tests/p21_python_services/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_queues"
+path = "tests/p21_python_queues/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_durable_objects"
+path = "tests/p21_python_durable_objects/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_workflows"
+path = "tests/p21_python_workflows/mod.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "p21_python_runtime"
+path = "tests/p21_python_runtime/mod.rs"
 required-features = ["test-support"]
 
 [[test]]

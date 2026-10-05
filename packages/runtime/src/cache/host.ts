@@ -12,13 +12,74 @@ import {
   currentStartupGeneration,
   INTERNAL_HEADERS,
 } from "../loader/shared.js";
+import { nativeCacheRequest, nativeCacheResponse } from "./native-adapter.js";
+
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+const WRITE_CONTEXT_HEADER = "x-open-compute-cache-write-context";
+type CacheNamespace = "automatic" | "default" | "named";
+type CacheFence = { fenceGeneration: string; refreshToken?: string };
+
+function cacheProps(value: unknown): CacheTransportProps {
+  if (
+    !isRecord(value) ||
+    Object.keys(value).length !== 7 ||
+    typeof value.instanceId !== "string" ||
+    typeof value.workerId !== "string" ||
+    typeof value.versionId !== "string" ||
+    typeof value.entrypoint !== "string" ||
+    typeof value.descriptorSha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(value.descriptorSha256) ||
+    typeof value.automaticEnabled !== "boolean" ||
+    typeof value.crossVersionCache !== "boolean"
+  )
+    throw bindingError("CACHE_PROTOCOL_ERROR");
+  return {
+    instanceId: value.instanceId,
+    workerId: value.workerId,
+    versionId: value.versionId,
+    entrypoint: value.entrypoint,
+    descriptorSha256: value.descriptorSha256,
+    automaticEnabled: value.automaticEnabled,
+    crossVersionCache: value.crossVersionCache,
+  };
+}
+
+function cacheError(error: unknown): Error {
+  const code: unknown =
+    error instanceof Error
+      ? Object.getOwnPropertyDescriptor(error, "stableCode")?.value
+      : undefined;
+  return bindingError(
+    typeof code === "string" &&
+      /^(?:CACHE|BINDING)_[A-Z0-9_]{1,127}$/.test(code)
+      ? code
+      : "CACHE_PROTOCOL_ERROR",
+  );
+}
 
 function publicHeaders(input: Headers): Array<[string, string]> {
   const headers: Array<[string, string]> = [];
+  const connectionFields = new Set(
+    (input.get("connection") ?? "")
+      .split(",")
+      .map((name) => name.trim().toLowerCase()),
+  );
+  // Native Cache HTTP framing is transport metadata, never part of the persisted representation.
   for (const [name, value] of input) {
     if (
       !name.startsWith("x-open-compute-") &&
-      !INTERNAL_HEADERS.includes(name)
+      !INTERNAL_HEADERS.includes(name) &&
+      !HOP_BY_HOP_HEADERS.has(name) &&
+      !connectionFields.has(name)
     ) {
       headers.push([name.toLowerCase(), value]);
     }
@@ -32,20 +93,7 @@ export class CacheTransport extends WorkerEntrypoint<
   CacheTransportProps
 > {
   #props() {
-    const props = this.ctx.props;
-    if (
-      !props ||
-      typeof props.instanceId !== "string" ||
-      typeof props.workerId !== "string" ||
-      typeof props.versionId !== "string" ||
-      typeof props.entrypoint !== "string" ||
-      !/^[0-9a-f]{64}$/.test(props.descriptorSha256) ||
-      typeof props.automaticEnabled !== "boolean" ||
-      typeof props.crossVersionCache !== "boolean"
-    ) {
-      throw bindingError("CACHE_PROTOCOL_ERROR");
-    }
-    return props;
+    return cacheProps(this.ctx.props);
   }
 
   #headers() {
@@ -73,6 +121,7 @@ export class CacheTransport extends WorkerEntrypoint<
       `http://binding-backend${path}`,
       {
         ...init,
+        ...(cacheMatch ? { encodeResponseBody: "manual" as const } : {}),
         headers: { ...this.#headers(), ...init.headers },
       },
     );
@@ -170,7 +219,7 @@ export class CacheTransport extends WorkerEntrypoint<
       return lookup;
     }
     const headers = new Headers(response.headers);
-    for (const key of headers.keys())
+    for (const key of Array.from(headers.keys()))
       if (key.startsWith("x-open-compute-")) headers.delete(key);
     return {
       ...lookup,
@@ -178,16 +227,38 @@ export class CacheTransport extends WorkerEntrypoint<
         status: response.status,
         statusText: response.statusText,
         headers,
+        encodeBody: "manual",
       }),
     };
   }
 
-  async put(
-    namespace: "automatic" | "default" | "named",
+  async putAutomatic(
+    request: Request,
+    response: Response,
+    fence: CacheFence,
+  ): Promise<void> {
+    // Native Response::send owns compression and body consumption for both cache surfaces.
+    const headers = new Headers(request.headers);
+    const context = JSON.stringify({
+      props: this.#props(),
+      fence: {
+        fenceGeneration: fence.fenceGeneration,
+        refreshToken: fence.refreshToken,
+      },
+    });
+    if (new TextEncoder().encode(context).byteLength > 64 * 1024)
+      throw bindingError("CACHE_LIMIT_EXCEEDED");
+    headers.set(WRITE_CONTEXT_HEADER, context);
+    await caches.default.put(new Request(request.url, { headers }), response);
+  }
+
+  /** Store the opaque bytes already serialized by workerd's Cache client. */
+  async storeEncoded(
+    namespace: CacheNamespace,
     name: string | undefined,
     request: Request,
     response: Response,
-    fence?: { fenceGeneration: string; refreshToken?: string },
+    fence?: CacheFence,
   ): Promise<void> {
     const metadata = {
       namespace,
@@ -218,6 +289,20 @@ export class CacheTransport extends WorkerEntrypoint<
       await result.body?.cancel();
     } catch {
       /* best effort */
+    }
+  }
+
+  /** Native Cache backend; scoped through the same persisted authority as automatic caching. */
+  async fetch(request: Request): Promise<Response> {
+    try {
+      return await nativeCacheRequest(this, request);
+    } catch (error) {
+      try {
+        await request.body?.cancel();
+      } catch {
+        /* best effort */
+      }
+      throw cacheError(error);
     }
   }
 
@@ -269,5 +354,72 @@ export class CacheTransport extends WorkerEntrypoint<
       throw bindingError("CACHE_PROTOCOL_ERROR");
     }
     return { success: true, deleted: value.deleted as number };
+  }
+}
+
+/** Host-only native serializer sink; never delegated through tenant env or Loader fields. */
+export class CacheWriteTransport extends WorkerEntrypoint<BindingEnv> {
+  async fetch(request: Request): Promise<Response> {
+    try {
+      if (request.method !== "PUT") throw bindingError("CACHE_PROTOCOL_ERROR");
+      const raw = request.headers.get(WRITE_CONTEXT_HEADER);
+      if (raw === null || new TextEncoder().encode(raw).byteLength > 64 * 1024)
+        throw bindingError("CACHE_PROTOCOL_ERROR");
+      const value: unknown = JSON.parse(raw);
+      if (
+        !isRecord(value) ||
+        Object.keys(value).length !== 2 ||
+        Object.keys(value).some((key) => !["props", "fence"].includes(key))
+      )
+        throw bindingError("CACHE_PROTOCOL_ERROR");
+      const props = cacheProps(value.props);
+      const fence = value.fence;
+      if (
+        !isRecord(fence) ||
+        Object.keys(fence).some(
+          (key) => !["fenceGeneration", "refreshToken"].includes(key),
+        ) ||
+        typeof fence.fenceGeneration !== "string" ||
+        !/^[1-9][0-9]{0,19}$/.test(fence.fenceGeneration) ||
+        (fence.refreshToken !== undefined &&
+          (typeof fence.refreshToken !== "string" ||
+            !/^[0-9a-f]{32}$/.test(fence.refreshToken)))
+      )
+        throw bindingError("CACHE_PROTOCOL_ERROR");
+      const response = await nativeCacheResponse(request);
+      const headers = new Headers(request.headers);
+      headers.delete(WRITE_CONTEXT_HEADER);
+      try {
+        await this.ctx.exports
+          .CacheTransport({ props })
+          .storeEncoded(
+            "automatic",
+            undefined,
+            new Request(request.url, { headers }),
+            response,
+            {
+              fenceGeneration: fence.fenceGeneration,
+              ...(fence.refreshToken === undefined
+                ? {}
+                : { refreshToken: fence.refreshToken }),
+            },
+          );
+      } catch (error) {
+        try {
+          await response.body?.cancel();
+        } catch {
+          /* best effort */
+        }
+        throw error;
+      }
+      return new Response(null, { status: 204 });
+    } catch (error) {
+      try {
+        await request.body?.cancel();
+      } catch {
+        /* best effort */
+      }
+      throw cacheError(error);
+    }
   }
 }

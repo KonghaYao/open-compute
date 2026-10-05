@@ -28,7 +28,6 @@ async fn supervisor_construction_debug_and_default_wiring_are_secret_safe() {
         config: open_compute_core::config::RuntimeConfig::default(),
         clock: Arc::new(open_compute_core::SystemClock),
         jitter: Arc::new(crate::OsJitter),
-        redactor: Redactor::new(),
         lease_path: None,
     };
     assert!(format!("{options:?}").contains("WorkerdSupervisorOptions"));
@@ -40,7 +39,6 @@ async fn supervisor_construction_debug_and_default_wiring_are_secret_safe() {
         runtime,
         compiler,
         open_compute_core::config::RuntimeConfig::default(),
-        Redactor::new(),
     );
     assert!(format!("{defaults:?}").contains("WorkerdSupervisor"));
     defaults.shutdown().await;

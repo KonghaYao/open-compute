@@ -55,7 +55,7 @@ BAILIAN_API_KEY=... DEEPSEEK_API_KEY=... COHERE_API_KEY=... \
 # 显式 hosted S3 资格测试；使用专用空闲 bucket 和独立前缀，不会加入 workspace：
 OPEN_COMPUTE_TEST_R2_S3_MUTATION_ACK=s3-provider-qualification \
   ./test/gate.py s3-provider-qualification --jobs 1
-# 外部写入；仅在明确授权、预置账号与 Wrangler OAuth/token credential 后选择：
+# 外部写入；仅在明确授权、预置账号与 cf OAuth/token credential 后选择：
 ./test/gate.py p3-cf-diff
 # 在同一个冻结报告中合成本地 contract 与 remote qualification：
 ./test/gate.py p3 p3-cf-diff
@@ -87,6 +87,13 @@ workspace 顺序先做 CLI、single-binary 和独占的 p5-search，再进入普
 | `workflow-recovery`                                        | 当前 Workflow 的 snapshot、进程恢复、transport fault 与产品 binding 路径                                                                                                                                 |
 | `workflow-product`                                         | 当前 durable execution 与大结果/批次边界                                                                                                                                                                 |
 | `workflow`                                                 | 上述三个 Workflow 目标；`p2` 也包含它们                                                                                                                                                                  |
+| `p21-python-main`                                          | 单个普通 Python 主链场景：静态官方 cf 上传、真实 daemon/SQLite/SigV4、prepare/restore、KV/D1/R2、重启、rollback 与损坏拒绝；纳入 all、p3 和 workspace，输入缺失即失败                                    |
+| `p21-python-frameworks`                                    | 三个普通 daemon 场景：Django、Flask、FastAPI 的真实 cf 静态包、HTTP/body/stream、prepare/restore、密文校验、重启、rollback、失败拒绝与日志脱敏，Flask SDK stream 仍有已知阻塞                            |
+| `p21-python-services`                                      | 单个普通 daemon Python/JavaScript Service 对照：默认/命名 fetch 与 RPC、callback、目标切换、prepare/restore、重启、rollback 与被引用/已删除目标拒绝                                                      |
+| `p21-python-queues`                                        | 单个普通 daemon Python/JavaScript Queue 对照：四种消息类型、send/sendBatch、消费 metadata、ack/retry/DLQ、暂停重启、rollback、公开 consumer 配置和引用删除拒绝                                           |
+| `p21-python-durable-objects`                               | 单个普通 daemon Python/JavaScript DO 对照：ID/fetch/RPC、SQL/KV、actor replacement、持久 alarm、重启、rollback 和退休 namespace 拒绝                                                                     |
+| `p21-python-workflows`                                     | 单个普通 daemon Python/JavaScript Workflow 对照：step/retry/error、batch、pause/event、SQLite replay、版本保留、重启、rollback 与 terminate                                                              |
+| `p21-python-runtime`                                       | 单个普通 daemon Python SDK/raw FFI/JavaScript 对照：共享 KV/D1/R2、转换/bytes/crypto/callback、stdlib、waitUntil、HTTP/TCP、临时文件与重启/rollback                                                      |
 | `p3-contract`                                              | baseline/catalog、capability/type/config/deviation/case/source 双射；无 workerd、网络或外部 mutation                                                                                                     |
 | `p3-assets`、`p3-services`、`p3-cache-images`              | 对应静态资产、Service binding（含事件源与 SIGKILL cleanup）、Cache/Images 真实 runtime 产品矩阵                                                                                                          |
 | `p3-isolation`、`p3-recovery`                              | 两账户 fail-closed 与 P3 产品隔离；进程/快照/跨产品 crash recovery 与清理                                                                                                                                |
@@ -100,7 +107,7 @@ workspace 顺序先做 CLI、single-binary 和独占的 p5-search，再进入普
 | `p0`、`p1`、`p2`、`all`                                    | 对应集合；多个选择取并集，每个选定目标与 case 执行一次                                                                                                                                                   |
 
 `p3-cf-diff` 每个 fixture 只使用随机 `oc-p34-*` Worker 名；Cloudflare 使用 workers.dev endpoint，
-open-compute 使用 test-support 数据面。两个 provider 都通过固定 Wrangler 与官方 v4 API 创建同前缀且
+open-compute 使用 test-support 数据面。两个 provider 都通过固定 cf 与官方 v4 API 创建同前缀且
 唯一的 KV namespace、D1 database、R2 bucket、Queue、Worker-owned Durable Object namespace 或
 Workflow；open-compute 只通过 `CLOUDFLARE_API_BASE_URL` 选择本地 v4 origin。runner 在 mutation 前验证
 目标账号和每个同名资源不存在，只对只读状态做有界重试，绝不重试写操作。cleanup 禁止扩大到非本轮
@@ -115,7 +122,46 @@ Workflow；open-compute 只通过 `CLOUDFLARE_API_BASE_URL` 选择本地 v4 orig
 完成索引、Search 和 Chat；429、timeout 或 contract drift 直接失败且不重试。普通 PR 与 workspace Gate 始终只跑本地
 `p5-search`，因此不会接触 credential 或公网。
 
+### Python Workers
+
+P21 的七个 exclusive target 共九项 native case，均使用正式 pin 的 workerd、真实 daemon、SQLite 和 SigV4 fixture。Gate 先核对原生 inventory 与 registry，再串行执行每项一次；输入缺失、digest 不匹配或 ignored case 都失败。维护源码与原始 cf multipart 位于 `test/applications/python-*` 和 `test/fixtures/python-*`。每次读取核对 main/package/data 与全部 19 项官方 SDK 字节。Gate 复用静态输入，不运行 PyWrangler/Wrangler、不构建依赖、不下载 runtime。
+
+开发侧 Python 构建临时由 `scripts/build-python.ts` 调用用户安装的 PyWrangler，优先项目 `.venv/bin/pywrangler`，再查 PATH；未安装报错，不安装或校验版本。依赖、构建解释器须显式准备，cf `--prebuilt` 负责上传。桥接只负责 Python build，移除条件见 [P25 活动 TODO](../p25-platform-follow-ups.md)。
+
+| 目标                 | 单个 case 拥有的验证范围                                                                                                                                                                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Main                 | 官方 Python entrypoint、三类 package 与 package data；Python/JavaScript 共享 KV/D1/R2、outbound/body stream、secret identity、prepare/restore、promotion/restart/rollback；六类应用 import/package 拒绝、密文截断与同大小损坏后失败关闭和 fresh-process 恢复     |
+| Frameworks（3 case） | Django、普通 Flask、FastAPI HTTP/template/HEAD/query/status；Django/FastAPI streaming；各自两次不可变 Version、secret、promotion/rollback、密文损坏拒绝、重启恢复、失败不切换 active 和退出清理                                                                  |
+| Services             | 双向默认/命名 fetch 与 RPC、clone/callback、业务异常脱敏；双方两个 Version、目标切换、restart/rollback、引用删除 409、显式 force 删除后精确 503/SERVICE_TARGET_NOT_READY                                                                                         |
+| Queues               | 共享持久 Queue 的 json/text/bytes/V8 Date 与 50,000 中文字符；Python 和 JavaScript consumer、retry/ack/DLQ、暂停帧跨重启、两个 Version/secret、rollback、被引用删除在重启前后均拒绝且后续投递正常                                                                |
+| DO                   | 两个语言各自 self-owned namespace 的 native ID/name、fetch/RPC、SQL/KV、abort actor replacement、alarm、WebSocket 消息/attachment/close、两个 Version/secret、promotion/rollback、SIGKILL orphan recovery、Python class 退休与独立 JavaScript namespace 连续运行 |
+| Workflows            | 两个语言各自 self-owned Flow、共享 KV effects；step retry/NonRetryableError/catch、batch、pause/event/restart/committed-step replay、旧实例固定原版本、公开 PUT 重绑 definition 后 rollback 新实例、terminate 持久性                                             |
+| Runtime              | 官方 SDK/raw FFI/JavaScript 的转换、bytes/crypto/callback destroy、stdlib、waitUntil、HTTP/TCP、临时文件和 observability；共享 KV/D1/R2、Cache/Assets/Images/Markdown/Vectorize、声明 AI Search/Artifacts subset，重启与 rollback                                |
+
+Runtime 的同一个 case 还部署未修改的 Pyodide `requests` 2.33.1 与 `httpx` 0.28.1 wheel（实际 wheel 来源与 digest 由 `pylock.toml` 和 cf capture 固定）。同步 requests、同步/异步 httpx 验证 Unicode body/header、HTTP status exception、完整分块流、真实延迟响应超时、连接拒绝与后续调用恢复；异步 httpx task cancellation 先用服务端 barrier 确认请求已接收。`subrequests=2` 的独立不可变 Version 必须只向 fixture 发出两次请求，第三次被 native quota 拒绝，下一 invocation 仍可访问。初始部署、fresh daemon restart、promotion/rollback 后复验客户端路径。requests/urllib3 的超时对外是 `ConnectionError`，测试必须同时确认其异常链包含真实 `_TimeoutError`，并证明延迟响应尚未完成，不能把任意连接失败当超时。取消后等待受控服务的 pending operation 归零并释放 listener；不把 task 取消写成底层 Fetch 立即 abort，也不依赖 client disconnect 取消。
+
+同一 Runtime case 使用 JavaScript parent、公开 `open-compute:worker-loader` forwarding helper、最小 `child.py` 和 `globalOutbound=null` 建立 Dynamic 基线。每个阶段分别调用两次 `loadWorker()` 和两次相同 key 的 `getWorker()`，记录 factory 次数、错误及 wall time：普通 Python preparation 前的 fresh process、普通 preparation 后、fresh daemon restart 后。子 Worker 不注入普通 prepared artifact，不提高 1,000 ms startup CPU 限额；没有成功初始化就不存在 warmed successful child。wall time 不冒充启动 CPU 测量；基线记录位于 [P21](../implemented/p21-python-workers.md)，Dynamic 实现仍属于 [#126](https://github.com/elliothux/open-compute/issues/126)。
+
+Cache API 的 default/named 命名空间各自保存 Worker 级共享可变状态；第二个 Version 写入的默认缓存在 rollback 和 fresh restart 后仍可读取，命名缓存与其他 Worker 不受影响。自动 Workers Cache 的默认版本隔离是另一个合同。
+
+公开上传当前拒绝 cross-Script DO/Workflow binding。其用例比较 self-owned 对象，不冒充 JavaScript 直接绑定同一个 Python DO/Flow。Workflow definition 的 current Version 独立于 HTTP deployment；rollback 后必须通过公开 PUT 重绑后再创建第一版实例。Queue consumer 通过公开 API 配置，不据此声明独立 API attachment 自动随 promotion 切换。Queue 的 `force` 只授权 backlog purge，不绕过 live referrer 保护。
+
+2026-10-04 用户暂缓 [workers-py#287](https://github.com/cloudflare/workers-py/issues/287)：Flask request/app-context streaming 留为已知上游问题，SDK 不改，原 route、捕获和失败证据保留。三个 framework case 均执行，无 ignored case；Flask 普通 HTTP/template 与部署恢复继续必选，上游修复后恢复流式 body/context/cancellation 验证。Dynamic Python 的 fresh isolate 仍按 `OC-WKR-LIMIT-001` 单列限制，普通 prepared deployment 不为它提供支持证明。
+
+这些 case 验证已列出的实际路径，不能推广为全部上游 overload、PITR、hibernation eviction、live WebSocket 跨进程死亡、托管模型、全球调度或 hosted Cloudflare differential。权限、stale fencing、crash 和持久产品语义仍由各产品现有 Gate 共同拥有；扩展只按声明 subset 资格，不新增 Python facade。
+
+正式 Pyodide 输入允许导入 `fcntl`、`termios`、`pty`、`tty`，这不证明宿主 POSIX 调用可用；线程启动拒绝，`multiprocessing` 只验证导入。标准库缺失列表按当前正式 pin 的实际行为固定，无历史列表兼容分支。
+
+实际 ordinary run 标识、workspace coverage 和最终单轮 Gate 写入精简 P21 实现记录；编译、capture、source review 和一次性 native probe 不冒充完整 daemon case 通过。失败诊断和 exact coverage inputs 一律保留于 `.temp/`。
+
+service library 的 `fresh_native_preparation_publishes_once_and_reaps_after_import_rejection` 是 preparation 所属回归：使用 cf Main 与正式 runtime 验证独立受监督 child、双重 readiness、加密 publication、重复 restore、import error 和 lease 清理。runtime 的 `isolated_python_preparation_owner_lifecycle` 与 `isolated_python_preparation_owner_rejection_matrix` 另外验证 child 取消/退出/orphan recovery 和输入拒绝，使用 verified supervisor fixture。它们不替代普通 deployment Gate。
+
 ## 单轮覆盖原则
+
+`runtime` 另外拥有 `isolated_python_preparation_owner_lifecycle` 与
+`isolated_python_preparation_owner_rejection_matrix` 两个进程组件场景：它们验证 prepare child 的共享 owner、双重 readiness、
+取消/退出/lease recovery、输入拒绝及主进程隔离，使用既有 verified supervisor fixture，不替代正式 Python deployment Gate。
+两个场景只在 runtime 目标登记一次。
 
 P0.5 的 `uploads::concurrent_large_upload_keeps_runtime_responsive` 使用真实 HTTP、stock workerd、
 SQLite/D1 和 SigV4 S3 fixture，上传 241,910,375 bytes（8 MiB 分片、4 并发），核对分片 authority、
@@ -201,10 +247,14 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s test -p 'test_gate.py'
 ```
 
 production 检查只构建无 test-support 的普通开发二进制并扫描测试标记，不调用发行包装。
-coverage 的清理限于自身 workspace 插桩产物，Rust 行覆盖率门槛仍为 **90.00%**。
+coverage 保留每轮独立的输入证据，不删除旧 profile 或 object；Rust 行覆盖率门槛仍为 **90.00%**。
 coverage 只运行一轮；调度器拒绝把已知 coverage 插桩环境用于最终未插桩 Gate。
 coverage 使用 cargo-llvm-cov `show-env --sh` 的外部运行器接口和相同 workspace 调度器，
-产物放在 `target/llvm-cov-target/`，每进程 profile 名包含 PID/模块身份。supervisor 夹具的环境
+构建缓存继续放在 `target/llvm-cov-target/`。每轮在 `.temp/coverage/run-*/` 保留独立
+profile 池、merged profdata 和精确 object 副本，拒绝覆写已存在 object 目录；缓存重建不会
+修改证据副本，也不把先前轮次计数混入本轮。报告先写入本轮目录；90% 门槛通过后，
+保留旧标准报告副本，再发布到文档约定的 `target/llvm-cov/`。失败不会覆写先前标准报告。
+supervisor 夹具的环境
 由生产 spawn 清空，其默认 profile 留在本轮 `.temp/gate-run/` 诊断目录；不向生产环境透传变量，
 夹具仍按原有测试源码规则排除，生产模块的插桩与计数不变。
 `crates/search/examples/exact_search_benchmark.rs` 是单独留存报告的发行 benchmark，不计入
@@ -219,6 +269,11 @@ production Rust 行覆盖率；不得把生产模块移入 `examples/` 规避门
 不覆盖已有清单。`./scripts/dev.sh` 复用该流程，但将持久开发状态放在 `.data/`。
 
 ### 按输入选择测试
+
+SDK 消费者通过 package exports 解析 `packages/sdk/dist/` 的声明与代码。修改 SDK 生成面、
+合入 SDK authority 更新或从没有 `dist/` 的 checkout 开始时，先运行
+`bun run --filter @open-compute/sdk build`，再执行消费者的 typecheck/build。
+SDK 的 `typecheck` 验证生成源码与严格类型，不刷新 `dist/`；旧构建产物不能证明当前 API。
 
 修改文档、release notes 或只读脚本时不需要 Rust Gate；CI 对纯文档变更只运行 `docs-checks`。纯 SDK
 、dashboard、website 或 toolchain 变更只运行对应的 JavaScript typecheck/test/build/pack 检查；混合

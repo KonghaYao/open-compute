@@ -166,10 +166,10 @@ fn generated_source_manifest_matches_every_system_worker() {
 #[test]
 fn platform_module_namespaces_are_reserved_without_binding_exceptions() {
     for name in [
-        "__open_compute__/entry.js",
-        "__open_compute__/d1/facade.js",
-        "__open_compute__/workflows/json.js",
-        "__open_compute__/other.js",
+        "cloudflare-internal:open-compute-host-policy",
+        "cloudflare-internal:open-compute-forwarding",
+        "cloudflare-internal:wrapped-binding",
+        "cloudflare-internal:other",
         "open-compute:worker-loader",
         "open-compute:future-module",
     ] {

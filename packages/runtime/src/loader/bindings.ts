@@ -1,5 +1,10 @@
 // Assemble only capabilities resolved and verified by RuntimeSource.
+import {
+  nativeBinding,
+  type NativeBinding,
+} from "../bindings/native-construction.js";
 import type { DoPolicy } from "../durable-objects/protocol.js";
+import { PRIVATE_POLICY, type WorkerPolicy } from "./policy.js";
 import type {
   BindingContext,
   NativeWorkerLoaderFactory,
@@ -8,6 +13,11 @@ import type {
   RuntimeSnapshot,
 } from "./protocol.js";
 import { bindingError } from "./shared.js";
+
+function requireHostPolicy(loaderFactory: NativeWorkerLoaderFactory): void {
+  if (loaderFactory.hostPolicyVersion !== 1)
+    throw bindingError("RUNTIME_UNAVAILABLE");
+}
 
 function makeBinding(
   ctx: BindingContext,
@@ -37,6 +47,7 @@ function makeBinding(
         workerId,
         queueId: descriptor.queueId,
         queueLifecycleGeneration: descriptor.queueLifecycleGeneration,
+        durableObject,
       }),
     });
   }
@@ -110,8 +121,10 @@ function makeModuleBinding(binding: RuntimeModuleBinding): unknown {
 /** Public Loader bindings needed to compile a Worker during admission. */
 export function validationEnv(
   snapshot: RuntimeSnapshot,
+  policy: WorkerPolicy,
   loaderFactory: NativeWorkerLoaderFactory,
-): Record<string, unknown> {
+) {
+  requireHostPolicy(loaderFactory);
   const env: Record<string, unknown> = {};
   for (const binding of snapshot.workerLoaders) {
     Object.defineProperty(env, binding.name, {
@@ -119,12 +132,17 @@ export function validationEnv(
       enumerable: true,
     });
   }
-  return env;
+  return {
+    env,
+    openComputeHostPolicy: true as const,
+    openComputePrivateEnv: { [PRIVATE_POLICY]: policy },
+  };
 }
 
 /** Keep raw product transports out of importable cloudflare:workers.env. */
 export function tenantEnv(
   snapshot: RuntimeSnapshot,
+  workerPolicy: WorkerPolicy,
   ctx: BindingContext,
   loaderFactory: NativeWorkerLoaderFactory,
   versionId: string,
@@ -134,8 +152,13 @@ export function tenantEnv(
 ): {
   env: Record<string, unknown>;
   openComputePrivateEnv: Record<string, unknown>;
+  openComputeBindings: Record<string, NativeBinding>;
+  openComputeCache: Fetcher;
+  openComputeHostPolicy: true;
 } {
+  requireHostPolicy(loaderFactory);
   const env = { ...snapshot.env };
+  const openComputeBindings: Record<string, NativeBinding> = {};
   const privateNames = new Set<string>();
   const forwardingLoaders: Record<string, WorkerLoader> = {};
   const [instanceId, workerId] = snapshot.loaderKey.split("/");
@@ -171,7 +194,13 @@ export function tenantEnv(
       policy,
       durableObject,
     );
+    const native = nativeBinding(descriptor.kind, env[descriptor.name]);
+    if (native) openComputeBindings[descriptor.name] = native;
     privateNames.add(descriptor.name);
+  }
+  if (snapshot.workerLoaders.length > 0) {
+    env.__OPEN_COMPUTE_PRIVATE_NATIVE_BINDINGS = openComputeBindings;
+    privateNames.add("__OPEN_COMPUTE_PRIVATE_NATIVE_BINDINGS");
   }
   if (snapshot.assetBinding) {
     const name = snapshot.assetBinding.name;
@@ -183,6 +212,9 @@ export function tenantEnv(
         descriptorSha256: snapshot.workerCodeSha256,
       }),
     });
+    const native = nativeBinding("assets", env[name]);
+    if (!native) throw bindingError("VERSION_INVARIANT_VIOLATION");
+    openComputeBindings[name] = native;
     privateNames.add(name);
   }
   for (const service of snapshot.services) {
@@ -198,9 +230,12 @@ export function tenantEnv(
           : { entrypoint: service.entrypoint }),
       }),
     });
+    const native = nativeBinding("service", env[service.name]);
+    if (!native) throw bindingError("VERSION_INVARIANT_VIOLATION");
+    openComputeBindings[service.name] = native;
     privateNames.add(service.name);
   }
-  const cacheTransports: Record<string, unknown> = {};
+  const cacheTransports: Record<string, Fetcher> = {};
   const defaultCachePolicy = {
     enabled: snapshot.cachePolicy.enabled,
     crossVersionCache: snapshot.cachePolicy.crossVersionCache,
@@ -242,6 +277,9 @@ export function tenantEnv(
         descriptorSha256,
       }),
     });
+    const native = nativeBinding("images", env[name]);
+    if (!native) throw bindingError("VERSION_INVARIANT_VIOLATION");
+    openComputeBindings[name] = native;
     privateNames.add(name);
   }
   if (snapshot.aiBinding) {
@@ -256,6 +294,9 @@ export function tenantEnv(
         descriptorSha256,
       }),
     });
+    const native = nativeBinding("ai", env[name]);
+    if (!native) throw bindingError("VERSION_INVARIANT_VIOLATION");
+    openComputeBindings[name] = native;
     privateNames.add(name);
   }
   if (snapshot.versionMetadataBinding) {
@@ -270,8 +311,13 @@ export function tenantEnv(
     });
   }
   const publicEnv: Record<string, unknown> = {};
-  const privateEnv: Record<string, unknown> = {};
+  const privateEnv: Record<string, unknown> = {
+    [PRIVATE_POLICY]: workerPolicy,
+  };
   for (const [name, value] of Object.entries(env)) {
+    const native = openComputeBindings[name];
+    // Queue's native serializer delegates durable publication to its private caller policy.
+    if (native && native.kind !== "queue") continue;
     Object.defineProperty(
       privateNames.has(name) ? privateEnv : publicEnv,
       name,
@@ -281,5 +327,11 @@ export function tenantEnv(
       },
     );
   }
-  return { env: publicEnv, openComputePrivateEnv: privateEnv };
+  return {
+    env: publicEnv,
+    openComputePrivateEnv: privateEnv,
+    openComputeBindings,
+    openComputeCache: cacheTransports[currentEntrypoint]!,
+    openComputeHostPolicy: true,
+  };
 }

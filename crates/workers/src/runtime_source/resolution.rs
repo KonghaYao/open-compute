@@ -65,8 +65,20 @@ pub(super) fn validate_scope(
 ) -> Result<(), PlatformError> {
     match scope {
         RuntimeScope::Runtime if snapshot.version.state != VersionState::Ready => Err(not_ready()),
-        RuntimeScope::Validation if snapshot.version.state != VersionState::Validating => {
+        RuntimeScope::Validation | RuntimeScope::Preparation
+            if snapshot.version.state != VersionState::Validating =>
+        {
             Err(not_ready())
+        }
+        RuntimeScope::Preparation
+            if snapshot.version.content_kind != VersionContentKind::Worker
+                || !snapshot
+                    .version
+                    .main_module
+                    .as_deref()
+                    .is_some_and(|name| name.ends_with(".py")) =>
+        {
+            Err(invariant())
         }
         RuntimeScope::Probe
             if !matches!(
@@ -76,7 +88,10 @@ pub(super) fn validate_scope(
         {
             Err(not_ready())
         }
-        RuntimeScope::Runtime | RuntimeScope::Validation | RuntimeScope::Probe => Ok(()),
+        RuntimeScope::Runtime
+        | RuntimeScope::Validation
+        | RuntimeScope::Preparation
+        | RuntimeScope::Probe => Ok(()),
     }
 }
 
@@ -252,7 +267,9 @@ fn resolve_durable_object_identity(
     binding: &open_compute_storage::bindings::VersionBindingRecord,
     scope: RuntimeScope,
 ) -> Result<Option<DurableObjectFacadeIdentity>, PlatformError> {
-    if binding.kind != BindingKind::DoNamespace || scope != RuntimeScope::Runtime {
+    if binding.kind != BindingKind::DoNamespace
+        || !matches!(scope, RuntimeScope::Runtime | RuntimeScope::Preparation)
+    {
         return Ok(None);
     }
     let (prefix, key) =
@@ -583,7 +600,7 @@ pub(super) fn decrypt_secrets(
     vars: &BTreeMap<String, serde_json::Value>,
 ) -> Result<BTreeMap<String, SecretString>, PlatformError> {
     let mut secrets = BTreeMap::new();
-    if scope != RuntimeScope::Runtime {
+    if !matches!(scope, RuntimeScope::Runtime | RuntimeScope::Preparation) {
         return Ok(secrets);
     }
     for secret in snapshot.secrets.values() {

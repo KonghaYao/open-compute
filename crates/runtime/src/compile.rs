@@ -80,8 +80,28 @@ fn is_atomic_partial(name: &str) -> bool {
         .is_some_and(|id| id.get_version_num() == 7)
 }
 
+/// Checked-in process profile selected before workerd compiles its configuration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConfigRole {
+    /// The instance runtime, including its sole Durable Object storage authority.
+    Runtime,
+    /// Disposable Python preparation, delegating DO operations to the instance runtime.
+    PythonPreparation,
+}
+
+impl ConfigRole {
+    pub(crate) const fn constant(self) -> &'static str {
+        match self {
+            Self::Runtime => "config",
+            Self::PythonPreparation => "prepareConfig",
+        }
+    }
+}
+
 /// Inputs required to compile or reuse a binary config.
 pub struct CompileRequest<'a> {
+    /// Exact static profile to compile; also part of the cache identity.
+    pub role: ConfigRole,
     /// Verified workerd identity and opened executable.
     pub runtime: &'a VerifiedRuntime,
     /// Absolute lock file used for digest mixing. Must match the verified lock bytes.
@@ -109,6 +129,7 @@ pub struct CompileRequest<'a> {
 impl Debug for CompileRequest<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CompileRequest")
+            .field("role", &self.role)
             .field("runtime", &self.runtime)
             .field("platform", &self.platform)
             .field("token", &self.token)
@@ -118,6 +139,7 @@ impl Debug for CompileRequest<'_> {
 
 /// Handle to a verified compiled config. Debug/Display omit filesystem paths and secrets.
 pub struct CompiledConfig {
+    role: ConfigRole,
     digest: String,
     path: PathBuf,
     content_sha256: String,
@@ -138,6 +160,12 @@ impl Display for CompiledConfig {
 }
 
 impl CompiledConfig {
+    /// Static process profile bound to this verified cache handle.
+    #[must_use]
+    pub fn role(&self) -> ConfigRole {
+        self.role
+    }
+
     /// Input digest identifying this compiled config.
     #[must_use]
     pub fn digest(&self) -> &str {
@@ -176,6 +204,18 @@ impl CompiledConfig {
         Ok(bytes)
     }
 
+    /// Build a preparation-profile config from explicit fixture bytes.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn preparation_from_bytes_for_test(
+        dir: &Path,
+        digest: &str,
+        bytes: &[u8],
+    ) -> Result<Self, PlatformError> {
+        let mut compiled = Self::from_bytes_for_test(dir, digest, bytes)?;
+        compiled.role = ConfigRole::PythonPreparation;
+        Ok(compiled)
+    }
+
     /// Build a compiled-config handle from bytes for supervisor tests.
     #[cfg(any(test, feature = "test-support"))]
     pub fn from_bytes_for_test(
@@ -189,6 +229,7 @@ impl CompiledConfig {
         write_sidecar(&path, digest, bytes)?;
         let content_sha256 = hex_sha256(&Sha256::digest(bytes).into());
         Ok(Self {
+            role: ConfigRole::Runtime,
             digest: digest.to_owned(),
             path,
             content_sha256,
@@ -220,6 +261,7 @@ pub async fn compile_static_config(
         request.binding_token,
         request.observability_token,
         &request.durable_objects,
+        request.role,
     )?;
 
     create_dir_secure(request.runtime_data_dir)?;
@@ -233,6 +275,7 @@ pub async fn compile_static_config(
         let _publish = publish_gate.lock().await;
         if let Some(content_sha256) = try_reuse_or_clear_cache(&dest, &digest)? {
             return Ok(CompiledConfig {
+                role: request.role,
                 digest,
                 path: dest,
                 content_sha256,
@@ -289,7 +332,12 @@ async fn compile_into(
     let output = request
         .runtime
         .run(
-            &["compile", generated_str, "--config-only"],
+            &[
+                "compile",
+                generated_str,
+                request.role.constant(),
+                "--config-only",
+            ],
             request.deadline,
             MAX_COMPILED_BYTES,
             request.redactor,
@@ -341,6 +389,7 @@ async fn compile_into(
     let _publish = publish_gate.lock().await;
     if let Some(existing) = try_reuse_or_clear_cache(dest, digest)? {
         return Ok(CompiledConfig {
+            role: request.role,
             digest: digest.to_owned(),
             path: dest.to_path_buf(),
             content_sha256: existing,
@@ -354,6 +403,7 @@ async fn compile_into(
             run_after_config_rename_hook(dest);
             write_sidecar(dest, digest, &bytes)?;
             Ok(CompiledConfig {
+                role: request.role,
                 digest: digest.to_owned(),
                 path: dest.to_path_buf(),
                 content_sha256: content_hash,
@@ -361,6 +411,7 @@ async fn compile_into(
         }
         Err(_) => match wait_reuse_winner(dest, digest).await {
             Ok(existing) => Ok(CompiledConfig {
+                role: request.role,
                 digest: digest.to_owned(),
                 path: dest.to_path_buf(),
                 content_sha256: existing,

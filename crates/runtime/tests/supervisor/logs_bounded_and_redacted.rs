@@ -5,8 +5,6 @@ pub(super) async fn run() {
     let runtime = verified(dir.path()).await;
     let data = dir.path().join("d");
     fs::create_dir(&data).unwrap();
-    let mut redactor = Redactor::new();
-    redactor.register_str("/secret/token-path");
     let mut cfg = small_cfg();
     cfg.restart_budget = 1;
     let sup = WorkerdSupervisor::new(
@@ -16,7 +14,6 @@ pub(super) async fn run() {
             config: cfg,
             clock: Arc::new(DeterministicClock::new(UNIX_EPOCH)),
             jitter: Arc::new(SequenceJitter::new(vec![0])),
-            redactor,
             lease_path: None,
         },
         Vec::new(),
@@ -25,8 +22,7 @@ pub(super) async fn run() {
     );
     sup.start();
     let snap = wait_state(&sup, SupervisorState::Running).await;
-    let token_in_config = snap.token_fingerprint.clone();
-    let _ = token_in_config;
+    let pid = snap.pid.expect("runtime PID");
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
         let now = sup.snapshot();
@@ -49,23 +45,19 @@ pub(super) async fn run() {
     assert_eq!(exit.code, Some(42));
     assert_eq!(exit.signal, None);
     let diag = sup.last_diagnostics().expect("diagnostics");
-    assert!(diag.stdout_tail.len() <= 16 * 1024);
-    assert!(diag.stderr_tail.len() <= 16 * 1024);
-    assert!(!diag.stdout_tail.contains("Authorization"));
-    assert!(!diag.stderr_tail.contains("Authorization: Bearer"));
-    assert!(!diag.stdout_tail.contains("/secret/token-path"));
-    assert!(!diag.stderr_tail.contains("/secret/token-path"));
     assert!(
-        diag.stderr_tail.contains("[REDACTED]") || diag.stdout_tail.contains("[REDACTED]"),
-        "headers must be redacted"
+        diag.stdout_tail.is_empty(),
+        "tenant output must never be retained"
     );
     assert!(
-        !diag.stderr_tail.contains(&"A".repeat(9000)),
-        "oversized lines must be bounded"
+        diag.stderr_tail.is_empty(),
+        "native tracebacks must never be retained"
     );
     assert!(
-        diag.stderr_tail.contains('\u{fffd}') || diag.stdout_tail.contains('\u{fffd}'),
-        "invalid utf8 must be lossy-redacted"
+        !diag.reader_failed,
+        "both pipes must still drain successfully"
     );
+    assert!(!format!("{diag:?}").contains("unregistered-tenant-secret"));
     sup.shutdown().await;
+    assert_reaped(Some(pid)).unwrap();
 }

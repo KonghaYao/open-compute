@@ -3,7 +3,9 @@ import type {
   LoaderEnv,
   RuntimeEnvelope,
   RuntimeSnapshot,
+  RuntimeSourceScope,
 } from "./protocol.js";
+import { resolvePythonSnapshot } from "./python-snapshot.js";
 import { assertSnapshot } from "./snapshot.js";
 
 const SOURCE_PATH = "/internal/runtime/v1/versions/resolve";
@@ -81,7 +83,7 @@ export function tenantGlobalOutbound(
 }
 
 /** Select compatibility metadata and resource limits only from the immutable snapshot. */
-export function snapshotWorkerCode(snapshot: RuntimeSnapshot): {
+function workerCodeOptions(snapshot: RuntimeSnapshot): {
   compatibilityDate: string;
   compatibilityFlags: string[];
   allowExperimental: true;
@@ -109,6 +111,44 @@ export function snapshotWorkerCode(snapshot: RuntimeSnapshot): {
       subRequests: snapshot.limits.subRequests,
     },
   };
+}
+
+/** Deployment startup must restore an admitted artifact instead of loading raw Python. */
+export async function snapshotWorkerCode(
+  env: LoaderEnv,
+  snapshot: RuntimeSnapshot,
+  scope: RuntimeSourceScope,
+  token: string | null,
+) {
+  if (token === null) throw bindingError("BINDING_PROTOCOL_ERROR");
+  const options = workerCodeOptions(snapshot);
+  if (snapshot.mainModule?.endsWith(".py")) {
+    if (snapshot.pythonPreparedSha256 === undefined)
+      throw bindingError("PYTHON_PREPARED_ARTIFACT_MISSING");
+    if (!/^[a-f0-9]{64}$/.test(snapshot.pythonPreparedSha256))
+      throw bindingError("VERSION_INVARIANT_VIOLATION");
+    return {
+      ...options,
+      openComputePythonSnapshot: await resolvePythonSnapshot(
+        env,
+        snapshot,
+        scope,
+        token,
+      ),
+    };
+  }
+  return options;
+}
+
+/** Require an unprepared Python deployment for the host's single-use preparation operation. */
+export function pythonPreparationCode(snapshot: RuntimeSnapshot) {
+  if (
+    snapshot.contentKind !== "worker" ||
+    snapshot.pythonPreparedSha256 !== undefined ||
+    !snapshot.mainModule?.endsWith(".py")
+  )
+    throw bindingError("VERSION_INVARIANT_VIOLATION");
+  return workerCodeOptions(snapshot);
 }
 
 function policyInteger(
@@ -157,8 +197,7 @@ export function currentStartupGeneration(seed?: string | null): string {
 export async function resolveSnapshot(
   env: LoaderEnv,
   envelope: RuntimeEnvelope,
-  validation: boolean,
-  probe: boolean,
+  scope: RuntimeSourceScope,
   internalToken: string | null,
 ): Promise<RuntimeSnapshot> {
   if (internalToken === null) throw bindingError("BINDING_PROTOCOL_ERROR");
@@ -175,7 +214,7 @@ export async function resolveSnapshot(
       body: JSON.stringify({
         key: envelope.loaderKey,
         expectedWorkerCodeSha256: envelope.expected,
-        scope: validation ? (probe ? "probe" : "validation") : "runtime",
+        scope,
       }),
     },
   );
@@ -189,7 +228,7 @@ export async function resolveSnapshot(
   if (
     snapshot.loaderKey !== envelope.loaderKey ||
     snapshot.workerCodeSha256 !== envelope.expected ||
-    (!validation &&
+    (scope === "runtime" &&
       envelope.routeGeneration !== undefined &&
       snapshot.routeGeneration !== envelope.routeGeneration)
   ) {

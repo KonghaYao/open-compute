@@ -6,7 +6,7 @@ use crate::workers_http::WorkerApiState;
 use open_compute_core::{InstanceId, PlatformError, WorkerId};
 use open_compute_storage::durable_objects::{
     DurableObjectClassRename, DurableObjectMigrationHead, DurableObjectMigrationPlan,
-    DurableObjectRepository,
+    DurableObjectMigrationPreparation, DurableObjectRepository,
 };
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -54,7 +54,17 @@ pub(super) fn prepare(
     };
     normalize_declarative_replay_base(&mut plan, current.as_ref());
     plan.new_sqlite_classes.sort();
-    repository.prepare_worker_migration(instance_id, worker_id, &plan, now_ms)?;
+    let preparation = repository.prepare_worker_migration(instance_id, worker_id, &plan, now_ms)?;
+    // A repeated cf export declaration describes the existing class authority.
+    // New Versions may change vars/secrets without claiming its committed migration.
+    if plan.declarative
+        && matches!(
+            preparation,
+            DurableObjectMigrationPreparation::AlreadyCommitted { .. }
+        )
+    {
+        return Ok(None);
+    }
     Ok(Some(PreparedDoMigration { plan }))
 }
 
@@ -240,6 +250,119 @@ fn declarative_export_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn repeated_cf_exports_do_not_claim_the_original_versions_migration() {
+        use open_compute_core::{RequestId, VersionId};
+        use open_compute_storage::worker_repository::{
+            EffectiveResourceLimits, NewVersion, NewVersionProducts, VersionContentKind,
+            WorkerRepository,
+        };
+
+        let (_temp, _mock, state, account, _storage) =
+            crate::tests::initialized_worker_http_fixture().await;
+        let api = state.worker_api().unwrap();
+        let workers = WorkerRepository::new(api.storage.db());
+        let (worker, _) = workers
+            .create_worker(account, "repeated-export", RequestId::generate(), 1, 100)
+            .unwrap();
+        let declaration = metadata(serde_json::json!({
+            "main_module": "index.js",
+            "compatibility_date": "2026-09-08",
+            "exports": {"Counter": {"type": "durable-object", "storage": "sqlite"}}
+        }));
+        let migration = prepare(api, account, worker.id, &declaration, Some(b"code"), 2)
+            .unwrap()
+            .unwrap();
+        let version = VersionId::generate();
+        workers
+            .insert_staging_version(
+                &NewVersion {
+                    id: version,
+                    instance_id: account,
+                    worker_id: worker.id,
+                    content_kind: VersionContentKind::Worker,
+                    artifact_sha256: Some([7; 32]),
+                    artifact_size: Some(1),
+                    artifact_schema_version: Some(1),
+                    main_module: Some("index.js".to_owned()),
+                    worker_code_sha256: [8; 32],
+                    compatibility_date: "2026-09-08".to_owned(),
+                    compatibility_flags: Vec::new(),
+                    resource_limits: EffectiveResourceLimits::standard_defaults(),
+                    vars: BTreeMap::new(),
+                    secrets: BTreeMap::new(),
+                    request_id: RequestId::generate(),
+                    now_ms: 3,
+                },
+                &NewVersionProducts::default(),
+                100,
+            )
+            .unwrap();
+        workers.begin_validation(version).unwrap();
+        workers
+            .mark_ready_with_durable_object_migration(version, worker.id, migration.plan(), 4)
+            .unwrap();
+        let repository = DurableObjectRepository::new(&api.storage);
+        let original = repository
+            .current_worker_migration(worker.id)
+            .unwrap()
+            .unwrap();
+        assert!(
+            prepare(api, account, worker.id, &declaration, Some(b"code"), 5)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            repository
+                .current_worker_migration(worker.id)
+                .unwrap()
+                .unwrap()
+                .tag,
+            original.tag
+        );
+        assert_eq!(
+            repository
+                .current_worker_migration(worker.id)
+                .unwrap()
+                .unwrap()
+                .version_id,
+            version
+        );
+
+        let conflicting = metadata(serde_json::json!({
+            "main_module": "index.js",
+            "compatibility_date": "2026-09-08",
+            "migrations": {"new_tag": original.tag, "steps": [{"new_sqlite_classes": ["Counter"]}]}
+        }));
+        assert_eq!(
+            prepare(api, account, worker.id, &conflicting, Some(b"code"), 6)
+                .err()
+                .unwrap()
+                .code(),
+            open_compute_core::ErrorCode::IdempotencyConflict
+        );
+        let changed = prepare(
+            api,
+            account,
+            worker.id,
+            &declaration,
+            Some(b"changed code"),
+            7,
+        )
+        .unwrap()
+        .unwrap();
+        assert_ne!(changed.tag(), original.tag);
+        changed.rollback(api, worker.id, 8).unwrap();
+        assert_eq!(
+            repository
+                .current_worker_migration(worker.id)
+                .unwrap()
+                .unwrap()
+                .version_id,
+            version
+        );
+    }
 
     fn metadata(value: serde_json::Value) -> WorkerUploadMetadata {
         serde_json::from_value(value).unwrap()

@@ -41,12 +41,14 @@ const controllerModule = moduleUrl(
     ),
   }),
 );
+const workflowErrors = moduleUrl(
+  "export class NonRetryableError extends Error {}",
+);
+const { NonRetryableError } = await import(workflowErrors);
 const runner = moduleUrl(
   await compileRuntime("workflows/runner.ts", {
     "cloudflare:workers": workerModule,
-    "cloudflare:workflows": moduleUrl(
-      "export class NonRetryableError extends Error {}",
-    ),
+    "cloudflare:workflows": workflowErrors,
     "./codec.js": workflowCodec,
     "./duration.js": workflowDuration,
   }),
@@ -349,6 +351,44 @@ test("waitForEvent preserves durable suspension and timeout verdicts", async () 
   }
 });
 
+test("suspension crosses an exception-conversion boundary without exposing a stack", async () => {
+  let converted;
+  class Flow extends WorkflowEntrypoint {
+    async run(_event, step) {
+      try {
+        await step.waitForEvent("approval", { type: "approved" });
+      } catch (error) {
+        converted = String(error);
+        assert.equal(error.stack, converted);
+        throw new Error(converted);
+      }
+    }
+  }
+  assert.deepEqual(
+    await runWorkflow(Flow, {}, {}, event, {
+      async claimBatch() {
+        return { state: "suspended" };
+      },
+      async drain() {
+        return { ok: true };
+      },
+    }),
+    { outcome: "suspended", finalOrdinal: 1 },
+  );
+  assert.equal(converted, "Error: WORKFLOW_RUN_STALE");
+
+  class Forged extends WorkflowEntrypoint {
+    async run() {
+      throw new Error(converted);
+    }
+  }
+  assert.deepEqual(await runWorkflow(Forged, {}, {}, event, {}), {
+    outcome: "errored",
+    errorCode: "WORKFLOW_EXECUTION_FAILED",
+    finalOrdinal: 0,
+  });
+});
+
 test("step.do resolves a dynamic retry delay with the same tenant Error", async () => {
   let failureBody;
   let finishResult;
@@ -533,4 +573,253 @@ test("terminate rollback replays completed handlers in LIFO order through durabl
       [3, "rollback:0", undefined],
     ],
   );
+});
+
+test("Workflow step permits the official SDK do method proxy", async () => {
+  let finishResult;
+  const ready = new Promise((resolve) => (finishResult = resolve));
+  let callbacks = 0;
+  class Flow extends WorkflowEntrypoint {
+    async run(_event, step) {
+      // The unmodified Python SDK wraps do with a Proxy get trap. A frozen
+      // own do property would violate the engine's Proxy invariant here.
+      const sdkStep = new Proxy(step, {
+        get(target, name) {
+          if (name === "do") return (...args) => target.do(...args);
+          return Reflect.get(target, name);
+        },
+      });
+      return await sdkStep.do("compute", async () => {
+        callbacks++;
+        return { value: 5 };
+      });
+    }
+  }
+  const result = await runWorkflow(Flow, {}, {}, event, {
+    async claimBatch({ steps }) {
+      assert.equal(steps.length, 1);
+      return { steps: [{ ordinal: 0, state: "run", attempt: 1, config }] };
+    },
+    async success(body) {
+      const reply = { state: "complete", outputBase64: body.outputBase64 };
+      finishResult(reply);
+      return reply;
+    },
+    async failure() {
+      assert.fail("successful SDK step reported a failure");
+    },
+    async result() {
+      return ready;
+    },
+    async drain() {
+      return { ok: true };
+    },
+  });
+  assert.deepEqual(result, {
+    outcome: "complete",
+    outputBase64: encodeWorkflowBase64({ value: 5 }),
+    finalOrdinal: 1,
+  });
+  assert.equal(callbacks, 1);
+});
+
+test("Workflow SDK non-retryable errors preserve classification without inspecting getters", async () => {
+  let getterReads = 0;
+  const native = new NonRetryableError("private step detail");
+  const named = new Error("private step detail");
+  named.name = "NonRetryableError";
+  const accessor = new Error("private step detail");
+  Object.defineProperty(accessor, "name", {
+    get() {
+      getterReads++;
+      throw new Error("name getter must not run");
+    },
+  });
+  const ordinary = new Error("NonRetryableError: ordinary retryable message");
+  class PythonError extends Error {
+    type = "NonRetryableError";
+  }
+  const python = new PythonError("private step detail");
+  const unbranded = new Error("private step detail");
+  unbranded.type = "NonRetryableError";
+  const typeAccessor = new Error("private step detail");
+  Object.defineProperty(typeAccessor, "type", {
+    get() {
+      getterReads++;
+      throw new Error("type getter must not run");
+    },
+  });
+  const constructorAccessor = new Error("private step detail");
+  constructorAccessor.type = "NonRetryableError";
+  Object.setPrototypeOf(
+    constructorAccessor,
+    Object.create(Error.prototype, {
+      constructor: {
+        get() {
+          getterReads++;
+          throw new Error("constructor getter must not run");
+        },
+      },
+    }),
+  );
+  for (const [error, expected] of [
+    [native, "WORKFLOW_NON_RETRYABLE"],
+    [named, "WORKFLOW_NON_RETRYABLE"],
+    [python, "WORKFLOW_NON_RETRYABLE"],
+    [unbranded, "WORKFLOW_EXECUTION_FAILED"],
+    [typeAccessor, "WORKFLOW_EXECUTION_FAILED"],
+    [constructorAccessor, "WORKFLOW_EXECUTION_FAILED"],
+    [accessor, "WORKFLOW_EXECUTION_FAILED"],
+    [ordinary, "WORKFLOW_EXECUTION_FAILED"],
+    [{ name: "NonRetryableError" }, "WORKFLOW_EXECUTION_FAILED"],
+  ]) {
+    if (error instanceof Error) {
+      for (const key of ["message", "stack", "cause"]) {
+        Object.defineProperty(error, key, {
+          get() {
+            getterReads++;
+            throw new Error("exception payload getter must not run");
+          },
+          configurable: true,
+        });
+      }
+    }
+    let finishResult;
+    const ready = new Promise((resolve) => (finishResult = resolve));
+    const failures = [];
+    let callbacks = 0;
+    class Flow extends WorkflowEntrypoint {
+      async run(_event, step) {
+        await step.do("compute", async () => {
+          callbacks++;
+          throw error;
+        });
+      }
+    }
+    const outcome = await runWorkflow(Flow, {}, {}, event, {
+      async claimBatch() {
+        return { steps: [{ ordinal: 0, state: "run", attempt: 1, config }] };
+      },
+      async failure(body) {
+        failures.push(body);
+        const reply = {
+          state: "failed",
+          code:
+            body.code === "WORKFLOW_NON_RETRYABLE"
+              ? body.code
+              : "WORKFLOW_STEP_RETRIES_EXHAUSTED",
+        };
+        finishResult(reply);
+        return reply;
+      },
+      async result() {
+        return ready;
+      },
+      async drain() {
+        return { ok: true };
+      },
+    });
+    assert.deepEqual(failures, [{ ordinal: 0, code: expected }]);
+    assert.equal(outcome.outcome, "errored");
+    assert.equal(callbacks, 1);
+    assert.equal(getterReads, 0);
+  }
+});
+
+test("Workflow SDK error roundtrip retains non-retryable verdict and allows catch continuation", async () => {
+  class PythonError extends Error {
+    type = "NonRetryableError";
+  }
+  for (const caught of [false, true]) {
+    let finishResult;
+    const ready = new Promise((resolve) => (finishResult = resolve));
+    let callbacks = 0;
+    const failures = [];
+    class Flow extends WorkflowEntrypoint {
+      async run(_event, step) {
+        try {
+          await step.do("compute", () => {
+            callbacks++;
+            throw new NonRetryableError("private step detail");
+          });
+        } catch {
+          if (caught) return { caught: true };
+          // The SDK converts the JS verdict into a Python exception, losing
+          // the WeakMap identity before Pyodide delivers a new PythonError.
+          throw new PythonError("private step detail");
+        }
+      }
+    }
+    const result = await runWorkflow(Flow, {}, {}, event, {
+      async claimBatch() {
+        return { steps: [{ ordinal: 0, state: "run", attempt: 1, config }] };
+      },
+      async failure(body) {
+        failures.push(body);
+        const reply = { state: "failed", code: body.code };
+        finishResult(reply);
+        return reply;
+      },
+      async result() {
+        return ready;
+      },
+      async drain() {
+        return { ok: true };
+      },
+    });
+    assert.deepEqual(failures, [
+      { ordinal: 0, code: "WORKFLOW_NON_RETRYABLE" },
+    ]);
+    assert.equal(callbacks, 1);
+    assert.deepEqual(
+      result,
+      caught
+        ? {
+            outcome: "complete",
+            outputBase64: encodeWorkflowBase64({ caught: true }),
+            finalOrdinal: 1,
+          }
+        : {
+            outcome: "errored",
+            errorCode: "WORKFLOW_NON_RETRYABLE",
+            finalOrdinal: 1,
+          },
+    );
+  }
+});
+
+test("Workflow context permits SDK waitUntil wrapping and awaits its background work", async () => {
+  let completed = false;
+  class Flow extends WorkflowEntrypoint {
+    constructor(ctx, env) {
+      super(ctx, env);
+      // workers-runtime-sdk patches this public method during construction.
+      const waitUntil = ctx.waitUntil.bind(ctx);
+      ctx.waitUntil = (promise) => waitUntil(promise);
+    }
+    async run() {
+      this.ctx.waitUntil(
+        Promise.resolve().then(() => {
+          completed = true;
+        }),
+      );
+      return 5;
+    }
+  }
+  const ctx = {};
+  for (let activation = 0; activation < 2; activation++) {
+    completed = false;
+    const result = await runWorkflow(Flow, ctx, {}, event, {
+      async drain() {
+        return { ok: true };
+      },
+    });
+    assert.deepEqual(result, {
+      outcome: "complete",
+      outputBase64: encodeWorkflowBase64(5),
+      finalOrdinal: 0,
+    });
+    assert.equal(completed, true);
+    assert.throws(() => ctx.waitUntil(Promise.resolve()), /WORKFLOW_RUN_STALE/);
+  }
 });

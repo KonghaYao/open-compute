@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { importRuntime } from "../compiled-runtime.mjs";
+import { Ingress } from "../gateway/runtime.mjs";
 
 const { revokeWorkerLoaders } = await importRuntime("loader/namespaces.ts");
-const { default: gateway } = await importRuntime("gateway/ingress.ts");
+
 const path = "http://gateway/internal/worker-loaders/revoke";
 const key = `${"a".repeat(64)}/`;
 const generation = `${key}${"0".repeat(15)}1/`;
@@ -86,22 +87,22 @@ test("only the authenticated private gateway can forward native namespace revoca
       },
     },
   };
+  const gateway = new Ingress({}, env);
   assert.equal(
     (
       await gateway.fetch(
         request([key], { "x-open-compute-internal-token": "old" }),
-        env,
       )
     ).status,
     404,
   );
   assert.deepEqual(revoked, []);
   assert.equal(
-    (await gateway.fetch(new Request(path + "?extra=1", request([key])), env))
+    (await gateway.fetch(new Request(path + "?extra=1", request([key]))))
       .status,
     404,
   );
   assert.deepEqual(revoked, []);
-  assert.equal((await gateway.fetch(request([key]), env)).status, 204);
+  assert.equal((await gateway.fetch(request([key]))).status, 204);
   assert.deepEqual(revoked, [key]);
 });

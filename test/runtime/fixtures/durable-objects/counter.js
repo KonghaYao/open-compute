@@ -1019,9 +1019,16 @@ export default {
       } catch {
         aborted = true;
       }
-      const recovered = await stub.getValue();
+      let oldStubRejected = false;
+      try {
+        await stub.getValue();
+      } catch {
+        oldStubRejected = true;
+      }
+      const recovered = await env.COUNTER.getByName(name).getValue();
       return Response.json({
         aborted,
+        oldStubRejected,
         recovered: typeof recovered.value === "number",
       });
     }

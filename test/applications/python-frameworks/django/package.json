@@ -1,0 +1,13 @@
+{
+  "name": "@open-compute/python-django-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run typecheck && node ../../../../scripts/build-python.ts .",
+    "typecheck": "WRANGLER_CACHE_DIR=../../../../.temp/cf-cli-cache/python-django MINIFLARE_CACHE_DIR=../../../../.temp/cf-cli-cache/python-django cf workers types && tsc --project tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "cf": "catalog:",
+    "typescript": "catalog:"
+  }
+}

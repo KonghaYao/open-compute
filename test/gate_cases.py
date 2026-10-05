@@ -108,6 +108,17 @@ ONCE = {
 }
 
 TIMING = {
+    'p21-python-runtime': ('runtime::p21_python_runtime_ffi_stdlib_wait_until_network_restart_rollback',),
+    'p21-python-main': ('python_main::p21_python_main_upload_prepare_dispatch_restart_rollback',),
+    'p21-python-services': ('services::p21_python_services_fetch_named_rpc_callback_restart_rollback',),
+    'p21-python-queues': ('queues::p21_python_queues_produce_consume_retry_dlq_restart_rollback',),
+    'p21-python-durable-objects': ('durable_objects::p21_python_durable_objects_fetch_rpc_storage_alarm_restart_rollback',),
+    'p21-python-workflows': ('workflows::p21_python_workflows_steps_events_retry_pause_restart_rollback',),
+    'p21-python-frameworks': (
+        'frameworks::p21_python_django_framework_deploy_restart_rollback',
+        'frameworks::p21_python_flask_framework_deploy_restart_rollback',
+        'frameworks::p21_python_fastapi_framework_deploy_restart_rollback',
+    ),
     'p0-1': ('p0_1_process_gate', 'round_drop_recovers_orphan_without_platform_handle'),
     # Cohesive real-runtime matrices also own concurrent requests, stream cleanup,
     # generation changes or drain assertions. Do not demote the entire matrix.
@@ -166,6 +177,8 @@ TIMING = {
         'drop_does_not_signal_or_double_wait_reaped_pid',
         'drop_reaps_child',
         'ignore_term_then_kill',
+        'isolated_python_preparation_owner_lifecycle',
+        'isolated_python_preparation_owner_rejection_matrix',
         'late_control_event_is_unhealthy_restart',
         'lease_persist_failure_reaps_child_and_never_runs',
         'logs_bounded_and_redacted',

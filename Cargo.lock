@@ -4766,6 +4766,7 @@ dependencies = [
  "url",
  "uuid",
  "webpki-root-certs",
+ "zeroize",
 ]
 
 [[package]]

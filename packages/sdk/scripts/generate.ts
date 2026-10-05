@@ -1081,13 +1081,13 @@ export type OpenComputeBinaryBody =
       arrayBuffer(): Promise<ArrayBuffer>;
     };
 
-/** Native Dynamic Worker Loader binding accepted by open-compute and Wrangler. */
+/** Native Dynamic Worker Loader upload binding. */
 export type OpenComputeWorkerLoaderBinding = {
   readonly type: "worker_loader";
   readonly name: string;
 };
 
-/** Artifacts binding wire supported by Wrangler and open-compute uploads. */
+/** Artifacts upload binding. */
 export type OpenComputeArtifactsBinding = {
   readonly type: "artifacts";
   readonly name: string;

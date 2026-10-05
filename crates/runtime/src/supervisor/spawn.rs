@@ -12,7 +12,7 @@ use crate::lock::RuntimeLock;
 use crate::process::{assert_reaped, exec_image, exec_image_with_lease, verify_self_pgid};
 use crate::verify::VerifiedRuntime;
 use command_fds::{CommandFdExt, FdMapping};
-use open_compute_core::{ErrorCode, PlatformError, Redactor, SecretString};
+use open_compute_core::{ErrorCode, PlatformError, SecretString};
 use rustix::process::{Pid, getpgid};
 use std::io::Write;
 use std::os::fd::{AsFd, OwnedFd};
@@ -135,12 +135,6 @@ impl LiveRuntime {
 pub(crate) struct SpawnRequest<'a> {
     pub runtime: &'a VerifiedRuntime,
     pub compiled: &'a CompiledConfig,
-    #[allow(
-        dead_code,
-        reason = "shared test support is consumed by a subset of integration targets"
-    )]
-    pub token: &'a SecretString,
-    pub redactor: &'a Redactor,
     pub owners: &'a super::owner::OwnerRegistry,
     pub external_services: &'a [ExternalServiceAddress],
     pub directory_services: &'a [DirectoryServicePath],
@@ -188,7 +182,6 @@ pub(crate) fn spawn_child(req: &SpawnRequest<'_>) -> Result<LiveRuntime, SpawnFa
         req.runtime,
         &argv,
         &config,
-        req.redactor,
         req.owners,
         req.lease_path,
         req.host_extension_fd,
@@ -201,7 +194,6 @@ fn spawn_child_inner(
     runtime: &VerifiedRuntime,
     argv: &[String],
     config: &[u8],
-    redactor: &Redactor,
     owners: &super::owner::OwnerRegistry,
     lease_path: Option<&Path>,
     host_extension_fd: Option<&OwnedFd>,
@@ -284,8 +276,10 @@ fn spawn_child_inner(
     let stdin = child.stdin.take();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
-    let stdout_log = LogCollector::new(redactor.clone());
-    let stderr_log = LogCollector::new(redactor.clone());
+    // Tenant console output and native exceptions may contain unregistered secrets or source.
+    // Keep draining bounded pipes and retain lifecycle evidence, never their untrusted bodies.
+    let stdout_log = LogCollector::new(None);
+    let stderr_log = LogCollector::new(None);
 
     let handle = match ChildHandle::start(
         child,

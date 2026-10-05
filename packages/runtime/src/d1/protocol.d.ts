@@ -12,12 +12,19 @@ export interface D1SessionWire {
   bookmark?: string;
 }
 
-/** The tenant facade validates responses before exposing them to user code. */
+/** Canonical response decoded from the instance-owned D1 backend. */
+export interface D1QueryResponse {
+  results: { columns: string[]; rows: D1Value[][]; meta: unknown }[];
+  bookmark: string | null;
+  stateVersion: number;
+}
+
+/** Private authority used by the native D1 wire adapter. */
 export interface D1RawTransport {
-  query(
+  executeStatements(
     mode: D1QueryMode,
     statements: readonly D1StatementDto[],
     session?: D1SessionWire,
-  ): Promise<unknown>;
+  ): Promise<D1QueryResponse>;
   exec(sql: string, options?: Record<string, never>): Promise<unknown>;
 }

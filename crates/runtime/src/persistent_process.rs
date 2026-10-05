@@ -113,8 +113,8 @@ impl PersistentHostProcess {
             pid,
             stdout,
             stderr,
-            LogCollector::new(spec.redactor.clone()),
-            LogCollector::new(spec.redactor),
+            LogCollector::new(Some(spec.redactor.clone())),
+            LogCollector::new(Some(spec.redactor)),
             &owners,
         )
         .inspect_err(|_| {

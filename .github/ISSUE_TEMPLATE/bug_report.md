@@ -10,7 +10,7 @@ For security vulnerabilities, use the private contact in [SECURITY.md](https://g
 - open-compute version (`ocd --version`) or commit:
 - OS and CPU architecture:
 - Installation method and relevant configuration (sanitized):
-- Wrangler version, if relevant:
+- cf CLI version, if relevant:
 - Browser and version, for Dashboard or website issues:
 
 ## Reproduction

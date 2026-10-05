@@ -33,9 +33,11 @@ const outputGateUrl = moduleUrl(
 );
 const {
   prepareDurableObjectContext,
+  activateDurableObjectAlarm,
   dispatchDurableObjectAlarm,
   runWithOutputGate,
   FLUSH_OUTPUT,
+  registerOutputPublisher,
 } = await importRuntime("durable-objects/alarm-shim.ts", {
   "./output-gate.js": outputGateUrl,
 }).then(async (shim) => ({
@@ -270,6 +272,23 @@ const index = {
   async clear() {},
 };
 
+async function recover(gate, env) {
+  for (const binding of Object.values(env))
+    registerOutputPublisher(binding, binding);
+  return gate.recover(env);
+}
+
+test("storage and transaction proxies preserve their native constructor identity", async () => {
+  const storage = memoryStorage();
+  const prepared = prepareDurableObjectContext(context(storage), index);
+  assert.equal(prepared.storage.constructor, storage.constructor);
+  await prepared.storage.transaction(async (txn) => {
+    assert.equal(txn.constructor, storage.constructor);
+    await txn.put("receiver", "preserved");
+  });
+  assert.equal(await prepared.storage.get("receiver"), "preserved");
+});
+
 test("thrown transaction failure drops gated mutations and commit publishes once", async () => {
   const storage = memoryStorage();
   const prepared = prepareDurableObjectContext(context(storage), index);
@@ -335,7 +354,7 @@ test("publish failure after commit leaves intent for recover exactly once", asyn
     );
   });
   const flushed = [];
-  await prepared.gate.recover({
+  await recover(prepared.gate, {
     EVENTS: {
       async [FLUSH_OUTPUT](payload) {
         flushed.push(Array.from(payload));
@@ -603,4 +622,69 @@ test("tenant SQL cannot read or mutate private alarm and output authority", () =
     () => prepared.storage.sql.exec("DROP TABLE __OPEN_COMPUTE_DO_OUTPUT"),
     /SQLITE_AUTH/,
   );
+});
+
+test("tenant global edits cannot read native storage or the private alarm index", async () => {
+  const raw = memoryStorage();
+  const ctx = { storage: raw, props: {}, exports: {} };
+  const index = { async upsert() {}, async delete() {}, async clear() {} };
+  const secrets = new Set([raw, ctx, index]);
+  const observed = [];
+  const get = Reflect.get;
+  const apply = Reflect.apply;
+  const freeze = Object.freeze;
+  const ProxyConstructor = globalThis.Proxy;
+  try {
+    Reflect.get = (target, ...args) => {
+      if (secrets.has(target)) observed.push("get");
+      return get(target, ...args);
+    };
+    Reflect.apply = (method, receiver, args) => {
+      if (secrets.has(receiver)) observed.push("apply");
+      return apply(method, receiver, args);
+    };
+    Object.freeze = (value) => {
+      if (value?.index === index || value?.rawStorage === raw)
+        observed.push("freeze");
+      return freeze(value);
+    };
+    globalThis.Proxy = function (target, handler) {
+      if (secrets.has(target)) observed.push("Proxy");
+      return new ProxyConstructor(target, handler);
+    };
+    const prepared = prepareDurableObjectContext(ctx, index);
+    assert.equal(await prepared.storage.get("absent"), undefined);
+    assert.equal(prepared.index, index);
+  } finally {
+    Reflect.get = get;
+    Reflect.apply = apply;
+    Object.freeze = freeze;
+    globalThis.Proxy = ProxyConstructor;
+  }
+  assert.deepEqual(observed, []);
+});
+
+test("private alarm activation retains the native input-gate receiver before tenant replacement", async () => {
+  const ctx = context(memoryStorage());
+  const pending = [];
+  let cleared = 0;
+  ctx.blockConcurrencyWhile = function (callback) {
+    assert.equal(this, ctx);
+    const task = Promise.resolve().then(callback);
+    pending.push(task);
+    return task;
+  };
+  const prepared = prepareDurableObjectContext(ctx, {
+    ...index,
+    async clear() {
+      cleared += 1;
+    },
+  });
+  ctx.blockConcurrencyWhile = () => {
+    throw new Error("tenant replacement reached private activation");
+  };
+  activateDurableObjectAlarm(prepared, {});
+  await Promise.all(pending);
+  assert.equal(cleared, 1);
+  assert.equal(pending.length, 1);
 });

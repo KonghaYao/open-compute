@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { importRuntime } from "../compiled-runtime.mjs";
 
-const { AiBinding } = await importRuntime("ai/facade.ts");
+const { Ai } = await importRuntime("ai/facade.ts");
 
 function success(file, format = "markdown") {
   return {
@@ -17,7 +17,7 @@ function success(file, format = "markdown") {
 
 test("AI binding preserves direct and handle single/array overloads", async () => {
   const calls = [];
-  const binding = new AiBinding({
+  const binding = new Ai({
     async transform(files, options) {
       calls.push({ files, options });
       return files.map((file) => success(file, options.output?.format));
@@ -33,6 +33,7 @@ test("AI binding preserves direct and handle single/array overloads", async () =
       ];
     },
   });
+  assert.equal(binding.constructor.name, "Ai");
   assert.equal(binding.aiGatewayLogId, null);
   const first = {
     name: "manual.pdf",
@@ -82,7 +83,7 @@ test("AI binding preserves direct and handle single/array overloads", async () =
 
 test("AI binding validates documents, options, limits, and backend response fail closed", async () => {
   let calls = 0;
-  const binding = new AiBinding({
+  const binding = new Ai({
     async transform(files) {
       calls += 1;
       return files.map(success);
@@ -139,7 +140,7 @@ test("AI binding validates documents, options, limits, and backend response fail
   );
   assert.equal(calls, 0);
 
-  const malformed = new AiBinding({
+  const malformed = new Ai({
     async transform() {
       return [{ name: "manual.pdf", format: "markdown", data: "x" }];
     },

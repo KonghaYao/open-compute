@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { importRuntime, moduleUrl } from "../compiled-runtime.mjs";
+import {
+  compileRuntime,
+  importRuntime,
+  moduleUrl,
+} from "../compiled-runtime.mjs";
 
 const shared = moduleUrl(`
   export function bindingError(code) { return Object.assign(new Error(code), { stableCode: code }); }
 `);
-const { tenantEnv } = await importRuntime("loader/bindings.ts", {
+const { tenantEnv, validationEnv } = await importRuntime("loader/bindings.ts", {
   "./shared.js": shared,
+  "./policy.js": moduleUrl(await compileRuntime("loader/policy.ts")),
+  "../bindings/native-construction.js": moduleUrl(
+    await compileRuntime("bindings/native-construction.ts"),
+  ),
 });
 
 const snapshot = {
@@ -36,10 +44,11 @@ test("tenant env creates a cache transport for the current unconfigured entrypoi
       },
     },
   };
-  const { env, openComputePrivateEnv } = tenantEnv(
+  const { env, openComputePrivateEnv, openComputeCache } = tenantEnv(
     snapshot,
-    ctx,
     {},
+    ctx,
+    { hostPolicyVersion: 1 },
     "version",
     {},
     false,
@@ -64,6 +73,11 @@ test("tenant env creates a cache transport for the current unconfigured entrypoi
     ],
   );
   assert.equal(env.PUBLIC, "value");
+  assert.equal(
+    openComputeCache,
+    openComputePrivateEnv.__OPEN_COMPUTE_PRIVATE_CACHE.Named,
+  );
+  assert.equal(env.openComputeCache, undefined);
 });
 
 test("tenant env resolves AI from the immutable version descriptor", () => {
@@ -72,8 +86,9 @@ test("tenant env resolves AI from the immutable version descriptor", () => {
     ...snapshot,
     aiBinding: { name: "AI", descriptorSha256: "cd".repeat(32) },
   };
-  const { env, openComputePrivateEnv } = tenantEnv(
+  const { env, openComputePrivateEnv, openComputeBindings } = tenantEnv(
     configured,
+    {},
     {
       exports: {
         CacheTransport({ props }) {
@@ -85,7 +100,7 @@ test("tenant env resolves AI from the immutable version descriptor", () => {
         },
       },
     },
-    {},
+    { hostPolicyVersion: 1 },
     "version",
     {},
     false,
@@ -98,12 +113,18 @@ test("tenant env resolves AI from the immutable version descriptor", () => {
     descriptorSha256: "cd".repeat(32),
   });
   assert.equal(env.AI, undefined);
-  assert.equal(typeof openComputePrivateEnv.AI.transform, "function");
+  assert.equal(openComputePrivateEnv.AI, undefined);
+  assert.equal(
+    openComputeBindings.AI.wrapperModule,
+    "cloudflare-internal:open-compute-ai",
+  );
+  assert.equal(typeof openComputeBindings.AI.fetcher.transform, "function");
 });
 
 test("DO and Workflow env keep programmatic cache and declared built-ins", () => {
   const configured = {
     ...snapshot,
+    assetBinding: { name: "ASSETS" },
     imagesBinding: { name: "IMAGES", descriptorSha256: "bc".repeat(32) },
     aiBinding: { name: "AI", descriptorSha256: "cd".repeat(32) },
     versionMetadataBinding: {
@@ -118,8 +139,9 @@ test("DO and Workflow env keep programmatic cache and declared built-ins", () =>
     { durableObject: false, entrypoint: "Flow" },
   ]) {
     const cacheProps = [];
-    const { env, openComputePrivateEnv } = tenantEnv(
+    const { env, openComputePrivateEnv, openComputeBindings } = tenantEnv(
       configured,
+      {},
       {
         exports: {
           CacheTransport({ props }) {
@@ -129,12 +151,15 @@ test("DO and Workflow env keep programmatic cache and declared built-ins", () =>
           ImageTransport({ props }) {
             return { kind: "images", props };
           },
+          AssetTransport({ props }) {
+            return { kind: "assets", props };
+          },
           AiTransport({ props }) {
             return { kind: "ai", props };
           },
         },
       },
-      {},
+      { hostPolicyVersion: 1 },
       "version",
       {},
       context.durableObject,
@@ -151,8 +176,29 @@ test("DO and Workflow env keep programmatic cache and declared built-ins", () =>
     );
     assert.equal(env.IMAGES, undefined);
     assert.equal(env.AI, undefined);
-    assert.equal(openComputePrivateEnv.IMAGES.kind, "images");
-    assert.equal(openComputePrivateEnv.AI.kind, "ai");
+    assert.equal(env.ASSETS, undefined);
+    assert.equal(openComputePrivateEnv.ASSETS, undefined);
+    assert.equal(openComputeBindings.ASSETS.fetcher.kind, "assets");
+    assert.deepEqual(openComputeBindings.ASSETS.fetcher.props, {
+      versionId: "version",
+      descriptorSha256: snapshot.workerCodeSha256,
+    });
+    assert.equal(
+      openComputeBindings.ASSETS.wrapperModule,
+      "cloudflare-internal:open-compute-assets",
+    );
+    assert.equal(openComputePrivateEnv.IMAGES, undefined);
+    assert.equal(openComputePrivateEnv.AI, undefined);
+    assert.equal(openComputeBindings.IMAGES.fetcher.kind, "images");
+    assert.equal(
+      openComputeBindings.IMAGES.wrapperModule,
+      "cloudflare-internal:open-compute-images",
+    );
+    assert.equal(openComputeBindings.AI.fetcher.kind, "ai");
+    assert.equal(
+      openComputeBindings.AI.wrapperModule,
+      "cloudflare-internal:open-compute-ai",
+    );
     assert.deepEqual(env.VERSION, {
       id: "version",
       tag: "context-matrix",
@@ -166,6 +212,7 @@ test("tenant env receives only native loader capabilities from verified descript
   const privateCapability = Object.freeze({ load() {}, get() {} });
   const keys = [];
   const factory = {
+    hostPolicyVersion: 1,
     get(key) {
       keys.push(key);
       return capability;
@@ -189,8 +236,9 @@ test("tenant env receives only native loader capabilities from verified descript
       },
     },
   };
-  const { env, openComputePrivateEnv } = tenantEnv(
+  const { env, openComputePrivateEnv, openComputeBindings } = tenantEnv(
     configured,
+    {},
     ctx,
     factory,
     "version",
@@ -208,6 +256,8 @@ test("tenant env receives only native loader capabilities from verified descript
   assert.deepEqual(Object.keys(openComputePrivateEnv).sort(), [
     "__OPEN_COMPUTE_PRIVATE_CACHE",
     "__OPEN_COMPUTE_PRIVATE_FORWARDING_LOADERS",
+    "__OPEN_COMPUTE_PRIVATE_NATIVE_BINDINGS",
+    "__OPEN_COMPUTE_PRIVATE_POLICY",
   ]);
   assert.equal(
     openComputePrivateEnv.__OPEN_COMPUTE_PRIVATE_FORWARDING_LOADERS.LOADER,
@@ -221,6 +271,7 @@ test("tenant env receives only native loader capabilities from verified descript
     () =>
       tenantEnv(
         { ...configured, env: { LOADER: "conflict" } },
+        {},
         ctx,
         factory,
         "version",
@@ -231,10 +282,17 @@ test("tenant env receives only native loader capabilities from verified descript
   );
 });
 
-test("product transport is handler-only while declared values stay importable", () => {
+test("native binding construction preserves the descriptor and keeps raw transports private", () => {
   const transport = { get() {} };
+  const serviceTransport = { fetch() {}, rpc() {} };
+  const service = {
+    name: "SERVICE",
+    descriptorSha256: "d".repeat(64),
+    entrypoint: "Named",
+  };
   const configured = {
     ...snapshot,
+    services: [service],
     bindings: [
       {
         kind: "kv_namespace",
@@ -248,24 +306,123 @@ test("product transport is handler-only while declared values stay importable", 
       },
     ],
   };
-  const code = tenantEnv(
-    configured,
-    {
-      exports: {
-        KVNamespace() {
-          return transport;
-        },
-        CacheTransport() {
-          return {};
-        },
+  const ctx = {
+    exports: {
+      KVNamespace() {
+        return transport;
+      },
+      ServiceTransport({ props }) {
+        assert.ok(Object.isFrozen(props));
+        assert.deepEqual(props, {
+          versionId: "version",
+          bindingName: "SERVICE",
+          descriptorSha256: service.descriptorSha256,
+          entrypoint: "Named",
+        });
+        return serviceTransport;
+      },
+      CacheTransport() {
+        return {};
       },
     },
+  };
+  const code = tenantEnv(
+    configured,
     {},
+    ctx,
+    { hostPolicyVersion: 1 },
     "version",
     {},
     false,
   );
   assert.deepEqual(Object.keys(code.env), ["PUBLIC"]);
   assert.equal(code.env.PUBLIC, "value");
-  assert.equal(code.openComputePrivateEnv.KV, transport);
+  assert.equal(code.openComputePrivateEnv.KV, undefined);
+  assert.deepEqual(code.openComputeBindings.KV, {
+    kind: "kvNamespace",
+    fetcher: transport,
+  });
+  assert.equal(code.openComputePrivateEnv.SERVICE, undefined);
+  assert.deepEqual(code.openComputeBindings.SERVICE, {
+    kind: "service",
+    fetcher: serviceTransport,
+  });
+  assert.throws(
+    () =>
+      tenantEnv(
+        { ...configured, services: [{ ...service, name: "PUBLIC" }] },
+        {},
+        ctx,
+        { hostPolicyVersion: 1 },
+        "version",
+        {},
+      ),
+    /VERSION_INVARIANT_VIOLATION/,
+  );
+});
+
+test("host capability assembly refuses a runtime without native host policy", () => {
+  for (const factory of [
+    {},
+    { hostPolicyVersion: 0 },
+    { hostPolicyVersion: 2 },
+  ]) {
+    assert.throws(
+      () => validationEnv(snapshot, {}, factory),
+      /RUNTIME_UNAVAILABLE/,
+    );
+    assert.throws(
+      () => tenantEnv(snapshot, {}, {}, factory, "version", {}),
+      /RUNTIME_UNAVAILABLE/,
+    );
+  }
+  assert.equal(
+    validationEnv(snapshot, {}, { hostPolicyVersion: 1 }).openComputeHostPolicy,
+    true,
+  );
+});
+
+test("Queue construction preserves its private publication transport in every caller context", () => {
+  const descriptor = {
+    name: "EVENTS",
+    kind: "queue_producer",
+    capabilityVersion: 1,
+    bindingId: "binding",
+    descriptorSha256: "ab".repeat(32),
+    queueId: "queue",
+    queueLifecycleGeneration: 1,
+  };
+  for (const durableObject of [false, true]) {
+    const transport = {};
+    let received;
+    const code = tenantEnv(
+      { ...snapshot, bindings: [descriptor] },
+      {},
+      {
+        exports: {
+          CacheTransport() {
+            return {};
+          },
+          QueueTransport({ props }) {
+            received = props;
+            return transport;
+          },
+        },
+      },
+      { hostPolicyVersion: 1 },
+      "version",
+      {},
+      durableObject,
+    );
+    assert.deepEqual(code.openComputeBindings.EVENTS, {
+      kind: "queue",
+      fetcher: transport,
+    });
+    assert.equal(code.openComputePrivateEnv.EVENTS, transport);
+    assert.equal(code.env.EVENTS, undefined);
+    assert.equal(received.durableObject, durableObject);
+    assert.equal(received.bindingId, descriptor.bindingId);
+    assert.equal(received.queueId, descriptor.queueId);
+    assert.equal(received.versionId, "version");
+  }
 });

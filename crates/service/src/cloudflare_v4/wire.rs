@@ -310,6 +310,7 @@ impl From<&PlatformError> for V4Error {
             | ErrorCode::VersionNotReady
             | ErrorCode::VersionActive
             | ErrorCode::VersionReferenced
+            | ErrorCode::ServiceTargetReferenced
             | ErrorCode::AssetUploadConflict
             | ErrorCode::AssetUploadIncomplete
             | ErrorCode::RouteConflict

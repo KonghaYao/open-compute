@@ -29,8 +29,13 @@ pub(super) async fn run() {
     let (shutdown_tx, mut source_shutdown) = tokio::sync::watch::channel(false);
     let mut binding_shutdown = shutdown_tx.subscribe();
     let source_task = tokio::spawn({
-        let source =
-            RuntimeSource::new(storage.clone(), artifacts.clone(), BundleLimits::default());
+        let source = RuntimeSource::new(
+            storage.clone(),
+            artifacts.clone(),
+            BundleLimits::default(),
+            open_compute_service::runtime_bridge::python_runtime_pin(&runtime),
+        )
+        .unwrap();
         let auth = source_auth.clone();
         async move {
             serve_runtime_source(source_listener, source, auth, async move {
@@ -95,7 +100,6 @@ pub(super) async fn run() {
             config: runtime_config(),
             clock: Arc::new(SystemClock),
             jitter: Arc::new(OsJitter),
-            redactor: Redactor::new(),
             lease_path: Some(storage.data_dir().runtime_dir().join("p0-3-gate.lease")),
         },
         vec![
@@ -383,7 +387,26 @@ pub(super) async fn run() {
     )
     .await;
     assert_eq!(denied.status, 500);
-    assert!(denied.body.contains("BINDING_PERMISSION_DENIED"));
+    assert_eq!(denied.body, "KV PUT failed: 403 BINDING_PERMISSION_DENIED");
+    let uncaught = dispatch(
+        &transport,
+        &repository,
+        account,
+        worker.id,
+        &read_only,
+        "/uncaught-put",
+        "denied",
+    )
+    .await;
+    assert_eq!(uncaught.status, 500);
+    let uncaught: serde_json::Value = serde_json::from_str(&uncaught.body).unwrap();
+    assert_eq!(uncaught["error"]["code"], "RUNTIME_INTERNAL");
+    assert_eq!(uncaught["error"]["message"], "worker request failed");
+    assert_eq!(
+        fake.values.lock().unwrap()[&resource]["gate"],
+        b"alpha",
+        "denied native PUT must not reach storage"
+    );
 
     fake.values
         .lock()
@@ -405,7 +428,7 @@ pub(super) async fn run() {
     )
     .await;
     assert_eq!(result_limit.status, 500);
-    assert!(result_limit.body.contains("KV_VALUE_TOO_LARGE"));
+    assert_eq!(result_limit.body, "KV GET failed: 500 KV_VALUE_TOO_LARGE");
     fake.values
         .lock()
         .unwrap()
@@ -433,7 +456,7 @@ pub(super) async fn run() {
     )
     .await;
     assert_eq!(isolated.status, 500);
-    assert!(isolated.body.contains("RESOURCE_UNAVAILABLE"));
+    assert_eq!(isolated.body, "KV GET failed: 500 RESOURCE_UNAVAILABLE");
     ResourceRepository::new(storage.db())
         .set_availability(account, resource, ResourceAvailability::Healthy, None, 42)
         .unwrap();

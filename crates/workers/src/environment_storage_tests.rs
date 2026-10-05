@@ -67,7 +67,13 @@ async fn variable_admission_and_restart_preserve_the_complete_immutable_environm
 
     let storage =
         Arc::new(PlatformStorage::bootstrap(&storage_config(&root), &SystemClock).unwrap());
-    let source = RuntimeSource::new(storage, artifacts, BundleLimits::default());
+    let source = RuntimeSource::new(
+        storage,
+        artifacts,
+        BundleLimits::default(),
+        python_runtime_pin(),
+    )
+    .unwrap();
     let snapshot = source
         .resolve(&key, &digest, RuntimeScope::Runtime)
         .await

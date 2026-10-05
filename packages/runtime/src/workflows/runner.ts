@@ -19,6 +19,31 @@ import type {
   WorkflowVerdict,
 } from "./execution-protocol.js";
 
+const ownPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectPrototype = Object.getPrototypeOf;
+
+/** Recognize official JS/Pyodide markers without reading exception payloads or getters. */
+function nonRetryableError(error: unknown): boolean {
+  try {
+    if (error instanceof NonRetryableError) return true;
+    if (!(error instanceof Error)) return false;
+    if (ownPropertyDescriptor(error, "name")?.value === "NonRetryableError")
+      return true;
+    if (ownPropertyDescriptor(error, "type")?.value !== "NonRetryableError")
+      return false;
+    const constructor: unknown = ownPropertyDescriptor(
+      objectPrototype(error),
+      "constructor",
+    )?.value;
+    return (
+      typeof constructor === "function" &&
+      ownPropertyDescriptor(constructor, "name")?.value === "PythonError"
+    );
+  } catch {
+    return false;
+  }
+}
+
 interface PendingStep {
   descriptor: WorkflowDeclaration;
   callback: WorkflowCallback | undefined;
@@ -162,8 +187,10 @@ export async function runWorkflow(
 ): Promise<WorkflowRunResult> {
   if (!validateWorkflowClass(target))
     throw workflowError("WORKFLOW_VERSION_NOT_READY");
-  const suspension = Object.freeze(Object.create(null));
-  const rollbackBoundary = Object.freeze(Object.create(null));
+  // Python's exception bridge needs Error objects to settle rejected promises.
+  // The controller verdict and private identity remain the control authority.
+  const suspension = Object.freeze(workflowError("WORKFLOW_RUN_STALE"));
+  const rollbackBoundary = Object.freeze(workflowError("WORKFLOW_RUN_STALE"));
   const rollbackTrigger = new Error("Instance terminated during rollback");
   let ordinal = 0;
   let closed = false;
@@ -489,14 +516,11 @@ export async function runWorkflow(
               try {
                 result = await callbackFunction(context);
               } catch (error) {
-                // Do not read error.message/name/stack/cause or invoke getters.
+                // The official Python SDK uses an own data name marker. Never
+                // read exception payloads or invoke a name/message/stack getter.
                 let code = failure || "WORKFLOW_EXECUTION_FAILED";
-                try {
-                  if (!failure && error instanceof NonRetryableError)
-                    code = "WORKFLOW_NON_RETRYABLE";
-                } catch {
-                  /* hostile proxy */
-                }
+                if (!failure && nonRetryableError(error))
+                  code = "WORKFLOW_NON_RETRYABLE";
                 let resolvedDelayMs: number | undefined;
                 if (
                   code === "WORKFLOW_EXECUTION_FAILED" &&
@@ -677,7 +701,9 @@ export async function runWorkflow(
       observe();
     });
   };
-  const step = Object.freeze({
+  // SDK Proxy wrappers replace do on lookup; freezing its own method would
+  // violate Proxy invariants. The controller and grants stay in this closure.
+  const step = Object.seal({
     do(
       name: string,
       config: unknown,
@@ -773,6 +799,8 @@ export async function runWorkflow(
     rollbacks.clear();
   };
   Object.defineProperty(ctx, "waitUntil", {
+    configurable: true,
+    writable: true,
     value(promise: Promise<unknown>) {
       if (closed || suspended) reject("WORKFLOW_RUN_STALE");
       const observed = Promise.resolve(promise);
@@ -813,7 +841,11 @@ export async function runWorkflow(
         (typeof error === "object" || typeof error === "function")
           ? recalledFailure(error)
           : undefined;
-      failure ||= code || "WORKFLOW_EXECUTION_FAILED";
+      failure ||=
+        code ||
+        (nonRetryableError(error)
+          ? "WORKFLOW_NON_RETRYABLE"
+          : "WORKFLOW_EXECUTION_FAILED");
     }
   }
   // Sibling commits must finish before terminal/yield; tenant Promise.all's

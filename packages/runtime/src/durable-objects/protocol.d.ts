@@ -17,6 +17,7 @@ export interface DoPolicy {
   maxInFlightDispatches: number;
 }
 export interface DoHostEnv extends LoaderEnv {
+  NATIVE_DO_ID: { create: DoNativeIdFactory };
   DO_HOST: DurableObjectNamespace<DoHost>;
   DO_DISK_STOP_WRITES_PERCENT: string;
 }
@@ -30,6 +31,7 @@ export interface DoRawTransport {
     kind: "call" | "get",
     method: string,
     args: unknown[],
+    identity: DoObjectIdentity,
   ): DoRpcResultProvider;
   cancelOrder(
     objectId: string,
@@ -42,6 +44,7 @@ export interface DoRawTransport {
     sequence: number,
     operationId: string,
     authority: SocketAuthorityWire,
+    identity: DoObjectIdentity,
   ): Promise<void>;
   cancelConnect(operationId: string): Promise<void>;
   fetch(request: Request): Promise<Response>;
@@ -161,8 +164,11 @@ export interface FacetManagerCapability extends Fetcher {
     token: string,
     socket: SocketAuthorityWire,
   ): Promise<void>;
+  __openComputeCancelFacetConnect(token: string): Promise<void>;
 }
 export interface TenantDoAuthority extends AlarmIdentity {
+  objectName?: string | undefined;
+  jurisdiction?: string | undefined;
   instanceId: string;
   workerId: string;
   versionId: string;
@@ -181,4 +187,31 @@ declare global {
       durableNamespaces: "DoHost";
     }
   }
+}
+
+/** Validated current object identity, without namespace secrets. */
+export interface DoObjectIdentity {
+  value: string;
+  name: string | undefined;
+  jurisdiction: string | undefined;
+}
+
+export type DoNativeIdFactory = (
+  value: string,
+  name?: string,
+  jurisdiction?: string,
+) => DurableObjectId;
+
+/** Native factories captured only by the INTERNAL host bootstrap. */
+export interface DoNativeFactories {
+  createId: DoNativeIdFactory;
+  createNamespace(policy: object): DurableObjectNamespace;
+  createStub(
+    id: DurableObjectId,
+    transport: object,
+    policy: object,
+  ): DurableObjectStub;
+  createRpcStub(policy: object): object;
+  isRpcStub(value: unknown): boolean;
+  createPrivateTransport(transport: object): object;
 }

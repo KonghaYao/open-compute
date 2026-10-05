@@ -56,7 +56,7 @@
     "packages/runtime": {
       "entry": ["build.ts", "src/**/*.ts", "src/**/*.d.ts"],
       "project": ["build.ts", "src/**/*.ts", "src/**/*.d.ts"],
-      "ignoreDependencies": ["cloudflare", "-source$"]
+      "ignoreDependencies": ["cloudflare", "cloudflare-internal"]
     },
     "packages/workers-types": {
       "entry": ["index.d.ts"],

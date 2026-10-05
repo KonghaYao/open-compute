@@ -10,11 +10,15 @@ workerd archive 内嵌进自己的单二进制发行物；启动时离线校验�
 
 | 身份           | 当前值                                                                                             |
 | -------------- | -------------------------------------------------------------------------------------------------- |
-| fork release   | `v1.20260930.0-open-compute-r3.e3bdb07f5`                                                          |
-| fork revision  | `e3bdb07f52affc6a618f02ed2b731a581b0b2f69`                                                         |
-| upstream base  | `cb26acc62e64f64487a78e3f73d0a08e9926c690`（正式 pin 的 upstream base）                            |
+| fork release   | `v1.20260930.0-open-compute-r4.e98a3e843`                                                          |
+| fork revision  | `e98a3e8433979356047a202d3e0d1b0e2e2c4b8c`                                                         |
+| upstream base  | `d99bc6b777e35d72d71c2f1fe2fd1db53284528a`（正式 pin 的 upstream base）                            |
 | `--version`    | `workerd 2026-09-30`                                                                               |
-| build workflow | [Open Compute binaries 36668461686](https://github.com/elliothux/workerd/actions/runs/36668461686) |
+| build workflow | [Open Compute binaries 37175389986](https://github.com/elliothux/workerd/actions/runs/37175389986) |
+
+四个平台的 build job 均成功。该 run 的 publish job 因 artifact 内二进制保留 `bazel-bin/src/workerd/server/` 路径而失败；发布使用原始成功产物恢复，没有重新编译或改变 binary。archive 使用 macOS `Apple gzip 487.0.1` 的 `gzip -9n`，Release 同时包含逐目标 build-inputs、catalog 与 `SHA256SUMS`。
+
+源码 checkout 的 `fdcb8c97f0b9f75f610b66e418d5175b9188ddad` 仅追加发布路径修正；正式 binary 仍来自上表的 `e98a3e8433979356047a202d3e0d1b0e2e2c4b8c`。R4 固定 P21 原生准备与 binding policy primitives，不代表完整 Python 产品资格已通过。
 
 `workerd --version` 只显示上游日期，不能证明拿到的是本 fork。需要同时核对 revision、目标和 lock 中的 binary
 SHA-256。
@@ -27,7 +31,7 @@ fork 保留 upstream Worker runtime、module validation、RPC、Durable Objects 
 | 扩展                       | fork 提供的能力                                                                                                                                                                   | open-compute 中的用途                                                                                                      |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Dynamic Worker Loader      | delegated Loader namespace、受约束 capability delegation、原生 `load` / `get`、entrypoint/RPC、Dynamic Durable Object facets、tails、in-flight accounting 与撤销生命周期          | 向普通 Worker 提供正式的 Worker Loader binding，同时保持 account、Script、Version 与 binding namespace 隔离                |
-| Workers Standard limits    | standalone CPU、memory、startup CPU、subrequest 与 simultaneous outbound-connection enforcement；Dynamic Worker/entrypoint/delegated Loader ceiling 组合；超限 isolate 摘除与恢复 | 执行 Wrangler/v4 Settings 与 immutable Version 中的 limits，而不是只解析参数或依赖 Cloudflare 私有宿主                     |
+| Workers Standard limits    | standalone CPU、memory、startup CPU、subrequest 与 simultaneous outbound-connection enforcement；Dynamic Worker/entrypoint/delegated Loader ceiling 组合；超限 isolate 摘除与恢复 | 执行 cf/v4 Settings 与 immutable Version 中的 limits，而不是只解析参数或依赖 Cloudflare 私有宿主                           |
 | Native host extensions     | 私有 `HostExtensionFactory` / `HostExtensionPort`、generation broker fd 4、session-scoped Cap'n Proto unary/stream transport                                                      | 让 operator-owned native Provider 通过普通 Service Binding facade 服务 Worker；该 ABI 不是 Cloudflare 标准 API             |
 | Dynamic binding forwarding | 私有 `openComputePrivateEnv`、host-issued Loader grant、handler-only capability table 与 generation/revocation fence                                                              | 由 `open-compute:worker-loader` 显式转发 KV、D1、R2、Queue 和普通值，同时不把根 binding 变成可 structured-clone 的公共对象 |
 | Compatibility catalog      | `compatibility-catalog` 从编入 binary 的 maximum date 与 `CompatibilityFlags` schema annotations 生成确定性 JSON；不加载配置或启动 listener                                       | 让 build、CLI、management API、SDK 与 Dashboard 从 exact binary 发现同一 date/flag 合同                                    |
@@ -50,18 +54,18 @@ SHA-256；唯一 authority 仍是 formal lock。
 
 | Target           | Archive                                                                                                                                           | Archive SHA-256                                                    | Binary SHA-256                                                     |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| macOS ARM64      | [workerd-darwin-arm64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-darwin-arm64.gz) | `632d2ee13c684e70200bacd0bf1583360d430ad1054ef3cb29e0c20ef52481e0` | `d489faf23b0ecf7bfa8edccac5e6d5295f262f7f02f392c7ae92b06d95f55ddf` |
-| Linux GNU ARM64  | [workerd-linux-arm64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-arm64.gz)   | `76d00935975e38c1b114771903cac54644dc1cde9a9c1b68a1afbd6829822f6b` | `744a56e9b28728ead237765abc6cbded98560acc4bbfb5339d21e184394839d5` |
-| Linux GNU x86-64 | [workerd-linux-64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-64.gz)         | `5145314dbd608857bbd765cc479a609619f0cf380bb91d9704303d218816fa48` | `40424924678782e02d6a68a1af512b1a9dacdf93b16e47c2d7f4825a09f5e336` |
-| macOS x86-64     | [workerd-darwin-64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-darwin-64.gz)       | `cd7c543b688120ccb5fdc57706c0e0bddbdde6ee140b55fd7f30cc3e3524c015` | `9149f00c2f2b7bd576f6b164e924ed306562845ca72a8207d99ff6774c58753e` |
+| macOS ARM64      | [workerd-darwin-arm64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r4.e98a3e843/workerd-darwin-arm64.gz) | `35866787c114955cf321761495eeefa21ec6dfcf6969f6960ab8b5abb853d78a` | `5fcc34038f37c5a42668193f31bc1a9eeb4355f42f8188b312d03c77f3efb788` |
+| Linux GNU ARM64  | [workerd-linux-arm64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r4.e98a3e843/workerd-linux-arm64.gz)   | `e8e1eda68ca7058cce04f6ac07fad123a1de967565fa284bb1d8c88507b62cb2` | `7f23d3fceb6ea9406e33d1acc1105d67ddbc25941a3498dd6f33c574b716ca0f` |
+| Linux GNU x86-64 | [workerd-linux-64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r4.e98a3e843/workerd-linux-64.gz)         | `22a6b617c8ed4fd2e577cf19111d842b4e596ca2137cfafb082b25bcdcf9d87b` | `5f9f5152df987be874e6092dbc56b28023d00e6c54b361617618d32071606ce5` |
+| macOS x86-64     | [workerd-darwin-64.gz](https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r4.e98a3e843/workerd-darwin-64.gz)       | `c7342e5579d798f184e7d0320087686060fc8819f00c096aa4d45b155941c675` | `ced654c8982520783a29f23cdb0d159cd3290ce07b2a30d5fa739741a8d08050` |
 
 例如下载 Linux x86-64 版本：
 
 ```sh
-curl -fL https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r3.e3bdb07f5/workerd-linux-64.gz -o workerd.gz
-echo '5145314dbd608857bbd765cc479a609619f0cf380bb91d9704303d218816fa48  workerd.gz' | sha256sum -c -
+curl -fL https://github.com/elliothux/workerd/releases/download/v1.20260930.0-open-compute-r4.e98a3e843/workerd-linux-64.gz -o workerd.gz
+echo '22a6b617c8ed4fd2e577cf19111d842b4e596ca2137cfafb082b25bcdcf9d87b  workerd.gz' | sha256sum -c -
 gzip -dc workerd.gz > workerd
-echo '40424924678782e02d6a68a1af512b1a9dacdf93b16e47c2d7f4825a09f5e336  workerd' | sha256sum -c -
+echo '5f9f5152df987be874e6092dbc56b28023d00e6c54b361617618d32071606ce5  workerd' | sha256sum -c -
 chmod +x workerd
 ./workerd --version
 ```

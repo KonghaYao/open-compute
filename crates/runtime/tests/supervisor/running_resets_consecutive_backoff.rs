@@ -39,7 +39,6 @@ pub(super) async fn run() {
             config: cfg,
             clock: clock.clone(),
             jitter: Arc::new(SequenceJitter::new(vec![0, 0, 0, 0])),
-            redactor: Redactor::new(),
             lease_path: None,
         },
         Vec::new(),

@@ -17,6 +17,7 @@ interface StorageScope {
 }
 export interface PreparedAlarm {
   context: DurableObjectState;
+  readonly blockConcurrencyWhile: DurableObjectState["blockConcurrencyWhile"];
   storage: DurableObjectStorage;
   rawStorage: DurableObjectStorage;
   index: AlarmIndexCapability;
@@ -26,6 +27,12 @@ type AlarmSqlRow = Record<string, SqlStorageValue> & {
   row_token: string;
   last_error_code: string | null;
 };
+
+const NativeProxy = Proxy;
+const nativeGet = Reflect.get;
+const nativeApply = Reflect.apply;
+const nativeDefine = Object.defineProperty;
+const nativeFreeze = Object.freeze;
 
 const TABLE = "__open_compute_do_alarm";
 const INTERNAL_SQL = /__open_compute_do_/i;
@@ -43,7 +50,7 @@ class TenantSqlStorage implements SqlStorage {
     this.#raw = raw;
     this.Cursor = raw.Cursor;
     this.Statement = raw.Statement;
-    Object.freeze(this);
+    nativeFreeze(this);
   }
 
   exec<T extends Record<string, SqlStorageValue>>(
@@ -348,7 +355,7 @@ function wrapStorage<T extends DurableObjectStorage | DurableObjectTransaction>(
   gate: DoOutputGate,
   scope: StorageScope,
 ): T {
-  return new Proxy(storage, {
+  return new NativeProxy(storage, {
     get(target, property) {
       const alarmStorage = rootStorage;
       if (property === "sql" && "sql" in target) {
@@ -448,11 +455,11 @@ function wrapStorage<T extends DurableObjectStorage | DurableObjectTransaction>(
         };
       }
       if (property === "rollback") {
-        const native: unknown = Reflect.get(target, property, target);
+        const native: unknown = nativeGet(target, property, target);
         return (...args: unknown[]): unknown => {
           if (transaction) transaction.rolledBack = true;
           return typeof native === "function"
-            ? Reflect.apply(native, target, args)
+            ? nativeApply(native, target, args)
             : undefined;
         };
       }
@@ -489,9 +496,10 @@ function wrapStorage<T extends DurableObjectStorage | DurableObjectTransaction>(
           gate.ensureTable();
         };
       }
-      const value: unknown = Reflect.get(target, property, target);
+      const value: unknown = nativeGet(target, property, target);
+      if (property === "constructor") return value;
       return typeof value === "function"
-        ? (...args: unknown[]): unknown => Reflect.apply(value, target, args)
+        ? (...args: unknown[]): unknown => nativeApply(value, target, args)
         : value;
     },
   });
@@ -504,6 +512,7 @@ export function prepareDurableObjectContext(
 ): PreparedAlarm {
   if (!ctx?.storage || !index) throw alarmFailure("DO_ALARM_INDEX_UNAVAILABLE");
   const rawStorage = ctx.storage;
+  const nativeBlockConcurrencyWhile = ctx.blockConcurrencyWhile;
   ensureTable(rawStorage);
   const gate = new DoOutputGate(rawStorage);
   const storage = wrapStorage(rawStorage, index, null, rawStorage, gate, {
@@ -511,22 +520,33 @@ export function prepareDurableObjectContext(
   });
   let context = ctx;
   try {
-    Object.defineProperty(ctx, "storage", {
+    nativeDefine(ctx, "storage", {
       value: storage,
       configurable: true,
     });
   } catch {
-    context = new Proxy(ctx, {
+    context = new NativeProxy(ctx, {
       get(target, property) {
         if (property === "storage") return storage;
-        const value: unknown = Reflect.get(target, property, target);
+        const value: unknown = nativeGet(target, property, target);
         return typeof value === "function"
-          ? (...args: unknown[]): unknown => Reflect.apply(value, target, args)
+          ? (...args: unknown[]): unknown => nativeApply(value, target, args)
           : value;
       },
     });
   }
-  return Object.freeze({ context, storage, rawStorage, index, gate });
+  return nativeFreeze({
+    context,
+    blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T> {
+      return nativeApply(nativeBlockConcurrencyWhile, ctx, [
+        callback,
+      ]) as Promise<T>;
+    },
+    storage,
+    rawStorage,
+    index,
+    gate,
+  });
 }
 
 /// Queue activation repair without exposing its private capability to tenant code.
@@ -534,7 +554,7 @@ export function activateDurableObjectAlarm(
   prepared: PreparedAlarm,
   env: Record<string, unknown> = {},
 ) {
-  prepared.context.blockConcurrencyWhile(async () => {
+  prepared.blockConcurrencyWhile(async () => {
     const row = readRow(prepared.rawStorage);
     try {
       if (row) await prepared.index.upsert(projection(row));
@@ -601,7 +621,7 @@ export async function dispatchDurableObjectAlarm(
       typeof handler === "function" &&
       !INTERNAL_METHOD.test(handler.name || "")
     ) {
-      await Reflect.apply(handler, instance, [
+      await nativeApply(handler, instance, [
         {
           retryCount: payload.retryCount,
           isRetry: payload.retryCount > 0,

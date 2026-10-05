@@ -3,7 +3,6 @@ import test from "node:test";
 import { importRuntime } from "./compiled-runtime.mjs";
 
 const { privateWeakMap } = await importRuntime("private-weak-map.ts");
-const { KVNamespace } = await importRuntime("kv/facade.ts");
 
 test("private capability maps ignore tenant prototype edits", () => {
   const map = privateWeakMap();
@@ -21,8 +20,6 @@ test("private capability maps ignore tenant prototype edits", () => {
     assert.equal(map.get(key), undefined);
     map.set(key, raw);
     assert.equal(map.get(key), raw);
-    const namespace = new KVNamespace(raw);
-    assert.equal(namespace instanceof KVNamespace, true);
     assert.equal(intercepted, false);
   } finally {
     WeakMap.prototype.get = originalGet;

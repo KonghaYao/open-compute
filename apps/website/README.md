@@ -44,7 +44,7 @@ The corresponding Chinese routes begin with `https://open-compute.dev/zh/docs/`.
 - Root directory: `apps/website`
 - Build command: `bun run build`
 - Deploy command: `bun run deploy`
-- Non-production deploy command: `bun run build && wrangler versions upload`
+- Non-production upload command: `bun run build && cf workers versions create --prebuilt --mode production`
 
 Configure `VITE_GITHUB_PERSONAL_ACCESS_TOKEN` as an encrypted Worker secret. The `/api/github-stars` route uses it server-side and returns only the repository star count.
 

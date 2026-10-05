@@ -1,5 +1,7 @@
 # W2：Workers Standard Resource Limits
 
+此文保留当时 pin 的历史验收；当前普通 Python 已有部署准备 snapshot，Dynamic child 仍不继承它。2026-10-05 正式 R4 pin 的 fresh/cached-key/restart 基线由 [P21](p21-python-workers.md) 记录；剩余 Dynamic 实现见 [#126](https://github.com/elliothux/open-compute/issues/126)。历史 cold-boot 结论不代替当前正式 pin 的执行证据。
+
 状态：**implemented and verified，2026-09-14**。W2 直接建立当前 Day1 合同，删除旧的
 `OC-WKR-LIMIT-001` 功能缺口，不保留曾经拒绝 `limits` 的配置分支、旧类型名、双 wire schema 或运行时
 fallback。正式源码、四平台二进制和 digest 以

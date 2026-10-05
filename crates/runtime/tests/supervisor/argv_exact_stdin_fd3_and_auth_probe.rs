@@ -16,7 +16,6 @@ pub(super) async fn run() {
             config: small_cfg(),
             clock,
             jitter: Arc::new(SequenceJitter::new(vec![0])),
-            redactor: Redactor::new(),
             lease_path: None,
         },
         Vec::new(),

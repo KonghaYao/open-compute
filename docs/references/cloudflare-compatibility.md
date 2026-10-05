@@ -5,7 +5,8 @@
 能力真值。`ocd capabilities --json`、类型 inventory、contract catalog 和 Gate 共同定义当前
 支持面。完成设计和 conformance 方案见
 [Cloudflare Runtime 全量兼容改造](../implemented/p3-0-cloudflare-runtime-compatibility.md)与
-[P3.4 Cloudflare conformance](../implemented/p3-4-cloudflare-conformance.md)。P6 当前管理合同及本地证据见
+[P3.4 Cloudflare conformance](../implemented/p3-4-cloudflare-conformance.md)。当前 CLI 合同见
+[P20 cf 迁移](../implemented/p20-cf-cli-migration.md)，此前管理协议证据见
 [P6 实现与验证](../implemented/p6-cloudflare-v4-wrangler-compatibility.md)。当前账号权限不足以运行真实 Cloudflare
 Workflow 与完整 P6 management 对照，因此不声明这两部分的托管端一致性。
 
@@ -24,11 +25,24 @@ revision 与四目标 binary/archive digest 一起固定。`ocd capabilities --j
 平台 system Workers 继续使用 formal lock 中独立的 `systemCompatibilityDate` / `systemCompatibilityFlags`，这些值不会注入 tenant
 Version。compatibility date 只选择当前 binary 内的运行时行为，不选择旧 binary、旧 schema、旧 artifact 或旧持久化模型。
 
-管理合同冻结于 Cloudflare OpenAPI revision `780de88d0324b007c907a1782259b1a0e5e87c7d`（blob
-`a37bda40bc108c44c135ee69ff83fe666ce4e25d`）、官方 SDK `cloudflare@7.2.0` 与 Wrangler `4.143.0`。Script/Version
-上传统一使用一个 JSON `metadata` multipart part 加具名 module parts；SDK 扩展只覆盖官方 SDK 尚未声明、但 Wrangler 已发送的
-Artifacts binding。当前 scanner 已发现 revision `01a855ec4bd180a1173f1b4587ef0fd0ca9f55e6` 新增 AI Search item schema，而 stable SDK 尚未同步，下一轮继续
+管理合同使用固定 cf `1.0.0-beta.12`、Cloudflare OpenAPI revision `780de88d0324b007c907a1782259b1a0e5e87c7d`（blob
+`a37bda40bc108c44c135ee69ff83fe666ce4e25d`）与官方 SDK `cloudflare@7.2.0`。Script/Version
+上传统一使用一个 JSON `metadata` multipart part 加具名 module parts；SDK 扩展覆盖官方 SDK 尚未声明的
+Artifacts binding。正式 runtime lock 的 `workersSdk` 字段记录 integration reference 与 cf/Vite pin；CLI 版本只有
+`cfVersion`，不接受旧字段或别名，执行路径只使用 cf。
+当前 scanner 已发现 revision `01a855ec4bd180a1173f1b4587ef0fd0ca9f55e6` 新增 AI Search item schema，而 stable SDK 尚未同步，下一轮继续
 保持 `blocked`，不改变上述 formal pin。
+
+Worker bundle 使用通用本地结构限制：4096 modules、单 module 8 MiB、总 module bytes 32 MiB、manifest 1 MiB，
+canonical artifact 默认 34 MiB。multipart streaming、离线 base64 encoder 和 framework importer 保持同一预算；
+扩大 `workers.max_bundle_bytes` 不解除结构限制。Cloudflare 当前声明 64 MiB uncompressed Worker size，
+本地差异记录于 [`OC-WKR-LIMIT-001`](p1-deviations.md)，不声明 hosted quota parity。Python 普通部署使用正式 R4 workerd pin、Pyodide `314.0.6_2026-08-17_6` 与未修改 SDK 1.9.2。Main、完整三框架、Services、Queues、self-owned DO、Workflows 与 Runtime 的九个 ordinary case 已在同一 workspace coverage 轮次通过；Django/FastAPI 包含流式响应，Flask 仅声明普通 HTTP/template。固定输入与测试合同见 [Python Workers](testing.md#python-workers)。最终未插桩 workspace 验收与具体报告由阶段完成记录拥有。
+
+Python Runtime 的单轮产品 case 包含原版 Pyodide requests 2.33.1 与同步/异步 httpx 0.28.1 的实际 HTTP 路径、HTTP exception、流、超时、连接拒绝、取消后的有界清理、native subrequest quota 和 restart/rollback。取消 Python task 不作为底层 Fetch 立即 abort 的保证；TLS、数据库驱动、AI/API client 与 HTTP MCP 仍留在 [#128](https://github.com/elliothux/open-compute/issues/128)。当前 Dynamic 基线另记录 fresh child、cached-key 尝试、普通 preparation 后和 daemon restart 后的结果；不拿普通 snapshot 或缓存 key 当成功 warm child。正式输入、执行结果与复现命令由 [P21](../implemented/p21-python-workers.md) 拥有，Dynamic 支持仍留在 [#126](https://github.com/elliothux/open-compute/issues/126)。
+
+Python Queue 的 ordinary case 覆盖 json/text/bytes/V8 Date、50,000 中文字符、metadata、ack/retry/DLQ、暂停与 fresh restart、两个 Version 和 rollback。正式 fork 使用官方单 batch 参数调用 Python handler；force 只授权 backlog purge，不绕过 live referrer 删除保护。Python scheduled 的 controller/env/ctx、type/noRetry/waitUntil、短签名与输入拒绝已有 source/SDK 组件资格；这些组件不单独证明完整 Python Cron scheduler recovery。
+
+普通 Python DO case 分别使用两个语言各自 self-owned namespace，覆盖 native ID/name、fetch/RPC、SQL/KV、abort replacement、持久 alarm、WebSocket 消息/attachment/close、promotion/rollback 和 SIGKILL orphan recovery。公开上传拒绝 cross-Script DO/Workflow，不声明 PITR、hibernation eviction 或 live socket 跨进程死亡。
 
 Dynamic Worker 的 `WorkerCode.compatibilityDate` / `compatibilityFlags` 是独立的官方
 [Loader API 合同](https://developers.cloudflare.com/dynamic-workers/api-reference/)，并经过与普通 Version 相同的 pinned workerd
@@ -64,7 +78,7 @@ authority 差异；它不代表缺方法、占位返回或半截实现。
 | WebSocket hibernation                        | `supported`                                     |    19 | accept/tags/get、auto-response、serialize/deserialize attachment、reconstruction 和 restart 均闭环                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —                                                 |
 | Vectorize                                    | `supported_with_deviation`                      |    27 | stable post-beta `Vectorize` 的 7 个方法、异步持久 mutation、三种公开 score/order、namespace、indexed metadata filter/projection、restart recovery 与全 stable response surface 均闭环；beta `VectorizeIndex` 不在当前 Day1 合同                                                                                                                                                                                                                                                                                                                                                                                          | `OC-VECTORIZE-001`                                |
 | Workers AI / Markdown Conversion / AI Search | `supported_with_deviation`                      |    54 | 标准 `[ai]` 注入 `env.AI.aiGatewayLogId`/`toMarkdown`；统一 registry 覆盖 62 个 Cloudflare 文档候选并安全公布 59 个 AI Search／18 个 Markdown 格式，本地三语言 OCR、扫描 PDF、可选 OpenAI-compatible VLM、`chunk: false`、bounded durable parse cache 与同实例 R2 source 已接入同一 indexing contract；R2 pause、显式 item/job、extensionless MIME、`r2:<bucket>` source ID、metadata filter、排序、删除 payload 和 bounded completion wait 走同一 Day1 路径；namespaced `open-compute:manual` source 是隔离的 API superset，不进入这 54 个官方成员；完整 Workers AI inference、外部 R2/S3 source 与 AutoRAG 不在声明范围 | `OC-AI-MARKDOWN-001`、`OC-AI-SEARCH-001`          |
-| Artifacts                                    | `supported_with_deviation`                      |    53 | namespace/repository/token、公开 HTTPS import、独立 fork、对象读取、Git Smart HTTP v1/v2、固定 Wrangler 4.143.0 与 pinned Worker binding 闭环；bare Git repository 与 SQLite metadata 位于单机 data-dir                                                                                                                                                                                                                                                                                                                                                                                                                   | `OC-ARTIFACTS-001`                                |
+| Artifacts                                    | `supported_with_deviation`                      |    53 | namespace/repository/token、公开 HTTPS import、独立 fork、对象读取、Git Smart HTTP v1/v2、历史固定客户端 wire 与当前 pinned Worker binding 闭环；当前 CLI 使用 cf；bare Git repository 与 SQLite metadata 位于单机 data-dir                                                                                                                                                                                                                                                                                                                                                                                               | `OC-ARTIFACTS-001`                                |
 
 当前 AI Search query surface 只声明文本输入：接受 text `query` 与 string-content messages；image、file 和 text+image
 multimodal query 不在当前支持范围并在 public boundary fail closed。文档 ingestion 的图片、扫描 PDF、OCR 与可选 VLM description
@@ -78,7 +92,7 @@ threshold 为 `0.4`；rerank 后顶层 `score` 等于 `reranking_score`，namesp
 `match_threshold` 过滤。临时 instance、items 与 metadata 均已删除并复查不存在。
 
 Workers observability 是管理面与平台 collector 能力，不计入 stable runtime-member denominator。当前
-[`workersObservability`](../../share/cloudflare-capabilities.json) authority 明确支持固定 Wrangler 4.143.0 Script
+[`workersObservability`](../../share/cloudflare-capabilities.json) authority 明确支持官方 Script
 Tails（`trace-v1`）、Workers Logs persistence、Telemetry keys/values、events/invocations query，以及 2026-09-03
 真实 Cloudflare Dashboard wire 冻结的 Live Tail/heartbeat。日志由单机有界 `observability.sqlite` 保存，实时 session
 在进程内且不 replay；每个执行 target 独立归属，caller tail 不聚合 nested target；不承诺全球顺序、hosted
@@ -108,9 +122,9 @@ instance，官方 `PUT /items`、upload、sync、source enum、response field �
 Artifacts 按 [REST API](https://developers.cloudflare.com/artifacts/api/rest-api/)、
 [Git protocol](https://developers.cloudflare.com/artifacts/api/git-protocol/)、
 [Workers binding](https://developers.cloudflare.com/artifacts/api/workers-binding/) 与固定
-`wrangler@4.143.0` 实现。namespace/repository list 的公开 REST 合同使用 `limit` + opaque `cursor`；固定
-Wrangler 4.143.0 的通用分页客户端仍发送 `page` 并读取 page metadata，因此同一路由仅为该固定客户端接受
-`page`，不能扩成历史 API 模式。token list 保持官方 `page` / `per_page`。repo token 精确采用
+`cf@1.0.0-beta.12` 实现。namespace/repository list 只接受官方 `limit` + opaque `cursor`；旧 Wrangler
+专用的 `page` 分支已删除，未知 query field 直接拒绝。固定 cf 的两个 list 命令使用同一 cursor 合同。
+token list 保持官方 `page` / `per_page`。repo token 精确采用
 `art_v1_<40 lowercase hex>?expires=<unix_seconds>`；Bearer 使用完整值，Git Basic password 使用 `?expires`
 之前的 secret，plaintext 只在创建响应出现，SQLite 只保存 keyed digest、scope、expiry 与 revoke metadata。
 
@@ -118,7 +132,7 @@ Wrangler 4.143.0 的通用分页客户端仍发送 `page` 并读取 page metadat
 metadata、`createToken`、`listTokens`、`revokeToken` 和 `fork`，共 53 个 Artifacts members/overloads。
 当前网页文档额外展示的 `log`、`readCommit`、`readTree` 不在该固定类型包中，因此本轮不手写扩展类型，也不把
 这些 docs-only Worker methods 宣称为已支持；相同对象读取能力仍通过已声明的 REST routes 提供。待正式 pin
-升级且类型、workerd、Wrangler 与 differential evidence 一致时再直接更新唯一实现。
+升级且类型、workerd、cf 与 differential evidence 一致时再直接更新唯一实现。
 
 本地 authority、capacity 与 Cloudflare 托管服务的差异见 `OC-ARTIFACTS-001`。名称校验遵循官方规则：首字符
 必须为 ASCII 字母或数字，其余只能为字母数字、`.`、`_`、`-`；jurisdiction 因单机无法提供真实 geographic
@@ -152,7 +166,19 @@ Version 上的 Images、当前声明子集内的 AI、Version Metadata 及其它
 Images/AI/Version Metadata binding 可见性、Service Binding 共存，并断言两种 context 的自动 caching 仍关闭。
 Cloudflare-hosted Workflow differential 仍受下文账号权限限制；本地结果不外推成尚未执行的 hosted 证据。
 
+Python Workflow ordinary case 使用两个语言各自 self-owned Flow，覆盖 step retry、NonRetryableError/catch、batch、pause/event/restart、committed-step replay、旧实例保留原 Version 和 terminate。definition 的 current Version 独立于 HTTP deployment，rollback 后通过公开 PUT 显式重绑，旧实例继续固定其原始版本。平台使用已有脱敏 Error 兑现 Python FFI 的 rejected promise，仍由 private signal identity 与 controller verdict 决定中断；不读取业务 exception payload/getter。
+
+Cache API 的 default/named 缓存是 Worker 级共享可变状态，跨 Version 保留；rollback 不回退第二版写入。自动 Workers Cache 的默认版本隔离是独立合同。Assets 保留 private wrapped transport，以官方 SDK 识别的公开 `Fetcher` 名称选择其既有 Request/Response 转换。Runtime 的 SDK/raw FFI/JavaScript 对照按声明 subset 验证 Images、Markdown、Vectorize、AI Search 和 Artifacts，不推广为 hosted 模型或全部 overload 资格。
+
 ### R2 上传调度与完整性
+
+原生 `R2Bucket.put` 要求流具有已知长度：请求/响应 body 或 `FixedLengthStream` 的 readable 可用，
+任意新建且长度未知的 `ReadableStream` 会被原生 workerd 拒绝，不能通过平台 facade 放宽。
+这一合同来自正式 pin 的 upstream `d99bc6b777e35d72d71c2f1fe2fd1db53284528a`
+[`r2-rpc.c++`](https://github.com/cloudflare/workerd/blob/d99bc6b777e35d72d71c2f1fe2fd1db53284528a/src/workerd/api/r2-rpc.c%2B%2B)
+及官方 [FixedLengthStream 文档](https://developers.cloudflare.com/workers/runtime-apis/streams/transformstream/#fixedlengthstream)。
+有效日期 `2026-09-08` 没有为此启用额外 flag。真实 R2 Gate 覆盖分块定长上传成功、
+未知长度抛出 `TypeError` 且对象没有写入；原有 checksum、metadata、multipart、取消和重启断言继续保留。
 
 `uploadPart` 的 staging source 只携带路径和精确长度，不计算不被后端消费的五种完整对象摘要。
 S3 adapter 仍计算并发送 `Content-MD5`，Local backend 仍执行自己的内容完整性校验；part ETag、
@@ -196,10 +222,11 @@ Assets bulk upload 的 Axum multipart wire limit 在该路由显式设为 64 MiB
 25 MiB。无 `Content-Length` 的 body 也受相同解析器与产品预算约束。固定 base64 multipart
 路由回归包含大于 2 MiB 的二进制文件及超预算拒绝；这不是新的 Cloudflare 托管管理面差分证据。
 
-固定 Wrangler 4.143.0 将 D1 配置的 `database_id` 投影为 Worker multipart binding 的 `id`；固定
+当前固定 cf 将 D1 配置的 `id` 投影为 Worker multipart binding 的 `id`；固定
 `cloudflare@7.2.0` 的 typed `workers.scripts.update()` 参数则声明 `database_id`。生成的 open-compute SDK client
 只在 binding `type` 精确为 `d1` 时把该字段投影为单一 JSON `metadata` part 内的 canonical `id`；其它 binding
-原样保留，服务端只接收 canonical upload schema。该客户端 wire 差异没有 tenant runtime 可观察语义，因此不
+原样保留。服务端在单一解析边界接受当前 cf 的 `id` 与 SDK 的 `database_id`，归一化为同一
+D1 authority identifier，同时提供两个字段则拒绝；这两项当前官方 wire 合同不构成旧 CLI 路径。该客户端 wire 差异没有 tenant runtime 可观察语义，因此不
 登记 runtime deviation ID；固定 SDK 真实 `ocd` Gate 同时验证 D1 binding 的持久投影和上传源码下载。
 该 SDK Gate 的回读发生在同一个 ready `ocd` 进程内，本次只证明写入 authority 后的立即持久投影，不单独
 声称 official SDK wrapper 已完成重启后回读资格；Version authority 的通用重启/恢复仍由独立真实进程 Gate 所有。
@@ -220,7 +247,7 @@ file unlink 失败，会留下不可达 orphan；单机 SMB 当前接受该磁�
 
 ### Service Binding `props`
 
-固定 Wrangler 4.143.0 的 schema 把 `services[].props` 定义为传给目标 Worker `ctx.props` 的可选 object。
+固定 cf 的 Worker schema 把 `services[].props` 定义为传给目标 Worker `ctx.props` 的可选 object。
 open-compute 在项目导入与 v4 multipart 边界要求 JSON object，执行 64 KiB、32 层深度上限和 canonical key
 ordering；canonical bytes/digest 随 immutable Version 一起持久化。runtime admission 会重新验证 canonical bytes
 与 descriptor digest，任何损坏都 fail closed；普通 Worker 目标通过 workerd 原生
@@ -257,12 +284,19 @@ Cloudflare 跨区域 placement 行为。
 
 ### Queue producer `delivery_delay`
 
-Cloudflare 当前 Queues/Wrangler 配置文档仍展示 producer binding 的 `delivery_delay`，但固定
-Wrangler 4.143.0 的实际 validator 明确警告该字段已弃用且无效果，并要求通过 `wrangler queues update`
-管理 Queue-level setting。P6 按固定客户端的可观察行为接受并忽略 upload metadata 中的该字段，不让它改写
-Queue authority 或 immutable descriptor；`/queues/{queue_id}` 的 settings API 才是队列默认 delay 的
-authority。官方文档与固定 CLI 的冲突在取得同版本 hosted management trace 前保持显式记录，不能用旧的
-producer 文档文字推翻 pinned CLI，也不能把本地无效果行为写成已经完成的托管端一致性证据。
+Queue consumer 响应只投影官方 `script_name`，不再输出旧 CLI 专用的 `script` 别名。
+当前固定 cf 的消费者命令与 SDK 使用同一 [REST response](https://developers.cloudflare.com/api/resources/queues/subresources/consumers/methods/list/)；
+所属 CRUD 回归同时检查 create/list/get/update 的名称字段和旧别名缺失。
+
+固定 cf 1.0.0-beta.12 所依赖的 `@cloudflare/config` Queue schema 仍声明 `deliveryDelay`；cf 的
+upload builder 将 producer 的 `delivery_delay` 原样放入 queue multipart binding，内部 config validator
+又明确警告该字段已弃用且无效果。它属于当前固定 cf 的可观察 upload 合同，不能仅因实现源自 workers-sdk
+就当成旧 CLI shim 删除。两种官方 metadata wire 统一解析该数值并忽略它，不改写 Queue authority 或
+immutable descriptor；`/queues/{queue_id}` settings API 才拥有 Queue-level 默认 delay。既有
+`fixed_wrangler_deprecated_queue_delay_metadata_is_accepted` 和
+`deprecated_queue_binding_delay_does_not_change_queue_authority` 两项所属回归保留；名称记录来源，行为按当前 cf
+重新核对。证据是固定 cf 的 `chunk-KKDV4JPS-D3kwd1Nq.mjs`、`dist-CYFkGHYv.mjs` 与 config schema。
+官方 producer 文档与 CLI warning 的差异仍未通过同版本 hosted trace 关闭，不宣称托管一致性。
 
 ### Dynamic Workers 生命周期
 
@@ -274,9 +308,22 @@ producer 文档文字推翻 pinned CLI，也不能把本地无效果行为写成
 进程在轮换与提交之间退出时，下一次启动在 runtime admission 前幂等完成删除。轮换会短暂影响同机其他 Worker，
 但外部 D1/KV/R2/Queue 资源不会随 Worker 删除。
 
-`WorkerCode.env` 的 transfer boundary 只接受 structured-clone value 与 Service Binding。D1、KV、R2、Queue
-binding 不直接转移，原生 clone 失败保持 `DataCloneError`；Loader Worker 必须通过 `ctx.exports` wrapper 暴露最小方法，
-使资源授权、tenant scope 与 audit 继续归宿主 Worker 所有。
+`WorkerCode.env` 的 transfer boundary 接受 structured-clone value、Service Binding 和上游可序列化的
+D1 `WrappedBinding`。D1 使用上游 `cloudflare-internal:d1-api` wrapper，转移的是原有 Fetcher capability，
+子 Worker 仍受原有资源授权与 tenant scope 约束，只得到显式传入的 env；KV、R2、Queue 的直接转移继续抛
+`DataCloneError`，需要 `ctx.exports` wrapper 或下述显式平台扩展。
+
+此行为依据正式 workerd pin 的上游基线 `d99bc6b777e35d72d71c2f1fe2fd1db53284528a` 中
+[D1Database](https://github.com/cloudflare/workerd/blob/d99bc6b777e35d72d71c2f1fe2fd1db53284528a/src/cloudflare/internal/d1-api.ts) 与
+[WrappedBinding serialization](https://github.com/cloudflare/workerd/blob/d99bc6b777e35d72d71c2f1fe2fd1db53284528a/src/workerd/api/wrapped-binding.c%2B%2B)，
+并由 `p6-cf-resources` 验证 parent 写入、child 绑定查询和精确 env keys。测试 compatibility date 为
+`2026-09-08`，未启用实验性 `d1_binding_jsrpc`；D1 继续通过原生 Fetcher 的 HTTP 契约访问平台 authority。
+这项证据限定于当前正式 pin，不声明 hosted Cloudflare 差分已通过。
+
+`open-compute:worker-loader` 的 `getWorker/loadWorker` 是显式选择的本地扩展，允许同一 owner 下已登记的
+typed binding root 通过 host-owned materializer 重建到 child；它不改变上述原生 `LOADER.get/load` 的
+transfer 规则，也不声明为 Cloudflare 标准能力。该扩展不继承 private Loader、平台 env 或普通 Python
+prepared artifact；Dynamic Python 的启动限制仍单独受 `OC-WKR-LIMIT-001` 约束。
 
 ### Durable Object nested facets
 
@@ -298,6 +345,16 @@ type 和空 batch 为 `TypeError`，超大 batch、负 delay 和超大 delay 为
 提交后的 30 秒超时按 result-unknown 返回。HTTP pull/ack/peek/purge 因缺少已资格的 lease/retry/crash-recovery 合同而继续
 不在支持面。
 
+Queue `v8` 的当前生产模型保留经过正式 workerd version-15 codec 验证的原生 bytes，consumer
+使用同一原生 decoder；不再转换成平台自有 structured-clone 格式。128,000/256,000 bytes 预算
+按[官方十进制 KB](https://developers.cloudflare.com/queues/platform/limits/)执行，托管 internal
+metadata 额度仍不声明 parity。缺省格式由原生 date/flags 决定，`queues_json_messages` 在
+2024-03-18 生效，`no_queues_json_messages` 可关闭，来源为固定 upstream compatibility-date
+schema。当前 r4 private publication component 验证两种选择、大 Unicode、原始 byte 大小和
+超限前无写入；两语言 Queue case 已通过真实 SQLite、fresh restart 与 Version rollback 验证。config-only
+raw fetch 的 oversized batch cancellation 限制不构成该产品路径资格证据，详见
+[Python Workers 测试合同](testing.md#python-workers)。全库兼容性状态与历史 inventory 不由组件结果提升。
+
 ### 资源生命周期
 
 Cron activation generation 从该 Worker 的全部持久 activation（含 tombstone）取最大值后递增。
@@ -314,6 +371,9 @@ Worker Version upload 取得的 Workflow reservation 在共用 validation pipeli
 publish，再把 Worker Version 标记 ready。确定性 probe 失败会拒绝已 stage Workflow versions 与 Worker Version；transient failure
 保留 validating 状态供既有恢复路径重试，避免 ready Worker 引用 stale Workflow definition。官方 Beta Worker Version DELETE 仅
 tombstone 非 active、无 pin/持久 referrer 的历史 Version，并释放 binding referrer；外部产品数据不级联删除。
+Workflow definition 的 current Version 与 Worker HTTP deployment 分别管理。HTTP promotion/rollback 不自动重绑
+definition；需要通过公开 `PUT /workflows/{name}` 选择当前 active Worker Version。已创建实例继续固定创建时的
+Workflow/Worker Version。Python 用例验证这一显式管理流程，不据此宣称托管平台自动 rollback 管理语义一致。
 官方 Beta Worker GET 按当前 account 的名称或 public Worker tag 读取；本地响应投影 immutable Worker identity、时间戳与空 references，
 并明确返回 `subdomain.enabled=false`、`previews_enabled=false`，不伪造 workers.dev DNS 或 Preview 可达性。
 upload 与 deployment 显式提供 `code_update_strategy` 时，本地 closed decoder 验证官方 mode、范围与毫秒精度，但单机 runtime 仍原子切换 generation，不模拟 Cloudflare 托管 Durable Object 的 hibernation rollout；
@@ -322,16 +382,16 @@ upload 与 deployment 显式提供 `code_update_strategy` 时，本地 closed de
 AI Search upload 按官方 `namespace` 字段解析 public instance key；省略时使用 `default`。authority lookup 同时固定 namespace 与
 instance，跨 namespace 同名 instance 不再依赖内部 Resource name，也不会互相解析。
 
-### Wrangler Workflow 部署 prerequisite
+### 官方 account prerequisite 的历史证据
 
-固定 Wrangler 4.143.0 在 `workers_dev:false` 的 Workflow deploy 中，仍会于 Worker upload 后、Workflow
+历史固定 Wrangler 4.143.0 在 `workers_dev:false` 的 Workflow deploy 中，于 Worker upload 后、Workflow
 PUT 前读取 `GET /accounts/{account_id}/workers/subdomain`，并丢弃返回值。open-compute 将该只读 route 标为
 `supported_with_deviation`：它返回以 `_` 开头、按 account 稳定派生的非 DNS label，只满足固定 CLI 的顺序
 prerequisite，不创建 workers.dev DNS、listener、route 或注册 authority；对应 `PUT/DELETE` 继续不支持。
 真实本地入口仍以 vendor Worker endpoints route 为准。该 route 与 capability 的关联 deviation 为
 `OC-ACCOUNT-SUBDOMAIN-001`。
 
-固定 Wrangler 4.143.0 创建 AI Search instance 前还会读取
+历史固定 Wrangler 4.143.0 创建 AI Search instance 前读取
 `GET /accounts/{account_id}/ai-search/tokens`。单机实现只返回一个 account-scoped、稳定、无 secret 的
 installation-managed metadata；不暴露 bearer token、provider credential 或 ciphertext，也不开放 token mutation。
 该 route 标为 `supported_with_deviation` 并关联 `OC-AI-SEARCH-TOKEN-001`。
@@ -351,7 +411,7 @@ Observability 的 authenticated Dashboard network differential。README 因此�
 产品 surface 口径列为十项；这不把专项 probe 外推成完整 hosted management qualification，也不改变上述 portable runner
 仍为七项的事实。
 
-Workflow portable fixture 已实现并通过 open-compute 本地真实进程路径，但当前 Wrangler OAuth 对
+Workflow portable fixture 已实现并通过 open-compute 本地真实进程路径，但此前对照使用的 OAuth session 对
 Cloudflare Workflow inventory API 返回 `Authentication error [code: 10000]`，在 preflight 阶段即停止，
 没有创建 Workflow 或 Worker。源码冻结后的七项合并复查又在 D1 inventory preflight 收到同一错误；该次
 运行已先完成 Cache API 对照并精确清理，D1 及后续 fixture 未创建资源。此前已完成的 D1 和其它分项
@@ -364,6 +424,30 @@ workerd、SQLite 与选定的 Local/S3 object authority、restart/crash tests �
 实际限制记录在归档完成报告中；机器可读 capability/catalog 仍是支持状态的唯一 authority。
 
 P20 当前应用入口为项目内 cf 与官方 Vite 插件 v2。内部 CI 固定 cf 1.0.0-beta.12；用户的非 1.0.x 版本警告后仍执行。旧 Wrangler 项目需显式使用 `cf migrate <exact-file> --bundler vite`。终端流式 tail 尚无等价 cf 入口，使用 Dashboard Live Tail。
+
+P21 临时例外只限开发侧 Python 构建：调用用户安装的 PyWrangler，不校验版本、不自动安装；
+Worker 配置仍为 `cloudflare.config.ts`，上游构建的 Build Output 只由 cf `--prebuilt` 上传/部署。
+认证与资源管理保持 cf。官方 cf Python builder 可用且资格通过后删除桥接，不保留双构建路径；
+fresh sync/build 与 cf loopback prebuilt capture 已通过并保留真实静态输入；七类 ordinary 场景已在完整 workspace coverage 中执行。Flask context-bearing stream 仍受 SDK 1.9.2 gap 影响并按已知问题暂缓。
+移除 TODO 与具体资格边界见 [P25 构建桥接移除待办](../p25-platform-follow-ups.md)。
+支持范围以本页的普通部署合同和已接受限制为准。
+
+2026-10-04 的 P21 扩展源码审查核对了 shared materializer、核心 binding policy 与 prepared artifact 的
+authority/加密/恢复边界，未发现已审路径的新确定性 mismatch；逐表面证据与未验收项目保留于
+`.temp/p21-cf-full-review/iteration-01/review-01.md`。这不代表全部 diff 或完整 Python contract 已通过。
+各 ordinary case 的完整生命周期和 workspace coverage 已验证；最终未插桩验收记录与 coverage 报告分别保留。当前补充复核包含 Fetcher 构造、Workflow FFI rejection、Cache API scope 与工具边界，逐项证据保留在 `.temp/p21-final-preflight/`。Flask 流式上下文限制见下述已知问题。
+
+### Python 已知上游问题：Flask 流式上下文
+
+2026-10-04 用户明确暂缓处理 [cloudflare/workers-py#287](https://github.com/cloudflare/workers-py/issues/287)。
+SDK 1.9.2 的 WSGI adapter 在首次读取与异步 `pull`/`cancel` 之间未保持同一个 Python Context，
+Flask `stream_with_context` 因此出现 request/app ContextVar 错误，可能截断响应或使清理失败。
+官方 stock workerd `v1.20260929.1` 配合未修改 SDK、直接 service binding 已复现；这不是托管端验证。
+Flask 带 request/app context 的流式响应暂不在本轮支持与验收范围，不能从普通 Flask HTTP/template
+Gate 推断 streaming 已通过。原应用路由、失败日志与诊断补丁保留，正式 SDK 不改动。
+其余 Flask HTTP、模板、不可变部署、restart/rollback、密文损坏拒绝和日志安全已在完整三框架聚合中通过。
+TODO(P25)：上游发布修复后重新验证该路由的完整 body、并发上下文与 cancellation cleanup，恢复流式验收并移除该限制。
+证据见 `.temp/p20-python-flask/diagnostic-01.json` 和 `.temp/p21-flask-context-diagnostic/qualification-01.json`。
 
 P20 支持 cf 当前 Beta Version GET/list 的扁平响应、分页与 `include=modules`；模块来自校验后的不可变 artifact，secret 只返回 binding 名称。版本与 Service 元数据以 `open-compute` 标识平台 producer，不冒充某个客户端品牌或 Cloudflare Dashboard。cf/Vite 动态导入分片的 `./` 模块前缀在上传入口规范化；路径穿越与规范化后的重复名称仍拒绝。Workflow export 与同 Script binding 引用复用现有 definition reservation 和 WorkerId，不开放跨 Script 引用。
 

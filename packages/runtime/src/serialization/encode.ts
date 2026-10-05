@@ -2,7 +2,6 @@ import {
   arrayBufferByteLength,
   ArrayBufferCtor,
   ArrayPrototype,
-  assertProfile,
   canonicalIndex,
   copyBuffer,
   dataDescriptor,
@@ -11,9 +10,9 @@ import {
   dataViewByteOffset,
   DateCtor,
   dateGetTime,
+  DURABLE_VALUE_KIND,
   DURABLE_VALUE_LIMITS,
   DURABLE_VALUE_MAGIC,
-  DURABLE_VALUE_PROFILE_ID,
   DURABLE_VALUE_SCHEMA,
   enumerableStringKeys,
   ERROR_CAUSE,
@@ -46,29 +45,26 @@ import {
   Writer,
   wtf8Encode,
 } from "./format.js";
-import type { DurableValueProfile } from "./protocol.js";
 
 class Encoder {
-  profile: DurableValueProfile;
   maxBytes: number;
   maxNodes: number;
   maxDepth: number;
   writer: Writer;
   seen = new WeakMap<object, number>();
   nodes = 0;
-  constructor(profile: DurableValueProfile) {
-    this.profile = profile;
-    const limits = DURABLE_VALUE_LIMITS[profile];
+  constructor() {
+    const limits = DURABLE_VALUE_LIMITS;
     this.maxBytes = limits.maxBytes;
     this.maxNodes = limits.maxNodes;
     this.maxDepth = limits.maxDepth;
     this.writer = new Writer(this.maxBytes);
   }
   tooLarge(): never {
-    return fail(this.profile, "tooLarge");
+    return fail("tooLarge");
   }
   unsupported(): never {
-    return fail(this.profile, "unsupported");
+    return fail("unsupported");
   }
   u8(value: number): void {
     this.writer.u8(value, () => this.tooLarge());
@@ -452,14 +448,11 @@ function defaultErrorName(kind: number): string {
   return "Error";
 }
 
-export function encodeDurableValue(
-  value: unknown,
-  profile: DurableValueProfile,
-): Uint8Array<ArrayBuffer> {
-  const encoder = new Encoder(assertProfile(profile));
+export function encodeDurableValue(value: unknown): Uint8Array<ArrayBuffer> {
+  const encoder = new Encoder();
   encoder.raw(DURABLE_VALUE_MAGIC);
   encoder.u8(DURABLE_VALUE_SCHEMA);
-  encoder.u8(DURABLE_VALUE_PROFILE_ID[encoder.profile]);
+  encoder.u8(DURABLE_VALUE_KIND);
   encoder.value(value, 0);
   return encoder.writer.finish();
 }

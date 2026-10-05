@@ -14,9 +14,14 @@ async fn remote_corruption_and_orphan_gc() {
         )
         .await
         .unwrap();
-    mock.corrupt_body(&r.physical_key("system/"));
+    let mut changed = payload.to_vec();
+    changed[0] ^= 1;
+    assert_eq!(changed.len(), payload.len());
+    mock.put_raw(&r.physical_key("system/"), changed);
+    mock.clear_recorded();
     let err = store.open(&r).await.unwrap_err();
     assert_eq!(err.code(), ErrorCode::ArtifactIntegrityError);
+    assert_eq!(mock.artifact_gets(), 1);
 
     mock.put_raw("tenant/not-ours", b"x".to_vec());
     let candidates = store.list_candidates().await.unwrap();

@@ -16,7 +16,9 @@ mod verify;
 mod digest;
 mod fsutil;
 
-pub use compile::{CompileRequest, CompiledConfig, PlatformReleaseMeta, compile_static_config};
+pub use compile::{
+    CompileRequest, CompiledConfig, ConfigRole, PlatformReleaseMeta, compile_static_config,
+};
 pub use digest::runtime_assets_sha256;
 pub use embedded::{
     RuntimeCacheCleanReport, RuntimePackage, clean_embedded_runtime_cache, embedded_caddy_lock,
@@ -44,10 +46,10 @@ pub use supervisor::FnCompiler;
 pub use supervisor::{
     ConfigCompiler, DirectoryServicePath, ExternalServiceAddress, GenerationAuthRegistry,
     GenerationCredential, HostExtensionBrokerRegistry, JitterRng, LIVE_PATH, OsJitter,
-    ProcessDiagnostics, READY_PATH, RuntimeFailureEvidence, StaticConfigCompiler,
-    SupervisorSnapshot, SupervisorState, TOKEN_HEADER, WatchdogConfig, WorkerdSupervisor,
-    WorkerdSupervisorOptions, generate_internal_token, probe_ready_with_raw_token, serve_argv,
-    token_fingerprint,
+    ProcessDiagnostics, PythonPreparationOptions, PythonPreparationProcess, READY_PATH,
+    RuntimeFailureEvidence, StaticConfigCompiler, SupervisorSnapshot, SupervisorState,
+    TOKEN_HEADER, WatchdogConfig, WorkerdSupervisor, WorkerdSupervisorOptions,
+    generate_internal_token, probe_ready_with_raw_token, serve_argv, token_fingerprint,
 };
 pub use verify::VerifiedRuntime;
 #[cfg(any(test, feature = "test-support"))]

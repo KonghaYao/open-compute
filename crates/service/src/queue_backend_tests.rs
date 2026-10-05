@@ -97,7 +97,7 @@ fn queue_frame_preserves_content_order_and_explicit_zero_delay() {
             (1, -1, b"{}"),
             (2, 0, b"text"),
             (3, 8, &[1, 2]),
-            (4, -1, b"OCDV"),
+            (4, -1, b"\xff\x0f\x22\x04body"),
         ],
     );
     let parsed = parse_frame(&bytes, QueueOperation::Batch).unwrap();
@@ -110,7 +110,7 @@ fn queue_frame_preserves_content_order_and_explicit_zero_delay() {
     assert_eq!(parsed.messages[2].content_type, QueueContentType::Bytes);
     assert_eq!(parsed.messages[2].body, vec![1, 2]);
     assert_eq!(parsed.messages[3].content_type, QueueContentType::V8);
-    assert_eq!(parsed.messages[3].body, b"OCDV");
+    assert_eq!(parsed.messages[3].body, b"\xff\x0f\x22\x04body");
 }
 
 #[test]

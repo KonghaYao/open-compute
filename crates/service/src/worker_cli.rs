@@ -7,8 +7,9 @@ use open_compute_workers::{BundleLimits, CanonicalBundle, ModuleInput, ModuleTyp
 use serde::Deserialize;
 use std::io::{Read, Write};
 
-// Includes base64 expansion of the default 16 MiB module budget and JSON framing.
-const MAX_INPUT_BYTES: u64 = 24 * 1024 * 1024;
+// Bound base64 payload plus JSON framing, including six-byte escaped name characters.
+const MAX_INPUT_BYTES: u64 = (BundleLimits::DEFAULT.max_total_module_bytes.div_ceil(3) * 4
+    + BundleLimits::DEFAULT.max_manifest_bytes * 6) as u64;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -116,6 +117,43 @@ mod tests {
         assert_eq!(
             CanonicalBundle::parse(output, BundleLimits::default()).unwrap(),
             expected
+        );
+    }
+
+    #[test]
+    fn full_module_budget_round_trips_through_bounded_base64_input() {
+        let limits = BundleLimits::default();
+        let mut modules = vec![serde_json::json!({"name": "index.js", "type": "esModule",
+                "bytesBase64": base64::engine::general_purpose::STANDARD
+                    .encode(vec![b' '; limits.max_module_bytes])})];
+        for index in 1..4 {
+            modules.push(
+                serde_json::json!({"name": format!("data{index}.bin"), "type": "data",
+                "bytesBase64": base64::engine::general_purpose::STANDARD
+                    .encode(vec![0; limits.max_module_bytes])}),
+            );
+        }
+        for index in 4..132 {
+            modules.push(serde_json::json!({"name": format!("data{index}.bin"),
+                "type": "data", "bytesBase64": ""}));
+        }
+        let bytes = serde_json::to_vec(&serde_json::json!({
+            "schemaVersion": 1, "mainModule": "index.js", "modules": modules,
+        }))
+        .unwrap();
+        assert!(bytes.len() > 24 * 1024 * 1024);
+        let mut output = Vec::new();
+        encode_bundle(bytes.as_slice(), &mut output).unwrap();
+        let bundle = CanonicalBundle::parse(output, limits).unwrap();
+        assert_eq!(bundle.manifest().modules.len(), 132);
+        assert_eq!(
+            bundle
+                .manifest()
+                .modules
+                .iter()
+                .map(|module| module.size)
+                .sum::<u64>(),
+            limits.max_total_module_bytes as u64
         );
     }
 

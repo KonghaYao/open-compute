@@ -148,16 +148,26 @@ function code() {
     compatibilityDate: "2026-09-08",
     mainModule: "child.js",
     globalOutbound: null,
-    modules: { "child.js": `export default { fetch() { return new Response("ok"); } };` },
+    modules: { "child.js": `export default { async fetch(_request, env) {
+      const row = await env.VALUE.prepare("SELECT value FROM loader_transfer WHERE id = ?")
+        .bind("shared-row").first();
+      return Response.json({ row, constructor: env.VALUE.constructor.name, keys: Object.keys(env).sort() });
+    } };` },
   };
 }
 export default {
-  fetch(_request, env) {
+  async fetch(_request, env) {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS loader_transfer (id TEXT PRIMARY KEY, value TEXT NOT NULL)").run();
+    await env.DB.prepare("INSERT OR REPLACE INTO loader_transfer (id, value) VALUES (?, ?)")
+      .bind("shared-row", "parent-persisted").run();
     const transferError = value => {
       try { env.LOADER.load({ ...code(), env: { VALUE: value } }); return null; }
       catch (error) { return error?.name ?? "Error"; }
     };
+    const child = env.LOADER.load({ ...code(), env: { VALUE: env.DB } });
+    const d1 = await (await child.getEntrypoint().fetch("https://child.invalid")).json();
     return Response.json({
+      d1,
       transferErrors: {
         d1: transferError(env.DB),
         kv: transferError(env.KV),
@@ -614,7 +624,7 @@ async fn worker_loader_native_binding_versions_delete_and_restart() {
         api_base_url: format!("http://{}/client/v4", fixture.admin_addr),
         account_id: &fixture.public_account,
     };
-    let kv_id = configure_nontransferable_bindings(&transfer_command, &mut transfer_config).await;
+    let kv_id = configure_resource_bindings(&transfer_command, &mut transfer_config).await;
     fs::write(
         fixture.project.join("cloudflare-input.transfer.json"),
         serde_json::to_vec_pretty(&transfer_config).unwrap(),
@@ -631,8 +641,13 @@ async fn worker_loader_native_binding_versions_delete_and_restart() {
     assert_eq!(
         invalid,
         json!({
+            "d1": {
+                "row": { "value": "parent-persisted" },
+                "constructor": "D1Database",
+                "keys": ["VALUE"],
+            },
             "transferErrors": {
-                "d1": "DataCloneError",
+                "d1": null,
                 "kv": "DataCloneError",
                 "queue": "DataCloneError",
                 "r2": "DataCloneError",
@@ -773,7 +788,7 @@ async fn worker_loader_native_binding_versions_delete_and_restart() {
     }
 }
 
-async fn configure_nontransferable_bindings(command: &CfCommand<'_>, config: &mut Value) -> String {
+async fn configure_resource_bindings(command: &CfCommand<'_>, config: &mut Value) -> String {
     assert_success(
         &command
             .run(&[

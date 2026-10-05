@@ -270,9 +270,14 @@ request_timeout_ms = 3000
             .unwrap(),
         );
         let source_task = tokio::spawn({
-            let source =
-                RuntimeSource::new(storage.clone(), artifacts.clone(), BundleLimits::default())
-                    .with_cache(cache.clone());
+            let source = RuntimeSource::new(
+                storage.clone(),
+                artifacts.clone(),
+                BundleLimits::default(),
+                open_compute_service::runtime_bridge::python_runtime_pin(&runtime),
+            )
+            .unwrap()
+            .with_cache(cache.clone());
             let auth = source_auth.clone();
             async move {
                 serve_runtime_source(source_listener, source, auth, async move {
@@ -319,7 +324,6 @@ request_timeout_ms = 3000
                 },
                 clock: Arc::new(SystemClock),
                 jitter: Arc::new(OsJitter),
-                redactor: Redactor::new(),
                 lease_path: Some(storage.data_dir().runtime_dir().join("workflow.lease")),
             },
             vec![

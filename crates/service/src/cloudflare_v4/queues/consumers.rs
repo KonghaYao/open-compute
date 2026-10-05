@@ -401,7 +401,6 @@ pub(crate) fn consumer_response(
         })?,
         dead_letter_queue,
         queue_name: queue.name.clone(),
-        script: worker.name.clone(),
         script_name: worker.name,
         settings: ConsumerSettings {
             batch_size: declaration.config.max_batch_size,
@@ -449,8 +448,6 @@ pub(crate) struct ConsumerResponse {
     created_on: String,
     dead_letter_queue: String,
     queue_name: String,
-    /// Wrangler 4.143.0 reads `script` while cloudflare 7.2.0 reads `script_name`.
-    script: String,
     script_name: String,
     settings: ConsumerSettings,
     #[serde(rename = "type")]

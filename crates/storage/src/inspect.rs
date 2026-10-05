@@ -282,6 +282,11 @@ pub fn inspect_snapshot_immutable_references(
                    JOIN worker_versions d ON d.id = r.version_id
                    WHERE d.state != 'tombstoned'
                    UNION
+                   SELECT p.artifact_sha256 AS sha256, p.artifact_size AS size
+                   FROM version_python_prepared p
+                   JOIN worker_versions d ON d.id = p.version_id
+                   WHERE d.state != 'tombstoned'
+                   UNION
                    SELECT o.sha256 AS sha256, o.size AS size
                    FROM version_upload_objects o
                    JOIN version_uploads u ON u.id = o.session_id

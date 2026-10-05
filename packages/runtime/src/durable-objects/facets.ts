@@ -1,3 +1,4 @@
+import wrapped from "cloudflare-internal:wrapped-binding";
 import { waitUntil } from "cloudflare:workers";
 import type { NativeHostFacets } from "../loader/protocol.js";
 import { loopbackDurableObjectMetadata } from "../loader/wrappers/runtime.js";
@@ -16,6 +17,7 @@ interface FacetStartupState {
 }
 interface TenantFacetsState {
   readonly manager: FacetManagerCapability;
+  readonly transport: Fetcher;
   readonly nativeFacets: NativeHostFacets;
   readonly authority: TenantDoAuthority;
   readonly logicalPath: readonly string[];
@@ -40,6 +42,8 @@ const FORBIDDEN_RPC = new Set([
   "webSocketError",
 ]);
 const encoder = new TextEncoder();
+const createPrivateTransport = wrapped.createPrivateTransport.bind(wrapped);
+const admitSubrequest = wrapped.admitSubrequest.bind(wrapped);
 const tenantFacetsState = privateWeakMap<object, TenantFacetsState>();
 interface LocalFacetDescriptor {
   wire: FacetClassDescriptor;
@@ -145,13 +149,20 @@ class FacetStubState {
     if (!this.startup.startup) {
       const inheritedId = ownerState(this.owner).inheritedId;
       this.startup.startup = Promise.resolve()
-        .then(this.startup.callback)
+        .then(() => this.startup.callback())
         .then((value) => descriptor(value, inheritedId));
     }
     return this.startup.startup;
   }
 
   run<T>(
+    operation: (descriptor: FacetClassDescriptor) => Promise<T>,
+  ): Promise<T> {
+    admitSubrequest();
+    return this.prepare(operation);
+  }
+
+  prepare<T>(
     operation: (descriptor: FacetClassDescriptor) => Promise<T>,
   ): Promise<T> {
     const checkAborted = () => {
@@ -254,7 +265,7 @@ function facetStub(state: FacetStubState): Fetcher {
           options?: SocketOptions,
         ): Socket => {
           const token = crypto.randomUUID().replaceAll("-", "");
-          const prepared = state.run((descriptor) =>
+          const prepared = state.prepare((descriptor) =>
             owner.manager.__openComputePrepareFacetConnect(
               owner.authority,
               state.logicalPath,
@@ -269,10 +280,28 @@ function facetStub(state: FacetStubState): Fetcher {
               () => undefined,
             ),
           );
-          return owner.manager.connect(
-            `${token}.facet-connect.invalid:1`,
-            options,
+          let cancellation: Promise<void> | undefined;
+          const cancel = () =>
+            (cancellation ??= prepared
+              .catch(() => undefined)
+              .then(() =>
+                owner.manager.__openComputeCancelFacetConnect(token),
+              ));
+          let socket: Socket;
+          try {
+            socket = owner.transport.connect(
+              `${token}.facet-connect.invalid:1`,
+              options,
+            );
+          } catch (error) {
+            waitUntil(cancel().catch(() => undefined));
+            throw error;
+          }
+          waitUntil(
+            socket.opened.then(() => undefined, cancel).catch(() => undefined),
           );
+          waitUntil(socket.closed.then(cancel, cancel).catch(() => undefined));
+          return socket;
         };
       }
       if (typeof property !== "string")
@@ -297,7 +326,8 @@ export class TenantFacets implements DurableObjectFacets {
     nativeFacets: NativeHostFacets,
   ) {
     tenantFacetsState.set(this, {
-      manager,
+      manager: createPrivateTransport(manager) as FacetManagerCapability,
+      transport: manager,
       authority,
       logicalPath,
       inheritedId,

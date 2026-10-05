@@ -167,7 +167,6 @@ struct TokenDto {
 struct CursorQuery {
     limit: Option<usize>,
     cursor: Option<String>,
-    page: Option<usize>,
 }
 
 #[derive(Default, Deserialize)]
@@ -175,7 +174,6 @@ struct CursorQuery {
 struct RepositoriesQuery {
     limit: Option<usize>,
     cursor: Option<String>,
-    page: Option<usize>,
     search: Option<String>,
     sort: Option<String>,
     direction: Option<String>,
@@ -238,13 +236,7 @@ async fn list_namespaces(
             .map(|record| namespace_dto(api, account, record))
             .collect::<Result<Vec<_>, _>>()
     }) {
-        Ok(result) => cursor_page(
-            context,
-            result,
-            query.limit,
-            query.cursor.as_deref(),
-            query.page,
-        ),
+        Ok(result) => cursor_page(context, result, query.limit, query.cursor.as_deref()),
         Err(error) => platform_error_response(&error, context.request_id()),
     }
 }
@@ -348,13 +340,7 @@ async fn list_repositories(
             if !ascending {
                 result.reverse();
             }
-            cursor_page(
-                context,
-                result,
-                query.limit,
-                query.cursor.as_deref(),
-                query.page,
-            )
+            cursor_page(context, result, query.limit, query.cursor.as_deref())
         }
         Err(error) => platform_error_response(&error, context.request_id()),
     }

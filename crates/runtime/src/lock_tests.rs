@@ -50,7 +50,7 @@ fn private_lock_helpers_cover_unavailable_target_and_visitor_contracts() {
         },
         workers_sdk: WorkersSdkPin {
             revision: "f8085545bcaa2c639f171c25e4424685036a0e10".to_owned(),
-            wrangler_version: "4.143.0".to_owned(),
+            cf_version: "1.0.0-beta.12".to_owned(),
             vite_plugin_version: "1.54.2".to_owned(),
         },
         targets: BTreeMap::new(),

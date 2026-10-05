@@ -2,6 +2,9 @@
 
 状态：implemented / Day1（2026-10-03）。正式入口为 `ocd cf`，应用使用官方 cf、Cloudflare Vite 插件 v2 与 Cloudflare Build Output。自有通用 Worker 应用工具链、Wrangler launcher 和旧配置消费路径已删除。
 
+2026-10-04 的临时 Python 构建例外由 [P25 构建桥接移除待办](../p25-platform-follow-ups.md) 管理：
+构建脚本调用用户安装的 PyWrangler，不恢复通用 Wrangler launcher；cf 继续负责上传、部署、认证和资源管理。
+
 ## 当前实现与边界
 
 - 用户无需固定 cf CLI 版本。标准 SemVer `1.0.x`（含 prerelease）不警告；其他 major/minor 在 stderr warning 后仍执行。内部 CI 与 capability 基线固定 `cf@1.0.0-beta.12`、Vite `8.3.0`、Cloudflare Vite 插件 `2.0.0-beta.sha-52b0dc0e9`。

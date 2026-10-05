@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { importRuntime, moduleUrl } from "../compiled-runtime.mjs";
+import {
+  compileRuntime,
+  importRuntime,
+  moduleUrl,
+} from "../compiled-runtime.mjs";
 
 const { authorityFromHeaders } = await importRuntime(
   "durable-objects/host-protocol.ts",
   {
+    "./identity.js": moduleUrl(
+      await compileRuntime("durable-objects/identity.ts"),
+    ),
     "../loader/shared.js": moduleUrl(
       "export const bindingError = (code) => new Error(code);",
     ),

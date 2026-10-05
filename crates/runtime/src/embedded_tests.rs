@@ -66,6 +66,7 @@ async fn materialization_is_reused_verified_and_never_repairs_corruption() {
     let binding_token = open_compute_core::SecretString::new("b".repeat(64));
     let observability_token = open_compute_core::SecretString::new("c".repeat(64));
     let compile_error = crate::compile_static_config(crate::CompileRequest {
+        role: crate::ConfigRole::Runtime,
         runtime: &runtime,
         lock_path: &package.lock_path(),
         assets_dir: &package.assets_dir(),

@@ -82,8 +82,13 @@ async fn p2_2_real_queue_producer_matrix() {
     let (shutdown_tx, mut source_shutdown) = tokio::sync::watch::channel(false);
     let mut binding_shutdown = shutdown_tx.subscribe();
     let source_task = tokio::spawn({
-        let source =
-            RuntimeSource::new(storage.clone(), artifacts.clone(), BundleLimits::default());
+        let source = RuntimeSource::new(
+            storage.clone(),
+            artifacts.clone(),
+            BundleLimits::default(),
+            open_compute_service::runtime_bridge::python_runtime_pin(&runtime),
+        )
+        .unwrap();
         let auth = source_auth.clone();
         async move {
             serve_runtime_source(source_listener, source, auth, async move {
@@ -151,7 +156,6 @@ async fn p2_2_real_queue_producer_matrix() {
             config: runtime_config(),
             clock: Arc::new(SystemClock),
             jitter: Arc::new(OsJitter),
-            redactor: Redactor::new(),
             lease_path: Some(storage.data_dir().runtime_dir().join("p2-2-gate.lease")),
         },
         vec![
@@ -253,7 +257,18 @@ async fn p2_2_real_queue_producer_matrix() {
     assert_eq!(result["oldestIsDate"], true);
     assert_eq!(result["bytesDetached"], true);
     assert_eq!(result["v8RoundTrip"], true);
-    assert_eq!(result["errors"], 7);
+    assert_eq!(
+        result["rejections"],
+        serde_json::json!({
+            "unsupportedType": true,
+            "oversizedMessage": true,
+            "invalidDelay": true,
+            "emptyBatch": true,
+            "oversizedBatch": true,
+            "undefinedBody": true,
+        })
+    );
+    assert_eq!(result["extraOptionsCount"], 8);
 
     let named = dispatch(
         &transport,
@@ -266,7 +281,7 @@ async fn p2_2_real_queue_producer_matrix() {
     )
     .await;
     assert_eq!(named.status, 200, "{}", named.body);
-    assert_eq!(named.body, "named:8:true");
+    assert_eq!(named.body, "named:9:true");
     assert_eq!(named.loader_outcome, Some(LoaderOutcome::Cold));
     let warm = dispatch(
         &transport,
@@ -281,7 +296,7 @@ async fn p2_2_real_queue_producer_matrix() {
     assert_eq!(warm.loader_outcome, Some(LoaderOutcome::Warm));
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&warm.body).unwrap()["backlogCount"],
-        8
+        9
     );
     assert_persisted_frames(&storage.data_dir().scheduler_db_path());
     let v8_body = persisted_v8_body(&storage.data_dir().scheduler_db_path());
@@ -378,7 +393,7 @@ async fn p2_2_real_queue_producer_matrix() {
     assert_eq!(restored.status, 200, "{}", restored.body);
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&restored.body).unwrap()["backlogCount"],
-        8
+        9
     );
 
     let catalog = QueueRepository::new(storage.db());
@@ -412,7 +427,7 @@ async fn p2_2_real_queue_producer_matrix() {
         "{}",
         fenced.body
     );
-    assert_eq!(scheduler.queue_backlog_totals().unwrap().0, 8);
+    assert_eq!(scheduler.queue_backlog_totals().unwrap().0, 9);
     assert_eq!(
         QueueController::new(&storage, scheduler.clone())
             .reconcile_pending(16, 42)
@@ -430,7 +445,7 @@ async fn p2_2_real_queue_producer_matrix() {
     )
     .await;
     assert_eq!(after_reconcile.status, 200, "{}", after_reconcile.body);
-    assert_eq!(scheduler.queue_backlog_totals().unwrap().0, 9);
+    assert_eq!(scheduler.queue_backlog_totals().unwrap().0, 10);
 
     let referenced = QueueController::new(&storage, scheduler.clone())
         .delete(account, queue, 1, true, RequestId::generate(), 43)
@@ -441,7 +456,7 @@ async fn p2_2_real_queue_producer_matrix() {
     let deleted = scheduler
         .sweep_queue_retention(max_expiry.saturating_add(1), 256, 4 * 1024 * 1024)
         .unwrap();
-    assert_eq!(deleted.messages, 9);
+    assert_eq!(deleted.messages, 10);
     assert_eq!(scheduler.queue_backlog_totals().unwrap(), (0, 0));
     let empty = dispatch(
         &transport,
@@ -478,10 +493,6 @@ async fn p2_2_real_queue_producer_matrix() {
         .unwrap();
     assert_eq!(retired.purged_messages, 0);
 
-    assert!(
-        include_str!("../../../packages/runtime/dist/queues/facade.js")
-            .contains("currentOutputGate")
-    );
     let diagnostics = format!("{:?}", supervisor.last_diagnostics());
     assert!(!diagnostics.contains("matrix-json-body"));
     supervisor.shutdown().await;

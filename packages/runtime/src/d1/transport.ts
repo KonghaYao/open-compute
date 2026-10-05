@@ -4,6 +4,11 @@ import type {
   BindingError,
   ResourceBindingProps,
 } from "../bindings/protocol.js";
+import {
+  nativeD1Error,
+  nativeD1Fetch,
+  nativeD1Query,
+} from "./native-adapter.js";
 import type {
   D1QueryMode,
   D1SessionWire,
@@ -322,7 +327,7 @@ export function makeD1TransportBase(
       return response;
     }
 
-    async query(
+    async executeStatements(
       mode: D1QueryMode,
       statements: readonly D1StatementDto[],
       session?: D1SessionWire,
@@ -351,8 +356,16 @@ export function makeD1TransportBase(
       return response.json();
     }
 
-    async fetch(): Promise<never> {
-      throw bindingError("BINDING_PERMISSION_DENIED");
+    async query(input: unknown) {
+      try {
+        return { success: true, results: await nativeD1Query(this, input) };
+      } catch (error) {
+        return { success: false, error: new Error(nativeD1Error(error)) };
+      }
+    }
+
+    async fetch(request: Request): Promise<Response> {
+      return nativeD1Fetch(request, this);
     }
   };
 }
