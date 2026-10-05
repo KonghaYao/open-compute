@@ -181,7 +181,10 @@ pub async fn run_platform(
 ) -> Result<(), PlatformError> {
     validate_scope_runtime_owner(registry.root_for(scope))?;
     let _daemon_lock = DaemonLock::acquire(registry.root_for(scope))?;
-    crate::setup::recover_setup_staging(registry.root_for(scope))?;
+    crate::setup::recover_setup_staging(
+        registry.root_for(scope),
+        rustix::process::getuid().as_raw(),
+    )?;
     let records = registry.list_scope(scope)?;
     let daemon_server = registry.server_config(scope)?;
     let daemon_gateway = registry.gateway_config(scope)?;
