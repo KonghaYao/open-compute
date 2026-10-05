@@ -335,12 +335,8 @@ pub(super) fn orphan_sigkill_recovery(
     env_secret: &str,
 ) {
     let pid = round.child.as_ref().unwrap().id() as i32;
-    let wpid = child_pids(pid)
-        .into_iter()
-        .find(|&p| p != pid)
-        .expect("workerd");
+    let wpid = leased_workerd_pid(&round.data, &round.runtime_digest, pid);
     note_tree(round, wpid);
-    stop_process(wpid);
     let mut child = round.child.take().unwrap();
     let _ = kill_process(Pid::from_raw(pid).unwrap(), Signal::KILL);
     let _ = child.wait();

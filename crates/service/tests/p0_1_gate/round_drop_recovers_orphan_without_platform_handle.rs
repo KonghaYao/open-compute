@@ -17,13 +17,9 @@ pub(super) async fn run() {
     wait_ready(&mut round, PLATFORM_READY_TIMEOUT_SECS);
     wait_path(&round.data.join("runtime/child.lease"), 10);
     let platform_pid = round.child.as_ref().unwrap().id() as i32;
-    let workerd_pid = child_pids(platform_pid)
-        .into_iter()
-        .find(|&pid| pid != platform_pid)
-        .expect("workerd child");
+    let workerd_pid = leased_workerd_pid(&round.data, &round.runtime_digest, platform_pid);
     let staged_executable = staged_executable(workerd_pid);
     note_tree(&mut round, platform_pid);
-    stop_process(workerd_pid);
 
     let mut platform = round.child.take().unwrap();
     let _ = kill_process(Pid::from_raw(platform_pid).unwrap(), Signal::KILL);
