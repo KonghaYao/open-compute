@@ -13,7 +13,7 @@ P13 将 `https://open-compute.dev/docs/` 从按产品机械拆页的目录，整
 | 区域        | 用途                                                               |
 | ----------- | ------------------------------------------------------------------ |
 | Get started | 从正式 release 安装，到第一个 Worker 部署                          |
-| Develop     | Wrangler 项目、本地开发、target、environment、bindings、部署与回滚 |
+| Develop     | cf 项目、本地开发、target、mode、bindings、部署与回滚 |
 | Operate     | 单机服务、配置、健康检查、备份和故障处理                           |
 | CLI         | 按任务解释当前 `ocd` 命令与共同选择规则                            |
 | Products    | 当前支持的产品、最小用法和关键差异                                 |
@@ -25,7 +25,8 @@ Sidebar 根据当前区域切换，只展示本区内容和必要的下一步。
 ## 已完成整理
 
 - 重写中英文首页、Get started、Develop、Operate、CLI、Products、Reference 和 Project 入口；
-- 将普通用户的黄金路径改为一行正式 release 安装、独立 `ocd setup`、项目内 Wrangler 和 `ocd wrangler`；
+- 当时将普通用户的黄金路径改为正式 release 安装、独立 `ocd setup` 和项目内 CLI；
+  当前 [P20](p20-cf-cli-migration.md) 已统一为 `cloudflare.config.ts`、官方 cf/Vite 构建与 `ocd cf`；
 - 依据当前 CLI、capability catalog、release 与正式 workerd pin 更新能力说明；
 - 增加 Artifacts，并准确说明 AI Search R2 source、Dynamic Workers、Browser Run 与 Containers 的边界；
 - 合并产品下重复且内容很少的 Concepts、Guides、Examples、Limits 与 Deviations 页面；

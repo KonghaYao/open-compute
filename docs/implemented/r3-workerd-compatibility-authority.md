@@ -137,7 +137,7 @@ fail closed。
 
 1. workerd fork：增加 reflection-based compatibility catalog 和确定性测试，提交独立 fork revision。
 2. runtime build／lock：从四个正式 binary 生成并比较 catalog，固定 digest，嵌入 `ocd`，同步 source identity 与 pin verification。
-3. workers／service：删除单日期和手写 flag policy；所有普通 upload、SDK multipart、Wrangler、Dynamic Worker、descriptor、snapshot 与 restart
+3. workers／service：删除单日期和手写 flag policy；所有普通 upload、SDK multipart、cf upload、Dynamic Worker、descriptor、snapshot 与 restart
    路径携带不可变原值并使用真实 workerd admission。
 4. toolchain：framework output 不再要求 lock 的单一 tenant date 或 required flags；保留语法解析，把最终判断交给部署 validation。
 5. capability surface：更新 core type、CLI、v4 vendor endpoint、OpenAPI、SDK、Dashboard 和 support bundle，全部消费同一 catalog。

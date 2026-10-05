@@ -1,25 +1,26 @@
 # P23：Cloudflare Containers 兼容设计
 
-状态：Day 1 合同与两阶段 provider 路线完成；待合同冻结、workerd 动态 Container G0、短期 Docker Broker、长期嵌入式
+状态：planned。cf 配置与命令入口已核对，两阶段 provider 路线已设计；待 CT0 合同冻结、workerd 动态 Container G0、短期 Docker Broker、长期嵌入式
 runtime G0、实施与验收。
 
-本文细化 [P6 Cloudflare v4 API 与 Wrangler 子集兼容设计](implemented/p6-cloudflare-v4-wrangler-compatibility.md)
-中的 Container upload、Containers control API 和 Durable Object Container runtime。P23 以固定 Cloudflare 公共合同、
-`@cloudflare/containers`、Wrangler/Miniflare source snapshot 与已授权的 `third_party/workerd/` fork 为依据，不把
+本文细化 [P6 Cloudflare v4 API 管理面](implemented/p6-cloudflare-v4-wrangler-compatibility.md)
+中的 Container upload、Containers control API 和 Durable Object Container runtime，应用入口遵循
+[P20 Cloudflare CLI 单轨迁移](implemented/p20-cf-cli-migration.md)。P23 以固定 Cloudflare 公共合同、
+`@cloudflare/containers`、cf/官方 Vite 插件与固定 Miniflare source snapshot 与已授权的 `third_party/workerd/` fork 为依据，不把
 Miniflare 的开发期 Docker socket 当作生产安全边界，也不宣称复制 Cloudflare 全球 Container fleet。
 
 ## 1. 范围与结论
 
 P23 Day 1 目标：
 
-- 标准 `wrangler.jsonc` 的 `containers[]`、对应 Durable Object binding/export/migration；
-- Wrangler multipart Worker metadata、Container application、image 与 rollout 调用序列；
+- `cloudflare.config.ts` 的顶层 `containers[]`、Worker 的 `exports.durableObject({ storage: "sqlite", container })` 与 `bindings.durableObject()`；
+- cf/Build Output multipart Worker metadata、Container application、image 与 rollout 调用序列；
 - 固定 Workers types 中公开的 Durable Object `ctx.container`；
 - 固定 `@cloudflare/containers` 的 Container class、routing、readiness、alarm、HTTP/WebSocket 与 lifecycle 行为；
 - `start`、`exec`、`destroy`、`signal`、`monitor`、`getTcpPort` 和声明支持的 outbound interception；
 - 短期依赖宿主机 Docker、通过 operator-owned Broker 执行；长期用可嵌入 runtime 与 Docker 子集 shim 替换该外部依赖；
 - 单机部署适用的 image admission、capacity、instance inventory 和 rollout；
-- 固定 Wrangler `containers` commands 中通过 C0 inventory 选定的标准子集。
+- 固定 cf `containers` commands 中通过 CT0 inventory 选定的标准子集。
 
 结论：**Worker 侧公开 API 可以以固定版本为边界做到兼容；Cloudflare 全球基础设施语义不能、也不应伪装为完全等价。**
 实现必须保留 workerd 原生 `ctx.container`，让固定官方 package 直接运行：
@@ -34,7 +35,8 @@ tenant Worker / @cloudflare/containers
   -> one application container + one egress interceptor sidecar per running identity
 ```
 
-P23 与 [P22 Browser Run](p22-browser-run.md) 共享单 executable 分发目标以及外部／嵌入式 runtime 的 ownership 边界：
+P23 与 [P22 Browser Run](p22-browser-run.md) 共享 operator/runtime 与平台 authority 的 ownership 原则；
+P22 的浏览器由 operator 安装或通过 CDP 接入，P23 的外部 Docker／长期嵌入式 runtime 分发策略由本方案单独定义：
 
 1. `ocd` 仍是唯一公开 listener 和 account/deployment/image/capacity authority；
 2. 短期 Docker 与 Broker 由 operator 预先部署，open-compute 不下载、不搜索 `PATH`、不启动、不 supervise 两者；
@@ -59,22 +61,23 @@ service binding 重写这套 API。
 - [Container local development](https://developers.cloudflare.com/containers/guides/local-dev/)；
 - [Container rollouts](https://developers.cloudflare.com/containers/configuration/rollouts/)；
 - [Container limits and instance types](https://developers.cloudflare.com/containers/platform/limits/)；
-- [Wrangler Containers commands](https://developers.cloudflare.com/workers/wrangler/commands/containers/)；
+- [Cloudflare CLI source](https://github.com/cloudflare/cf) 的 Containers commands、schema 与 deploy producer；
 - [Cloudflare `@cloudflare/containers`](https://github.com/cloudflare/containers)；
 - [workerd Container configuration/source](https://github.com/cloudflare/workerd/blob/main/src/workerd/server/workerd.capnp)；
-- repository snapshot `wrangler@4.138.0`、`miniflare@5.20260828.0-alpha` 与 commit
-  `f8085545bcaa2c639f171c25e4424685036a0e10`；
-- 当前研究候选 `@cloudflare/containers@0.3.7`；C0 必须把最终 package tarball、integrity、types 和 source revision 固定；
-- 当前 `third_party/workerd/` source revision `b3e1a27840299f493d9425dc4d9972381d02ef23`；正式实现仍须按
-  [workerd runtime policy](workerd/README.md) 完成协调 pin；
-- 固定 Cloudflare remote traces、OpenAPI revision/hash、Workers types 与 Wrangler subprocess fixtures。
+- 当前 CLI 基线 `cf@1.0.0-beta.12`、`cf/config`（`@cloudflare/config@0.23.0`）、官方 Vite 插件 v2 与 Build Output；
+- 早期研究使用 Miniflare `5.20260828.0-alpha` / workers-sdk `f8085545bcaa2c639f171c25e4424685036a0e10`；
+  仅保留为 runtime 行为调查来源，CT0 重新固定当前开发工具依赖及调用链，不能作为当前 cf 验收证据；
+- 当前研究候选 `@cloudflare/containers@0.3.7`；CT0 必须把最终 package tarball、integrity、types 和 source revision 固定；
+- 当前 workerd source/gitlink 与正式 binary 分别由 [workerd runtime policy](workerd/README.md) 和
+  `packages/runtime/workerd.lock.json` 固定；CT-G0 记录实际输入，源码 checkout 不代替正式 pin；
+- 固定 Cloudflare remote traces、OpenAPI revision/hash、Workers types 与 cf subprocess fixtures。
 
 网页和 upstream source 用于发现合同；进入 Gate 的 property descriptor、method signature、同步 throw、promise rejection、
 stream/Socket 行为、HTTP/WebSocket、signal/exit、restart 和 CLI/API wire shape 必须固定为 inventory/fixture。Cloudflare
 Containers 仍在快速演进，未进入 inventory 的 beta、experimental 或新字段默认 unsupported。
 
 不得因为当前 fork 暴露了比官方文档更多的 method/options 就自动扩大兼容范围。workerd-only experimental capability 必须由
-兼容日期/flag 隐藏或明确拒绝，除非 C0 把它登记为正式支持的 Cloudflare 合同。
+兼容日期/flag 隐藏或明确拒绝，除非 CT0 把它登记为正式支持的 Cloudflare 合同。
 
 ## 3. 兼容声明边界
 
@@ -83,13 +86,13 @@ P23 把“兼容”拆成三个可验收层次：
 | 层                     | 目标                                                      | 声明                              |
 | ---------------------- | --------------------------------------------------------- | --------------------------------- |
 | Worker API             | 固定 `ctx.container`、Workers types、官方 package         | 目标为逐 API 行为兼容             |
-| Wrangler/control plane | 固定 config、upload、application/image/rollout/commands   | 只声明 inventory 中通过的标准子集 |
+| cf/control plane | 固定 config、upload、application/image/rollout/commands   | 只声明 inventory 中通过的标准子集 |
 | Cloudflare fleet       | 全球 placement、预热、跨机房路由、Cloudflare VM/配额/计费 | 明确不实现，不宣称等价            |
 
 正式 capability 文案：
 
 > open-compute supports the documented Cloudflare Worker Containers API for the pinned compatibility date, workerd
-> revision, Workers types, Wrangler revision, and `@cloudflare/containers` package. Placement and execution use a
+> revision, Workers types, cf revision, and `@cloudflare/containers` package. Placement and execution use a
 > single-machine operator-owned provider and do not emulate Cloudflare's global scheduling infrastructure.
 
 允许的单机偏差：
@@ -108,66 +111,78 @@ P23 中。
 
 | 层                     | 调用方                  | 合同                                             | authority                                        |
 | ---------------------- | ----------------------- | ------------------------------------------------ | ------------------------------------------------ |
-| Wrangler config/upload | Wrangler                | JSONC、multipart Worker metadata                 | 固定 Wrangler/source fixture                     |
-| Containers public API  | Wrangler、SDK、operator | `/client/v4/accounts/{account_id}/containers/**` | `ocd`                                            |
+| cf config/upload       | cf / 官方 Vite 插件    | TypeScript config、Build Output、multipart metadata | 固定 cf/config/source/wire fixture              |
+| Containers public API  | cf、SDK、operator | `/client/v4/accounts/{account_id}/containers/**` | `ocd`                                            |
 | Worker high-level API  | tenant package          | `@cloudflare/containers` classes/helpers         | 固定 package                                     |
 | Worker low-level API   | tenant DO               | native `ctx.container`、Fetcher/Socket/streams   | workerd                                          |
 | Engine provider        | workerd/`ocd`           | pinned private Docker-subset contract            | 短期 external Broker；长期 embedded shim/runtime |
 
-Worker upload 成功不代表 image materialization 或 rollout 已完成。Cloudflare 当前顺序是先激活 Worker，再 build/push image，
-最后启动 rollout；后两步不是事务，Wrangler success 只表示 rollout 已启动。P23 必须兼容固定 Wrangler 可观察到的顺序和错误，
-但不能因此让一个未 materialize 的镜像在 runtime 被静默 pull。
+Worker upload 成功不代表 image materialization 或 rollout 已完成。CT0 必须从当前 cf deploy producer 与真实 trace
+冻结 Worker upload/activation、image build/push、application update 和 rollout 的顺序、错误及成功退出含义；
+旧客户端的调用顺序不作为当前 cf 合同。各步不是跨资源事务，未 materialize 的镜像不得在 runtime 被静默 pull。
 
-## 5. Wrangler config 与 upload contract
+## 5. cf 配置、Build Output 与 upload contract
 
 ### 5.1 标准配置
 
-```jsonc
-{
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "container-app",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-09-07",
-  "containers": [
-    {
-      "name": "api-container",
-      "class_name": "ApiContainer",
-      "image": "./Dockerfile",
-      "max_instances": 4,
-      "instance_type": "lite",
-      "rollout_step_percentage": [10, 100],
-    },
-  ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "API_CONTAINER",
-        "class_name": "ApiContainer",
-      },
-    ],
+```ts
+import {
+  bindings,
+  defineConfig,
+  defineContainer,
+  defineWorker,
+  exports,
+} from "cf/config";
+
+const apiContainer = defineContainer({
+  name: "api-container",
+  image: { dockerfile: "./Dockerfile" },
+  maxInstances: 4,
+  instanceType: "lite",
+  rollout: { stepPercentage: [10, 100] },
+});
+
+const worker = defineWorker({
+  name: "container-app",
+  entrypoint: "./src/index.ts",
+  compatibilityDate: "2026-09-07",
+  workersDev: false,
+  exports: {
+    ApiContainer: exports.durableObject({
+      storage: "sqlite",
+      container: apiContainer,
+    }),
   },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["ApiContainer"],
-    },
-  ],
-}
+  env: {
+    API_CONTAINER: bindings.durableObject({
+      worker: "container-app",
+      exportName: "ApiContainer",
+    }),
+  },
+});
+
+export default defineConfig({ worker, containers: [apiContainer] });
 ```
 
-字段、默认值、互斥关系、named environment inheritance 和错误文本以固定 Wrangler schema/tests 为准。特别要求：
+此例展示固定 `cf/config` 的声明关系，不表示 P23 已可部署。mode 求值、DO export lifecycle 与 Build Output
+由 cf 和官方构建链拥有；`ocd` 验证实际上传合同，不读取 TypeScript 项目文件或沿用旧 migrations/tag 配置。
 
-- `class_name` 必须是同一 script 的 SQLite-backed DO export 和 binding，不能指向另一个 script；
+字段、默认值、互斥关系、mode 求值和错误文本以固定 cf/config schema、deploy producer 与 tests 为准。
+配置使用 camelCase；v4 multipart/API wire 按各自 schema 冻结，不把配置字段拼写直接当成 wire。特别要求：
+
+- `exports` 中的 Container DO 必须是同一 Worker 的 SQLite-backed export，env binding 指向该 export；
+  wire 中的 `class_name`/export 关联由 CT0 fixture 固定，不能指向另一个 script；
 - application name、class name、binding name 与 account/script 唯一性逐项按 fixture 校验；
-- `instance_type` 的 named/custom 两种形状不能混用，resource 值在 admission 时归一化一次；
-- `max_instances`、rollout steps/grace、scheduling/affinity 中未实现的字段明确拒绝，不能静默忽略；
+- `instanceType`（wire `instance_type`）的 named/custom 两种形状不能混用，resource 值在 admission 时归一化一次；
+- `maxInstances`、`rollout` steps/grace、scheduling/affinity 中未实现的字段明确拒绝，不能静默忽略；
 - `image` 是开发/部署输入，不作为 tenant runtime 可修改字段；
 - tenant config 不接受 engine socket、Docker host、privileges、devices、mounts、network mode 或 provider auth；
-- 不保留 Wrangler 旧 `containers.configuration` 兼容路径；P23 只实现固定 Day 1 schema。
+- P23 只实现当前 cf/Build Output 的 Day1 schema；旧项目由用户显式 `cf migrate <exact-file> --bundler vite`，
+  不在平台内读取旧配置或增加兼容路径。
 
 ### 5.2 Worker multipart metadata
 
-C0 从固定 Wrangler upload tests 冻结 metadata。已确认的核心关系是：
+CT0 从固定 cf/Build Output upload tests 与真实 multipart 冻结 metadata；以下是需核对的关联，不继承旧 producer 的已验证结论：
 
 - metadata `containers` 关联 application name 与 DO `class_name`；
 - Worker export 标记相应 DO class 的 Container link；
@@ -181,20 +196,20 @@ P23 实施时直接修改当前 Day 1 validator/schema/fixtures，不保留“�
 
 镜像 build 属于 developer/CI tooling：
 
-- 本地 Dockerfile 由固定 Wrangler 与 operator-installed Docker-compatible CLI build；
+- 本地 Dockerfile 由固定 cf 部署/构建链与 developer/CI-installed Docker-compatible CLI build；
 - production `ocd` startup、Worker request 和 Container `start()` 都不得运行 Dockerfile build 或访问公网 registry；
 - 标准 push/import route 接收 OCI manifest/config/layers，按 digest 校验后写入平台 artifact authority；
 - image tag 只在 deployment admission 时解析一次为 immutable digest；runtime 不重新解析 `latest`；
 - private registry credential 只由 developer CLI/provider secret reference 使用，不进入 Worker metadata、SQLite plaintext、logs 或
   Broker labels；
-- remote registry ref 若未通过 C0 和安全 import flow，部署明确 unsupported，不能由 Broker 在首次请求时偷偷 pull；
+- remote registry ref 若未通过 CT0 和安全 import flow，部署明确 unsupported，不能由 Broker 在首次请求时偷偷 pull；
 - image 缺失、digest mismatch、architecture 不支持或 provider materialization 失败时 rollout/start fail closed。
 
 ## 6. Worker `ctx.container` contract
 
 ### 6.1 Public inventory
 
-C0 从固定 docs、Workers types、workerd JSG declarations 和 package call graph 生成唯一 inventory。Day 1 至少覆盖：
+CT0 从固定 docs、Workers types、workerd JSG declarations 和 package call graph 生成唯一 inventory。Day 1 至少覆盖：
 
 ```text
 ctx.container.running
@@ -488,7 +503,7 @@ admitting/starting/running/stopping -> lost
 
 ## 11. Rollout 与 rollback
 
-Wrangler/Cloudflare 的 observable order 保留：
+目标 rollout sequence 如下；CT0 必须对照当前 cf/Cloudflare 的可观察顺序确认或修订，不能把旧 producer 顺序当作已资格合同：
 
 ```text
 activate Worker version
@@ -505,7 +520,7 @@ Worker code可能在 rollout 完成前访问旧 image instance。P23 因此必�
 
 单机 rollout：
 
-- `max_instances < 2` 时一个 100% step；其他固定默认/自定义 steps 按 Wrangler合同解释；
+- `max_instances < 2` 时一个 100% step；其他默认/自定义 steps 由当前 cf producer 与官方 rollout API fixture 固定；
 - 每一步只选择本机 eligible instances，不能为了“达到百分比”超过 `max_instances`；
 - selected instance 先等待 active grace，再向 main process发送 `SIGTERM`；
 - 按官方固定合同最多等待 15 分钟，之后 `SIGKILL`；
@@ -514,7 +529,7 @@ Worker code可能在 rollout 完成前访问旧 image instance。P23 因此必�
 - rollback 创建指向旧 immutable target 的新 target generation，不复活旧 lease/capability；
 - rollout失败保留 Worker已激活这一事实，返回固定 CLI/API 状态，不伪造事务回滚。
 
-`scheduling_policy`、affinity、regional placement 等无法在单机产生对应效果的配置默认拒绝。若固定 Wrangler 要求 round-trip，
+`scheduling_policy`、affinity、regional placement 等无法在单机产生对应效果的配置默认拒绝。若固定 cf/官方 API 要求 round-trip，
 可以保存并返回 `unsupported` 状态，但不能接受后忽略并宣称生效。
 
 ## 12. Networking 与 egress
@@ -571,9 +586,12 @@ instance type 映射表是 operator deployment capability：
 - current local Docker client 未证明完整执行 custom instance resources，因此 Broker Gate 必须观测 cgroup/runtime effective state，
   不能只检查 request JSON。
 
-## 14. Containers public API 与 Wrangler commands
+## 14. Containers public API 与 cf commands
 
-C0 从固定 Wrangler source/OpenAPI 抽取唯一 route inventory。当前 source表明至少涉及：
+CT0 从固定 cf source/OpenAPI 抽取唯一 route inventory。2026-10-05 的本地 `cf cli search` 已确认
+`cf containers applications create/edit/list`、`cf containers applications rollouts create` 与
+`cf containers images prepare` 的入口；这只证明命令存在，不证明当前 `ocd` 支持对应 API。
+进一步使用命令 help 与 `cf schema <discovered-command>` 冻结 method/query/body，不猜测旧命令映射。目标 family 包含：
 
 ```text
 /client/v4/accounts/{account_id}/containers/applications/**
@@ -588,7 +606,7 @@ error、polling、terminal status 与 CLI exit code。
 
 Day 1 优先级：
 
-1. `wrangler deploy` 实际调用的 application create/update、image、rollout；
+1. `cf deploy` 实际调用的 application create/update、image、rollout；
 2. list/status/delete 与安全 operator diagnosis；
 3. image list/delete/prune 中可由 immutable authority 安全表达的部分；
 4. instance list/status；
@@ -609,7 +627,7 @@ container_not_running, exec_rejected, exec_failed, port_unavailable,
 egress_denied, rollout_failed, malformed_provider_response
 ```
 
-Worker exception type/message、public API code/message/status 与 Wrangler exit code由固定 fixture分别映射，不能直接暴露 Broker/
+Worker exception type/message、public API code/message/status 与 cf exit code由固定 fixture分别映射，不能直接暴露 Broker/
 Docker error。retryability、`Retry-After`、monitor rejection 和 signal/exit semantics 有明确表，不能用 provider message regex 猜。
 
 日志/metrics 推荐低基数维度：
@@ -635,12 +653,12 @@ P7 tail只显示 Worker触发的 Container operation metadata/outcome；operator
 
 ### 16.1 Miniflare
 
-采用 pinned Miniflare/Wrangler 证据：
+Miniflare 只提供开发/runtime 行为参考；配置、Build Output、upload 与 deploy 顺序须使用当前 pinned cf/官方 Vite 插件证据：
 
 - config normalization、upload metadata 与 application/rollout call order；
 - Container metadata关联到 DO namespace；
 - `containerEngine.localDocker` socket discovery/config；
-- Wrangler build/pull/tag local image；
+- cf 开发工具链的 image build/pull/tag（CT0 待固定实际调用）；
 - workerd按 Worker call启动本地实例；
 - safe environment 下的 FUSE privilege detection；
 - dev session teardown与hot rebuild行为。
@@ -679,7 +697,7 @@ fork变更在 `third_party/workerd/` 独立提交，再由协调 pin、archive/d
 
 ### CT0：冻结合同
 
-- 固定 Wrangler schema、upload metadata、deploy/container command call graph；
+- 固定 cf/config、mode、Build Output、upload metadata、deploy/container command call graph；
 - 固定 Workers types、`@cloudflare/containers` package tarball/integrity/source；
 - 固定 `ctx.container` JSG descriptors、exceptions、streams、Fetcher/Socket/monitor behavior；
 - 固定 public API/OpenAPI、rollout状态、CLI polling/exit与remote traces；
@@ -742,7 +760,7 @@ Exit：若 native capability不能安全挂到 dynamic loaded DO/facet，P22保�
 - outbound HTTP/HTTPS/TCP interception；
 - fixed official package lifecycle/alarm/schedule/hooks/helpers。
 
-### CT5：Wrangler/control plane/rollout
+### CT5：cf/control plane/rollout
 
 - standard config/upload/deploy sequence；
 - application/image/rollout routes与CLI polling；
@@ -756,17 +774,17 @@ Exit：若 native capability不能安全挂到 dynamic loaded DO/facet，P22保�
 - identity/cross-account/cross-script/cross-version differentials；
 - Broker/workerd/`ocd` crash、restart、upgrade、orphan cleanup与soak；
 - P7/P9、readiness、metrics、backup（authority metadata only）与runbook；
-- fixed Wrangler/package/remote differential；
+- fixed cf/package/remote differential；
 - capability/deviation/reference/examples/Dashboard同步。
 
 ## 18. 必测矩阵
 
 | case                                      | 预期                                                               |
 | ----------------------------------------- | ------------------------------------------------------------------ |
-| standard JSONC `containers[]`             | fixed Wrangler normalization与metadata精确通过                     |
+| `cloudflare.config.ts` containers/exports/env             | fixed cf normalization、Build Output与metadata精确通过                     |
 | Container class未绑定同script SQLite DO   | deploy固定失败，无部分application                                  |
 | unsupported placement/affinity/privilege  | 明确拒绝，不静默忽略                                               |
-| Dockerfile build/push                     | build在Wrangler/developer侧；`ocd` startup/request不build/download |
+| Dockerfile build/push                     | build在cf/developer侧；`ocd` startup/request不build/download |
 | image tag changes after deploy            | runtime仍使用admission时固定digest                                 |
 | missing/mismatched image                  | rollout/start fail closed，无旧tag fallback                        |
 | official package constructor              | Container-enabled class成功；普通class无`ctx.container`            |
@@ -797,14 +815,14 @@ Exit：若 native capability不能安全挂到 dynamic loaded DO/facet，P22保�
 | rollout later step fails                  | Worker active事实与rollout失败状态保留                             |
 | rollback                                  | 新target generation指向旧digest，不复活旧capability                |
 | raw Docker/provider error                 | Worker/API/log均为sanitized stable mapping                         |
-| Wrangler deploy/list/status/delete        | route、envelope、polling、exit code与fixed CLI一致                 |
-| unsupported Wrangler SSH/command          | 明确失败，不暴露host shell/socket                                  |
+| cf deploy与选定Containers commands        | route、envelope、polling、exit code与fixed CLI一致                 |
+| unsupported cf SSH/command          | 明确失败，不暴露host shell/socket                                  |
 
 ## 19. Definition of Done
 
 P23 只有同时满足以下条件才可归档：
 
-- 固定 Wrangler的标准 Container config、upload、application/image/rollout序列对真实 `ocd` 通过；
+- 固定 cf 的 Container config/mode、Build Output、upload、application/image/rollout 序列对真实 `ocd` 通过；
 - 固定 Workers types和`@cloudflare/containers`在正式 pinned workerd中直接运行，无custom package/import rewrite；
 - supported `ctx.container` API的descriptor、exception、stream、Fetcher/Socket、monitor与compatibility flags逐项通过；
 - dynamic `DoHost` 只为声明class附加native capability，不共享静态image或泄露给non-Container class；
@@ -818,7 +836,7 @@ P23 只有同时满足以下条件才可归档：
 - single-machine placement/isolation/rollout deviations进入compatibility matrix、capability manifest和用户文档；
 - WDL/Miniflare只作为固定source evidence，不成为production authority或fallback；
 - Cloudflare remote differential完成，或credential/availability限制拆成独立active acceptance；
-- P6/P7/P9/P12、references、examples、runbook和Dashboard同步；
+- P6/P7/P9/P20、references、examples、runbook和Dashboard同步；
 - 正式release仍以单个`ocd` executable + 既有单个pinned workerd child为目标；短期外部Docker/Broker与长期嵌入式runtime边界分别明确。
 
 文档变更本身只运行`git diff --check`、Markdown链接和固定源码/命令核对。实施属于workerd fork、protocol、container/process、

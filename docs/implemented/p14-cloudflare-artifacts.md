@@ -6,7 +6,7 @@
 
 ## 支持范围
 
-open-compute 支持固定 `wrangler@4.127.1` 的标准 `artifacts` binding、Artifacts v4 管理 API、固定
+open-compute 支持当前 cf/config 的标准 `bindings.artifacts({ namespace })`、Artifacts v4 管理 API、固定
 `@cloudflare/workers-types@5.20260830.1` 的 53 个 Worker members/overloads，以及 repo-token Git Smart HTTP：
 
 - account-scoped namespace 与 namespace-scoped repository；
@@ -46,9 +46,9 @@ content route family。request body、object response、repository bytes、concu
 TTL 都由 `[artifacts]` 的有界配置控制。`public_origin` 只接受无 credential/path/query/fragment 的绝对 HTTP(S)
 origin。
 
-官方 namespace/repository list 使用 `limit` + opaque `cursor`，token list 使用 `page` + `per_page`。固定 Wrangler
-4.127.1 的通用 list helper 会向前两者发送 `page`，所以仅在检测到该参数时返回其所需 page envelope；cursor 与 page
-不能同时出现。这是固定客户端的可观察兼容，不是旧 open-compute API。
+当前 namespace/repository list 只接受官方 `limit` + opaque `cursor`，token list 使用 `page` + `per_page`。
+[P20](p20-cf-cli-migration.md) 已移除旧客户端的 page envelope 与参数兼容分支，标准 cf/SDK 使用同一接口；
+历史 Wrangler list helper 的行为不再构成支持承诺。当前 wire 见 [兼容矩阵](../references/cloudflare-compatibility.md)。
 
 token plaintext 精确为 `art_v1_<40 lowercase hex>?expires=<unix_seconds>`。Bearer 接受完整 token；Git Basic
 忽略 username，并以 `?expires` 前的 secret 作为 password。plaintext 只返回一次；持久层使用 installation key 计算
@@ -93,8 +93,9 @@ capacity 与 Cloudflare hosted placement/replication/quota 的差异；它不掩
   immutable binding 和 startup reconciliation；
 - snapshot tests：Artifact Git files 的 authenticated snapshot/restore 与 symlink/path rejection；
 - runtime tests：固定 Worker facade 全方法、类型/错误与 malformed backend rejection；
-- P6 real-process Gate：固定 Wrangler namespace/repository/token commands、Worker deploy 和 Worker binding；
+- 当前 P6 real-process Gate：固定 cf namespace/repository/token commands、Worker deploy 和 Worker binding；
 - conformance：标准 config/upload route inventory、53 个 pinned members、positive/negative evidence 与
   `OC-ARTIFACTS-001` 关联。
 
-本次完成验收的精确命令与结果记录在最终任务结果；历史 PASS 不替代当前源码的一轮 Final Gate。
+P14 初次验收使用 Wrangler 4.127.1，原记录仅证明当时输入；P20 记录当前 cf 的协调迁移与验收。
+历史 PASS 不替代当前源码的一轮 Final Gate。

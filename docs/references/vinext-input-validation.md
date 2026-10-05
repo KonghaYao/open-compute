@@ -17,9 +17,16 @@ Playwright 内置 Chromium 元数据及 runner case registry，不构建、不�
 - `80953b9e2` 删除已废弃的 `test/applications/vinext/open-compute.json`，改变 fixture tree；
 - 同一提交把两个 case 的 fixture 引用改为 `wrangler.jsonc`，改变 case matrix。
 
-当前 fixture 相比 P4 提交只删除了旧配置，应用源码和声明的固定依赖版本未变。修复更新当前三个
+当次 fixture 相比 P4 提交只删除了旧配置，应用源码和声明的固定依赖版本未变。该次修复更新三个
 摘要，保留原摘要作为历史证据，并检查 fixture `node_modules` 中每个直接依赖的实际版本。
 没有恢复已废弃配置，也没有将当前输入校验冒充新的 Application Go。
+
+## 当前 cf 输入
+
+[P20](../implemented/p20-cf-cli-migration.md) 已将 Vinext fixture 切换为 `cloudflare.config.ts`、官方 cf 与 Vite 插件 v2，
+浏览器和 Worker 类型分别检查，部署消费 Cloudflare Build Output。根 lock、fixture tree 和 case matrix 的当前摘要
+仍由 `vinext.json` 与离线检查拥有；上节只记录 2026-09-06 的修复，不再描述当前 fixture 差异。
+P20 的严格构建通过没有更新历史 P4 hosted Go，也不证明当前工具链的云端 differential。
 
 ## 后续更新
 
