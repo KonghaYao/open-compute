@@ -135,8 +135,14 @@ mod tests {
             let (stream, _) = listener.accept().unwrap();
             let connection = ServerConnection::new(Arc::new(config)).unwrap();
             let mut tls = StreamOwned::new(connection, stream);
-            let mut request = [0u8; 256];
-            assert!(tls.read(&mut request).unwrap() > 0);
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                let mut chunk = [0u8; 256];
+                let read = tls.read(&mut chunk).unwrap();
+                assert!(read > 0);
+                request.extend_from_slice(&chunk[..read]);
+                assert!(request.len() <= 4096);
+            }
             tls.write_all(
                 b"HTTP/1.1 204 No Content\r\nX-Open-Compute-Gateway-Probe: 1\r\nContent-Length: 0\r\n\r\n",
             )
