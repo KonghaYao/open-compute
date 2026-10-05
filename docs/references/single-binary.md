@@ -1,7 +1,7 @@
 # 单二进制分发与部署
 
-2026-09-30 正式 lock 已固定用户 fork `e3bdb07f52affc6a618f02ed2b731a581b0b2f69`，
-release 为 `v1.20260930.0-open-compute-r3.e3bdb07f5`，见[workerd 方案](../workerd/README.md)。
+当前正式 lock 固定用户 fork `e98a3e8433979356047a202d3e0d1b0e2e2c4b8c`，
+release 为 `v1.20260930.0-open-compute-r4.e98a3e843`，见[workerd 方案](../workerd/README.md)。
 三个正式产品平台加 macOS Intel 手动输入的 archive/binary 摘要、upstream base 与构建输入统一记录于 lock。
 四个平台的 gzip 由 workerd fork 的 GitHub Release 托管，lock 固定 URL、archive/binary digest 与构建身份；macOS Intel
 仍不进入官方 `ocd` release。Caddy 使用独立的 `elliothux/open-compute-caddy` 源码 submodule、Release 与
