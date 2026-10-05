@@ -254,7 +254,13 @@ impl Fixture {
                 RequestTarget::Worker(script),
             )
             .await;
-        assert_eq!(status, 200, "Worker {script} invocation {path} failed");
+        let filesystem = (status != 200).then(|| {
+            rustix::fs::statvfs(&self.data).map(|stat| (stat.f_blocks, stat.f_bfree, stat.f_bavail))
+        });
+        assert_eq!(
+            status, 200,
+            "Worker {script} invocation {path} failed; filesystem (blocks, free, available)={filesystem:?}"
+        );
         serde_json::from_slice(&bytes).unwrap()
     }
 
