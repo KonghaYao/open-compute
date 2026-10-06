@@ -285,6 +285,10 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   assert.match(rustSetup, /github-cache-mode: objects/);
   assert.match(
     rustSetup,
+    /uses: jdx\/mr-boxington-action@v1\n\s+env:\n\s+MBX_BUILD_SCRIPT_EXECUTION: "0"\n\s+MBX_TARGET_VIEWS: "0"\n\s+MBX_RESTORE_HARDLINK: "0"/,
+  );
+  assert.match(
+    rustSetup,
     /cache-key-suffix: \$\{\{ github\.job \}\}-\$\{\{ matrix\.suite \|\| 'build' \}\}/,
   );
   assert.match(rustSetup, /version: 1\.22\.0/);
