@@ -4,6 +4,7 @@
 import argparse
 from collections import namedtuple
 import concurrent.futures
+from contextlib import nullcontext
 from functools import partial
 import hashlib
 import json
@@ -622,7 +623,10 @@ def execute_target(name, executable, directory, target, *, list_only=False):
     env.pop('OPEN_COMPUTE_GATE_ROUNDS', None)
     start = time.monotonic()
     try:
-        with (directory / 'output.log').open('x') as output:
+        # JSON targets own stdout; compiler diagnostics must not become protocol data.
+        with (directory / 'output.log').open('x') as output, \
+             ((directory / 'stderr.log').open('x') if isinstance(target, TypedTarget)
+              else nullcontext(subprocess.STDOUT)) as errors:
             # Native harness loading can trigger slow host executable assessment. Finish
             # discovery before any product timeout starts; never prewarm product state.
             if isinstance(target, TypedTarget):
@@ -634,7 +638,7 @@ def execute_target(name, executable, directory, target, *, list_only=False):
                 if not list_only and target.cases:
                     arguments += ['--exact', *target.cases]
             process = subprocess.run([executable, *arguments], cwd=cwd, env=env,
-                                     stdout=output, stderr=subprocess.STDOUT,
+                                     stdout=output, stderr=errors,
                                      timeout=600 if list_only else target.timeout
                                      if isinstance(target, TypedTarget) else None)
     finally:

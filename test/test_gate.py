@@ -1079,6 +1079,7 @@ if '--list' not in sys.argv:
                         {'id': 'second', 'status': 'passed'},
                     ],
                 }) + '\n')
+                kwargs['stderr'].write('mbx: diagnostic after the JSON result\n')
                 return SimpleNamespace(returncode=0)
 
             with patch.dict(os.environ, {'PATH': '/usr/bin', 'ALLOWED': 'yes',
@@ -1088,6 +1089,8 @@ if '--list' not in sys.argv:
                     'p3-contract', '/usr/bin/bun', Path(temp) / 'execute', target)
             self.assertEqual(result['exit_code'], 0)
             self.assertEqual(result['cases_passed'], 2)
+            self.assertEqual((Path(temp) / 'execute/stderr.log').read_text(),
+                             'mbx: diagnostic after the JSON result\n')
 
     def test_contract_report_keeps_local_and_remote_verdicts_separate(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(gate, 'ROOT', Path(temp)):
