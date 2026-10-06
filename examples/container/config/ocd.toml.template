@@ -1,0 +1,3 @@
+[server]
+public_bind = "${OC_PUBLIC_BIND}"
+admin_auth = { file = "/var/lib/open-compute/keys/admin.token" }

@@ -1,0 +1,4 @@
+# Release binaries copied into the build context by CI or local `make fetch-ocd-all`.
+ocd
+ocd.linux-x64
+ocd.linux-arm64

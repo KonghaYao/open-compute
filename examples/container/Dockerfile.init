@@ -1,0 +1,22 @@
+# One-shot compose bootstrap image. Not a release artifact.
+FROM ubuntu:24.04
+ARG TARGETARCH
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates gettext-base login \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 65532 open-compute \
+    && useradd -u 65532 -g 65532 -M -s /usr/sbin/nologin open-compute
+
+COPY ocd.linux-x64 ocd.linux-arm64 /tmp/
+RUN case "${TARGETARCH}" in \
+      amd64) cp /tmp/ocd.linux-x64 /opt/open-compute/ocd ;; \
+      arm64) cp /tmp/ocd.linux-arm64 /opt/open-compute/ocd ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && chmod 0555 /opt/open-compute/ocd \
+    && rm -f /tmp/ocd.linux-x64 /tmp/ocd.linux-arm64
+COPY scripts/init-volume.sh /usr/local/bin/init-volume.sh
+COPY config/ /etc/open-compute/
+
+ENTRYPOINT ["/usr/local/bin/init-volume.sh"]
