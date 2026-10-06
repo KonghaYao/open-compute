@@ -6,21 +6,6 @@ inputs:
     description: Extra rustup components (comma-separated)
     required: false
     default: ""
-  rust-cache-key:
-    description: rust-cache shared-key; default or llvm-cov
-    required: true
-  rust-cache-save:
-    description: Save newly built dependencies after success or failure
-    required: false
-    default: "true"
-  rust-cache-targets:
-    description: Cache Cargo target directories; disable when sccache owns compiler outputs
-    required: false
-    default: "true"
-  rust-workspaces:
-    description: rust-cache workspace to target-dir mapping
-    required: false
-    default: ". -> target"
   python:
     description: Install Python 3.12
     required: false
@@ -108,18 +93,22 @@ runs:
       if: ${{ inputs.llvm-cov == 'true' }}
       uses: taiki-e/install-action@cargo-llvm-cov
 
-    - name: Cache Rust
-      uses: Swatinem/rust-cache@v2
+    - name: Install mbx and restore shared compiler objects
+      uses: jdx/mr-boxington-action@v1
       with:
-        cache-targets: ${{ inputs.rust-cache-targets }}
-        # Failed target directories are often incomplete and poison the next
-        # restore. Package jobs retain their bounded sccache separately.
-        cache-on-failure: false
-        save-if: ${{ github.event_name != 'pull_request' && inputs.rust-cache-save == 'true' }}
-        add-job-id-key: false
-        shared-key: v2-${{ inputs.rust-cache-key }}
-        workspaces: ${{ inputs.rust-workspaces }}
-        cache-all-crates: true
+        version: 1.22.0
+        github-cache-mode: objects
+        cache-links: "true"
+
+    - name: Configure global mbx build policy
+      shell: bash
+      run: |
+        mbx settings set build_script_execution false
+        mbx settings set target.views false
+        mbx settings set restore_hardlink false
+        mbx settings set gc.max_total_size 8GiB
+        mbx settings set gc.min_free_size 4GiB
+        echo "TMPDIR=/tmp" >> "$GITHUB_ENV"
 
     - name: Download and verify pinned runtime inputs
       shell: bash

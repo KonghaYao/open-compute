@@ -117,7 +117,7 @@ if (args.length === 1 && args[0] === "--list") {
   let buildOutput: string;
   try {
     ({ stdout: buildOutput } = await execFileAsync(
-      "cargo",
+      "mbx",
       [
         "test",
         "--locked",

@@ -91,8 +91,8 @@ E2E 依赖专用多实例与可选产品 fixture，不在干净的 production pa
 该已复现的历史问题不能通过修改旧二进制掩盖，候选版本的原始 installer 首装仍必须无 workaround 通过。
 
 `publish` 明确依赖 main 静态资格、coverage、macOS 最终 Gate、Linux egress 和三个正式平台 assemble；
-任何一项未通过均不得公开发布。构建保存编译耗时和标明未验收的二进制；普通 Rust target cache
-不保存失败半成品，package 的 bounded sccache 只作为编译加速，不作为测试通过证据或可信发行物。
+任何一项未通过均不得公开发布。构建保存编译耗时和标明未验收的二进制；所有 Rust 构建统一使用
+全局 mbx 对象缓存，不上传 Cargo target。缓存只用于编译加速，不作为测试通过证据或可信发行物。
 缓存和任务依赖设计见 [CI 构建性能](ci-build-performance.md)。
 
 npm 发布以 `npm publish` 成功退出为完成信号，成功后不轮询 registry，也不等待 eventual-consistency read-back。
@@ -195,10 +195,11 @@ git tag -a vX.Y.Z -m "open-compute vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-每个 Gate job 都先显式执行 `bun run build` 和 `cargo fetch --locked`；打包脚本独立从源码构建。
+每个 Gate job 都先显式执行 `bun run build` 和 `mbx fetch --locked`；打包脚本独立从源码构建。
 最终 Gate 不设置三轮诊断变量，遵循[单轮测试政策](testing.md)。
 共享 setup 将 Cargo registry/git 下载与编译产物分开缓存：下载缓存允许 `Cargo.lock` 变化时按 OS 回退，
-coverage 保留独立 instrumented target cache；package 只使用 bounded sccache，不重复保存 Cargo target。
+coverage 与 package 保留各自的本地 target 目录，统一通过 mbx 按实际编译输入复用对象；CI 只保存
+mbx 对象缓存，不另存 target 或 sccache。共享对象仅由成功的 main push 写入，PR 和 tag 只恢复。
 release 的 coverage、最终 Gate、Linux egress 与 package 只依赖身份校验并同时启动，发布墙钟由最慢路径
 决定，不再把这些长任务串行相加。
 

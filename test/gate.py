@@ -276,7 +276,7 @@ def verify_case_inventory(targets, prepared):
 def resolve_targets(selected, workspace):
     """Use Cargo's workspace inventory; unaudited targets remain exclusive."""
     metadata = json.loads(subprocess.check_output(
-        [os.environ.get('CARGO', 'cargo'), 'metadata', '--locked', '--offline',
+        ['mbx', 'metadata', '--locked', '--offline',
          '--no-deps', '--format-version=1'], cwd=ROOT, text=True))
     known = {(package, name): (label, exclusive)
              for label, (package, name, exclusive) in CARGO_TARGETS.items()}
@@ -527,7 +527,7 @@ def build_targets(targets, directory, workspace):
     for names in expected.values():
         if len(names) > 1 and set(names) != allowed_aliases:
             raise RuntimeError(f'Cargo test executable has duplicate Gate owners: {sorted(names)}')
-    command = [os.environ.get('CARGO', 'cargo'), 'test', '--locked', '--offline',
+    command = ['mbx', 'test', '--locked', '--offline',
                '--all-features', '--no-run', '--message-format=json']
     if workspace:
         command += ['--workspace', '--all-targets']

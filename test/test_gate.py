@@ -852,7 +852,7 @@ class GateTests(unittest.TestCase):
             workerd.write_text('verified runtime input belongs to the real Gate')
             tools = {}
             sources = {
-                'cargo': """import sys
+                'mbx': """import sys
 if sys.argv[1:3] == ['llvm-cov', 'show-env']:
     print('export CARGO_LLVM_COV=1')
 elif sys.argv[1:] not in (['llvm-cov', '--version'], ['fetch', '--locked']):
@@ -884,7 +884,7 @@ if '--list' not in sys.argv:
                 path.chmod(0o700)
                 tools[name] = str(path)
             shutil.copy2(tools['gate'], root / 'test/gate.py')
-            environment = {'PATH': os.environ['PATH'], 'CARGO': tools['cargo'],
+            environment = {'PATH': str(root) + os.pathsep + os.environ['PATH'],
                            'RUSTC': tools['rustc'], 'LLVM_COV': tools['llvm-cov'],
                            'LLVM_PROFDATA': tools['llvm-profdata'],
                            'OPEN_COMPUTE_TEST_WORKERD': str(workerd),

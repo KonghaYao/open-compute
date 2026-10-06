@@ -239,17 +239,9 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   assert.match(workflow, /  coverage:\n    needs: failfast\n/);
   assert.match(
     workflow,
-    /rust-cache-key: llvm-cov-[^\n]+\n\s+rust-cache-save: "false"/,
-  );
-  assert.match(
-    workflow,
     /name: Enforce 90 percent Rust line coverage\n\s+env:\n\s+CARGO_BUILD_JOBS: "2"\n\s+OPEN_COMPUTE_COVERAGE_HTML: "0"\n\s+run: \.\/test\/coverage\.sh --jobs 2/,
   );
   assert.match(workflow, /  integration:\n    needs: failfast\n/);
-  assert.match(
-    workflow,
-    /rust-cache-key: default-[^\n]+\n\s+rust-cache-save: "false"/,
-  );
   assert.match(
     workflow,
     /  sdk-package:\n    # Build the SDK tarball once[\s\S]*?needs: failfast\n/,
@@ -263,8 +255,8 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   }
   for (const command of [
     "./test/check-rust-clippy.sh",
-    "cargo check --workspace --no-default-features",
-    "cargo +1.98.0 check --workspace --all-targets",
+    "mbx check --workspace --no-default-features",
+    "mbx +1.98.0 check --workspace --all-targets",
     "./test/check-production.py",
   ]) {
     assert.equal(ci.split(command).length - 1, 1);
@@ -279,12 +271,26 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   );
   assert.match(
     workflow,
-    /Fetch locked crates for offline packaged-binary tests\n\s+run: cargo fetch --locked/,
+    /Fetch locked crates for offline packaged-binary tests\n\s+run: mbx fetch --locked/,
   );
   assert.doesNotMatch(workflow, /v3-release-|actions\/cache\/save@/);
+  const rustSetup = await readFile(
+    new URL(
+      "../.github/actions/setup-open-compute/action.yml",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(rustSetup, /jdx\/mr-boxington-action@v1/);
+  assert.match(rustSetup, /github-cache-mode: objects/);
+  assert.match(rustSetup, /version: 1\.22\.0/);
+  assert.doesNotMatch(
+    workflow + ci + rustSetup,
+    /Swatinem\/rust-cache|sccache|rust-cache-key|rust-cache-save/,
+  );
   assert.match(
     workflow,
-    /unset CARGO_TARGET_DIR RUSTC_WRAPPER SCCACHE_DIR SCCACHE_CACHE_SIZE[\s\S]*?OPEN_COMPUTE_TEST_OCD="\$destination"[\s\S]*?OPEN_COMPUTE_PACKAGE_GATE_USER_ROOT=1[\s\S]*?\.\/test\/gate\.py single-binary --jobs 1/,
+    /unset CARGO_TARGET_DIR[\s\S]*?OPEN_COMPUTE_TEST_OCD="\$destination"[\s\S]*?OPEN_COMPUTE_PACKAGE_GATE_USER_ROOT=1[\s\S]*?\.\/test\/gate\.py single-binary --jobs 1/,
   );
   assert.match(workflow, /path: \.temp\/release-target\/cargo-timings\//);
   assert.match(
@@ -328,7 +334,7 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   );
   assert.match(
     localDryRun,
-    /export RUSTFLAGS='-D warnings'[\s\S]*?export CARGO_NET_OFFLINE=true[\s\S]*?cargo fetch --locked --offline[\s\S]*?bun test\/conformance\/check\.ts --case baseline-identity[\s\S]*?node --test test\/release-tools\.test\.mjs/,
+    /export RUSTFLAGS='-D warnings'[\s\S]*?export CARGO_NET_OFFLINE=true[\s\S]*?mbx fetch --locked --offline[\s\S]*?bun test\/conformance\/check\.ts --case baseline-identity[\s\S]*?node --test test\/release-tools\.test\.mjs/,
   );
   assert.match(
     localDryRun,
@@ -836,7 +842,7 @@ test("installation qualification is a mandatory publication dependency", async (
   assert.match(workflow, /for scope in user system/);
   assert.match(
     ci,
-    /cargo test --locked -p open-compute-service --lib service_manager::tests/,
+    /mbx test --locked -p open-compute-service --lib service_manager::tests/,
   );
   const recovery = await readFile(recoveryWorkflowPath, "utf8");
   assert.match(recovery, /startswith\("install-lifecycle \("\)/);

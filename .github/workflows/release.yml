@@ -234,9 +234,6 @@ jobs:
           lfs: true
       - uses: ./.github/actions/setup-open-compute
         with:
-          rust-cache-key: llvm-cov-${{ hashFiles('crates/storage/refinery-migrations/**/*.sql') }}
-          rust-cache-save: "false"
-          rust-workspaces: ". -> target/llvm-cov-target"
           llvm-cov: "true"
           rust-components: llvm-tools-preview
       - name: Build untracked runtime and toolchain assets from this checkout
@@ -269,13 +266,10 @@ jobs:
         with:
           lfs: true
       - uses: ./.github/actions/setup-open-compute
-        with:
-          rust-cache-key: default-${{ hashFiles('crates/storage/refinery-migrations/**/*.sql') }}
-          rust-cache-save: "false"
       - name: Build untracked runtime and toolchain assets from this checkout
         run: bun run build
       - name: Fetch locked crates for offline Gate compile
-        run: cargo fetch --locked
+        run: mbx fetch --locked
       - name: Final workspace once (macOS)
         if: runner.os == 'macOS'
         run: ./test/gate.py --workspace --jobs 2
@@ -310,28 +304,8 @@ jobs:
         with:
           lfs: true
       - uses: ./.github/actions/setup-open-compute
-        with:
-          # Reuse main's debug/test target for the single-binary harness.
-          rust-cache-key: default-${{ hashFiles('crates/storage/refinery-migrations/**/*.sql') }}
-          rust-cache-save: "false"
-      - uses: mozilla-actions/sccache-action@v0.0.11
-        with:
-          version: v0.16.0
-      - name: Restore bounded compiler cache
-        uses: actions/cache/restore@v6
-        with:
-          path: .temp/sccache
-          key: compiler-v2-${{ runner.os }}-${{ runner.arch }}-rust1.98-sccache0.16-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'packages/runtime/workerd.lock.json', 'crates/storage/refinery-migrations/**/*.sql') }}
-          restore-keys: |
-            compiler-v2-${{ runner.os }}-${{ runner.arch }}-rust1.98-sccache0.16-
-      - name: Enable local compiler cache without per-crate remote cache requests
-        shell: bash
-        run: |
-          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
-          echo "SCCACHE_DIR=$GITHUB_WORKSPACE/.temp/sccache" >> "$GITHUB_ENV"
-          echo "SCCACHE_CACHE_SIZE=512M" >> "$GITHUB_ENV"
       - name: Fetch locked crates for offline packaged-binary tests
-        run: cargo fetch --locked
+        run: mbx fetch --locked
       - name: Package and verify the native single executable
         shell: bash
         env:
@@ -355,10 +329,10 @@ jobs:
             '
           # Test-only transport driver; never included in the release artifact.
           host_target="$(rustc -vV | sed -n 's/^host: //p')"
-          cargo build --locked --offline --release --target "$host_target" -p open-compute-service \
+          mbx build --locked --offline --release --target "$host_target" -p open-compute-service \
             --features test-support --bin install-upgrade-fixture
           cp "$CARGO_TARGET_DIR/$host_target/release/install-upgrade-fixture" "$RUNNER_TEMP/install-upgrade-fixture"
-          unset CARGO_TARGET_DIR RUSTC_WRAPPER SCCACHE_DIR SCCACHE_CACHE_SIZE
+          unset CARGO_TARGET_DIR
           OPEN_COMPUTE_TEST_OCD="$destination" \
           OPEN_COMPUTE_PACKAGE_GATE_USER_ROOT=1 \
             ./test/gate.py single-binary --jobs 1
@@ -419,7 +393,7 @@ jobs:
           compression-level: 0
       - name: Compiler cache statistics
         if: always()
-        run: sccache --show-stats
+        run: mbx cache stats
       - name: Retain compiler timings
         if: always()
         uses: actions/upload-artifact@v7
