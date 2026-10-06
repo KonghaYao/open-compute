@@ -24,11 +24,109 @@ export OC_S3_BUCKET="${OC_S3_BUCKET:-open-compute}"
 export OC_S3_PREFIX="${OC_S3_PREFIX:-open-compute/system/}"
 export OC_S3_R2_PREFIX="${OC_S3_R2_PREFIX:-open-compute/tenant/r2/}"
 
-if [ "${OC_STORAGE_BACKEND}" = "s3" ]; then
-  COMPUTE_TEMPLATE=/etc/open-compute/compute.s3.toml.template
-else
-  COMPUTE_TEMPLATE=/etc/open-compute/compute.local.toml.template
-fi
+write_ocd_config() {
+  envsubst <<EOF >"${ROOT}/ocd.toml"
+[server]
+public_bind = "${OC_PUBLIC_BIND}"
+admin_auth = { file = "${ROOT}/keys/admin.token" }
+EOF
+  chmod 600 "${ROOT}/ocd.toml"
+}
+
+write_compute_config() {
+  CONFIG="${ROOT}/instances/default/compute.toml"
+  if [ "${OC_STORAGE_BACKEND}" = "s3" ]; then
+    envsubst <<EOF >"${CONFIG}"
+[instance]
+name = "default"
+
+[auth]
+deployer_auth = { env = "OPEN_COMPUTE_DEPLOYER_TOKEN" }
+read_only_auth = { env = "OPEN_COMPUTE_READ_ONLY_TOKEN" }
+
+[data]
+path = "${ROOT}/instances/default/data"
+master_key_file = "${ROOT}/instances/default/data/keys/master.key"
+sqlite_busy_timeout_ms = 5000
+free_space_soft_bytes = 1073741824
+free_space_hard_bytes = 268435456
+
+[storage]
+backend = "s3"
+endpoint = "${OC_S3_ENDPOINT}"
+region = "${OC_S3_REGION}"
+bucket = "${OC_S3_BUCKET}"
+force_path_style = true
+prefix = "${OC_S3_PREFIX}"
+r2_prefix = "${OC_S3_R2_PREFIX}"
+access_key_id_env = "OC_S3_ACCESS_KEY_ID"
+secret_access_key_env = "OC_S3_SECRET_ACCESS_KEY"
+
+[runtime]
+startup_timeout_ms = 20000
+shutdown_grace_ms = 10000
+
+[artifacts]
+public_origin = "http://127.0.0.1:${OC_PUBLIC_PORT}"
+
+[dashboard]
+enabled = true
+
+[public_gateway]
+base_domain = "${OC_PUBLIC_BASE_DOMAIN}"
+
+[observability]
+external_control_origin = "http://127.0.0.1:${OC_PUBLIC_PORT}"
+
+[metrics]
+enabled = true
+EOF
+  else
+    envsubst <<EOF >"${CONFIG}"
+[instance]
+name = "default"
+
+[auth]
+deployer_auth = { env = "OPEN_COMPUTE_DEPLOYER_TOKEN" }
+read_only_auth = { env = "OPEN_COMPUTE_READ_ONLY_TOKEN" }
+
+[data]
+path = "${ROOT}/instances/default/data"
+master_key_file = "${ROOT}/instances/default/data/keys/master.key"
+sqlite_busy_timeout_ms = 5000
+free_space_soft_bytes = 1073741824
+free_space_hard_bytes = 268435456
+
+[storage]
+backend = "local"
+prefix = "system/"
+r2_prefix = "tenant/r2/"
+free_space_soft_bytes = 1073741824
+free_space_hard_bytes = 268435456
+partial_grace_ms = 3600000
+
+[runtime]
+startup_timeout_ms = 20000
+shutdown_grace_ms = 10000
+
+[artifacts]
+public_origin = "http://127.0.0.1:${OC_PUBLIC_PORT}"
+
+[dashboard]
+enabled = true
+
+[public_gateway]
+base_domain = "${OC_PUBLIC_BASE_DOMAIN}"
+
+[observability]
+external_control_origin = "http://127.0.0.1:${OC_PUBLIC_PORT}"
+
+[metrics]
+enabled = true
+EOF
+  fi
+  chmod 600 "${CONFIG}"
+}
 
 mkdir -p "${ROOT}/keys" "${ROOT}/instances/default" "${ROOT}/tmp"
 chmod 700 "${ROOT}" "${ROOT}/tmp" "${ROOT}/keys"
@@ -36,12 +134,9 @@ chmod 700 "${ROOT}" "${ROOT}/tmp" "${ROOT}/keys"
 printf '%s\n' "${ADMIN_TOKEN}" > "${ROOT}/keys/admin.token"
 chmod 600 "${ROOT}/keys/admin.token"
 
-envsubst < /etc/open-compute/ocd.toml.template > "${ROOT}/ocd.toml"
-chmod 600 "${ROOT}/ocd.toml"
-
+write_ocd_config
+write_compute_config
 CONFIG="${ROOT}/instances/default/compute.toml"
-envsubst < "${COMPUTE_TEMPLATE}" > "${CONFIG}"
-chmod 600 "${CONFIG}"
 
 chown -R open-compute:open-compute "${ROOT}"
 

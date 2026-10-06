@@ -1,17 +1,18 @@
 # Container notes
 
-This directory ships:
+Files in this directory:
 
-- `Dockerfile` — minimal production runtime image (`ocd --system run` as UID 65532)
-- `Dockerfile.init` — one-shot compose bootstrap (not a release artifact)
+- `Dockerfile` — runtime (`target: runtime`) and one-shot bootstrap (`target: init`) images
 - `docker-compose.yml` — local object storage stack
-- `docker-compose.external-s3.yml` — overlay for an existing S3-compatible bucket
+- `docker-compose.external-s3.yml` — optional overlay for an existing S3-compatible bucket
+- `init-volume.sh` — bootstrap script copied into the init image
 
-The runtime image runs one `ocd` daemon for the explicitly registered instances. Each running instance
-owns its own verified workerd child and data directory; the daemon owns the shared listener and
-Gateway. The build context contains one native Linux release file named `ocd`; use the matching
-CPU architecture. The Ubuntu 24.04 base matches the CI Linux release builder; workerd requires
-glibc, so this image cannot use `scratch` or Alpine/musl.
+The runtime image runs one `ocd` daemon for explicitly registered instances. Each running
+instance owns its own verified workerd child and data directory; the daemon owns the shared
+listener and Gateway. The build context must contain `ocd.linux-x64` and `ocd.linux-arm64`
+release binaries for the matching CPU architecture. The Ubuntu 24.04 base matches the CI
+Linux release builder; workerd requires glibc, so this image cannot use `scratch` or
+Alpine/musl.
 
 ## Quick start (local storage)
 
@@ -20,12 +21,15 @@ cd examples/container
 cp .env.example .env
 # edit tokens in .env
 
-make up
+curl -fsSL --http1.1 -o ocd.linux-x64 \
+  "https://github.com/elliothux/open-compute/releases/download/v0.2.4/ocd-v0.2.4-linux-x64"
+curl -fsSL --http1.1 -o ocd.linux-arm64 \
+  "https://github.com/elliothux/open-compute/releases/download/v0.2.4/ocd-v0.2.4-linux-arm64"
+chmod 0555 ocd.linux-x64 ocd.linux-arm64
+
+docker compose up -d --build
 curl -fsS http://127.0.0.1:8787/health/live
 ```
-
-`make up` downloads the pinned release binary into the build context, builds the runtime/init
-images, and starts compose.
 
 ## External S3 (shared RustFS / MinIO)
 
