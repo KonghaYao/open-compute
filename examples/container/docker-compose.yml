@@ -1,9 +1,12 @@
 # open-compute container stack (local object storage).
 #
-# For an external S3-compatible bucket (RustFS/MinIO), also pass:
+# External S3-compatible bucket (RustFS/MinIO on an existing Docker network):
 #   docker compose -f docker-compose.yml -f docker-compose.external-s3.yml up -d
 #
-# Build context must contain a Linux `ocd` release binary (see README).
+# Build context must contain Linux release binaries: ocd.linux-x64, ocd.linux-arm64.
+# Download them from a release or run:
+#   curl -fsSL -o ocd.linux-x64 https://github.com/elliothux/open-compute/releases/download/v0.2.4/ocd-v0.2.4-linux-x64
+#   curl -fsSL -o ocd.linux-arm64 https://github.com/elliothux/open-compute/releases/download/v0.2.4/ocd-v0.2.4-linux-arm64
 
 name: open-compute
 
@@ -11,7 +14,8 @@ services:
   init:
     build:
       context: .
-      dockerfile: Dockerfile.init
+      dockerfile: Dockerfile
+      target: init
     environment:
       OPEN_COMPUTE_ADMIN_TOKEN: ${OPEN_COMPUTE_ADMIN_TOKEN:?set OPEN_COMPUTE_ADMIN_TOKEN}
       OPEN_COMPUTE_DEPLOYER_TOKEN: ${OPEN_COMPUTE_DEPLOYER_TOKEN:?set OPEN_COMPUTE_DEPLOYER_TOKEN}
@@ -35,6 +39,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runtime
     image: ${OC_IMAGE:-open-compute:local}
     container_name: open-compute-ocd
     depends_on:
@@ -50,7 +55,11 @@ services:
     volumes:
       - ocd-data:/var/lib/open-compute
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${OC_PUBLIC_PORT:-8787}/health/live >/dev/null"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:${OC_PUBLIC_PORT:-8787}/health/live >/dev/null",
+        ]
       interval: 15s
       timeout: 5s
       retries: 12
