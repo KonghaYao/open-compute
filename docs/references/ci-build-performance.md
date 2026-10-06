@@ -140,6 +140,7 @@ workspace/final binary。当前没有应用 benchmark，且仓库 cache 已接�
 
 - 所有 Rust 构建、Clippy、Gate、coverage 和 package 统一使用全局 mbx；其对象键区分
   工具链、平台、编译参数和输入内容。CI 只保存对象缓存，不再使用 Swatinem rust-cache 或 sccache。
+  GitHub 缓存 key 加 job/suite 后缀，避免并行任务争抢同一个不可覆盖的条目；恢复仍使用共同的工具链前缀。
 - package 把正式 profile 隔离在 `.temp/release-target/`；普通 `target/` 仍只服务 main 与
   `single-binary` Gate。default branch 没有 `v3-release-*` writer，而新 tag 不能读取旧 tag 的 cache，
   因此已删除这个确定 miss 的 release-target cache layer。两个 profile 不互相覆盖，也不保存 incremental

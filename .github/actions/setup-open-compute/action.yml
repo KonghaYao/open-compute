@@ -99,6 +99,7 @@ runs:
         version: 1.22.0
         github-cache-mode: objects
         cache-links: "true"
+        cache-key-suffix: ${{ github.job }}-${{ matrix.suite || 'build' }}
 
     - name: Configure global mbx build policy
       shell: bash

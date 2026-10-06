@@ -283,6 +283,10 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   );
   assert.match(rustSetup, /jdx\/mr-boxington-action@v1/);
   assert.match(rustSetup, /github-cache-mode: objects/);
+  assert.match(
+    rustSetup,
+    /cache-key-suffix: \$\{\{ github\.job \}\}-\$\{\{ matrix\.suite \|\| 'build' \}\}/,
+  );
   assert.match(rustSetup, /version: 1\.22\.0/);
   assert.doesNotMatch(
     workflow + ci + rustSetup,
