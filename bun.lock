@@ -92,6 +92,15 @@
         "vite": "catalog:",
       },
     },
+    "examples/stress-demo": {
+      "name": "@open-compute/example-stress-demo",
+      "devDependencies": {
+        "@cloudflare/vite-plugin": "catalog:",
+        "cf": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:",
+      },
+    },
     "packages/runtime": {
       "name": "@open-compute/runtime",
       "version": "0.1.0",
@@ -103,7 +112,7 @@
     },
     "packages/sdk": {
       "name": "@open-compute/sdk",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "dependencies": {
         "cloudflare": "catalog:",
       },
@@ -591,6 +600,8 @@
     "@open-compute/dashboard": ["@open-compute/dashboard@workspace:apps/dashboard"],
 
     "@open-compute/example-hello-worker": ["@open-compute/example-hello-worker@workspace:examples/hello-worker"],
+
+    "@open-compute/example-stress-demo": ["@open-compute/example-stress-demo@workspace:examples/stress-demo"],
 
     "@open-compute/p4-vinext-qualification": ["@open-compute/p4-vinext-qualification@workspace:test/applications/vinext"],
 
