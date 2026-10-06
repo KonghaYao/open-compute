@@ -366,7 +366,9 @@ def resolve_targets(selected, workspace):
                 (str(ROOT / 'test/conformance/ai-provider-qualification.ts'),),
                 ('--list',),
                 (
-                    'PATH', 'HOME', 'OPEN_COMPUTE_TEST_WORKERD',
+                    'PATH', 'HOME', 'RUSTFLAGS', 'CARGO_HOME', 'RUSTUP_HOME',
+                    'CARGO_INCREMENTAL', 'MBX_CACHE_EXPORT_GROUP', 'MBX_CACHE_LINKS',
+                    'MBX_GC_AUTO', 'OPEN_COMPUTE_TEST_WORKERD',
                     'OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE', 'OPEN_COMPUTE_BUILD_CADDY',
                     'BAILIAN_API_HOST', 'BAILIAN_API_KEY', 'DEEPSEEK_API_KEY',
                     'COHERE_API_KEY',
@@ -391,6 +393,8 @@ def resolve_targets(selected, workspace):
                 ('--list',),
                 (
                     'PATH', 'HOME', 'RUSTFLAGS', 'CARGO_HOME', 'RUSTUP_HOME',
+                    'CARGO_INCREMENTAL', 'MBX_CACHE_EXPORT_GROUP', 'MBX_CACHE_LINKS',
+                    'MBX_GC_AUTO',
                     'OPEN_COMPUTE_TEST_R2_S3_ENDPOINT',
                     'OPEN_COMPUTE_TEST_R2_S3_REGION',
                     'OPEN_COMPUTE_TEST_R2_S3_BUCKET',
