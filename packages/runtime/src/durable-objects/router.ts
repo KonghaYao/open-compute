@@ -76,6 +76,7 @@ const FORBIDDEN_RPC = new Set([
   "webSocketError",
 ]);
 let activeDispatches = 0;
+const dispatchWaiters: Array<() => void> = [];
 const pendingConnects = new Map<
   string,
   {
@@ -165,20 +166,39 @@ function boundedBody(
   );
 }
 
+function acquireDispatchSlot(maximum: number): Promise<void> {
+  if (activeDispatches < maximum) {
+    activeDispatches += 1;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    dispatchWaiters.push(() => {
+      activeDispatches += 1;
+      resolve();
+    });
+  });
+}
+
+function releaseDispatchSlot(): void {
+  activeDispatches -= 1;
+  const next = dispatchWaiters.shift();
+  if (next) next();
+}
+
 function admitted<T>(
   env: DoPolicyEnv,
   operation: (policy: DoPolicy) => Promise<T>,
 ): Promise<T> {
   const policy = doPolicy(env);
-  if (activeDispatches >= policy.maxInFlightDispatches) {
-    throw stableFailure("DO_STORAGE_LIMIT");
-  }
-  activeDispatches += 1;
-  const pending = Promise.resolve()
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    releaseDispatchSlot();
+  };
+  const pending = acquireDispatchSlot(policy.maxInFlightDispatches)
     .then(() => operation(policy))
-    .finally(() => {
-      activeDispatches -= 1;
-    });
+    .finally(release);
   return Promise.race([
     pending,
     scheduler.wait(policy.dispatchTimeoutMs).then(() => {

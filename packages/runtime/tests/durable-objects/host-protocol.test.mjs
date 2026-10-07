@@ -6,17 +6,15 @@ import {
   moduleUrl,
 } from "../compiled-runtime.mjs";
 
-const { authorityFromHeaders } = await importRuntime(
-  "durable-objects/host-protocol.ts",
-  {
+const { authorityFromHeaders, cancelOrderedOperation, ordered } =
+  await importRuntime("durable-objects/host-protocol.ts", {
     "./identity.js": moduleUrl(
       await compileRuntime("durable-objects/identity.ts"),
     ),
     "../loader/shared.js": moduleUrl(
       "export const bindingError = (code) => new Error(code);",
     ),
-  },
-);
+  });
 
 test("DO host authority accepts only the canonical instance ID", () => {
   const headers = new Headers({
@@ -43,4 +41,51 @@ test("DO host authority accepts only the canonical instance ID", () => {
     () => authorityFromHeaders(headers),
     /DO_INTERNAL_PROTOCOL_ERROR/,
   );
+});
+
+test("cancelOrderedOperation skips a queued sequence without blocking the channel", async () => {
+  const states = new Map();
+  const channelId = "a".repeat(32);
+  let firstStarted;
+  const firstGate = new Promise((resolve) => {
+    firstStarted = resolve;
+  });
+  const first = ordered(states, { channelId, sequence: 0 }, async () => {
+    await firstGate;
+    return "first";
+  });
+  const second = ordered(
+    states,
+    { channelId, sequence: 1 },
+    async () => "second",
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  cancelOrderedOperation(states, { channelId, sequence: 1 });
+  firstStarted();
+  assert.equal(await first, "first");
+  const third = await ordered(
+    states,
+    { channelId, sequence: 2 },
+    async () => "third",
+  );
+  assert.equal(third, "third");
+  await second.catch(() => undefined);
+});
+
+test("ordered rejects duplicate pending sequences with DO_RUNTIME_EXCEPTION", async () => {
+  const states = new Map();
+  const channelId = "b".repeat(32);
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  void ordered(states, { channelId, sequence: 0 }, async () => {
+    await gate;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.throws(
+    () => ordered(states, { channelId, sequence: 0 }, async () => undefined),
+    /DO_RUNTIME_EXCEPTION/,
+  );
+  release();
 });

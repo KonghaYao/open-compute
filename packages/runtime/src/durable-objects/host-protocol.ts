@@ -58,6 +58,7 @@ export interface OrderState {
   next: number;
   expiresAt: number;
   pending: Map<number, PendingOperation>;
+  skipped: Set<number>;
 }
 export interface RegisteredFacet {
   logicalPath: readonly string[];
@@ -173,12 +174,38 @@ export function assertOrder(order: unknown): asserts order is DoOrder {
   }
 }
 
+function advanceOrderCursor(state: OrderState): void {
+  while (state.skipped.has(state.next)) {
+    state.skipped.delete(state.next);
+    state.next += 1;
+  }
+}
+
 function grantNextOperation(state: OrderState): void {
+  advanceOrderCursor(state);
   const pending = state.pending.get(state.next);
   if (!pending) return;
   state.pending.delete(state.next);
   state.next += 1;
   pending.resolve();
+}
+
+/** Drop a queued or future order slot without running tenant work. */
+export function cancelOrderedOperation(
+  states: Map<string, OrderState>,
+  order: DoOrder,
+): void {
+  assertOrder(order);
+  const state = states.get(order.channelId);
+  if (!state || order.sequence < state.next) return;
+  advanceOrderCursor(state);
+  if (state.pending.has(order.sequence)) {
+    state.pending.delete(order.sequence);
+    state.skipped.add(order.sequence);
+    if (order.sequence === state.next) grantNextOperation(state);
+    return;
+  }
+  void ordered(states, order, async () => undefined);
 }
 
 export function ordered<T>(
@@ -196,15 +223,23 @@ export function ordered<T>(
     }
     if (states.size >= MAX_ORDER_CHANNELS)
       throw bindingError("DO_STORAGE_LIMIT");
-    state = { next: 0, expiresAt: now + ORDER_IDLE_MS, pending: new Map() };
+    state = {
+      next: 0,
+      expiresAt: now + ORDER_IDLE_MS,
+      pending: new Map(),
+      skipped: new Set(),
+    };
     states.set(order.channelId, state);
   }
-  if (
-    order.sequence < state.next ||
-    state.pending.has(order.sequence) ||
-    state.pending.size >= MAX_PENDING_OPERATIONS
-  ) {
+  advanceOrderCursor(state);
+  if (order.sequence < state.next || state.skipped.has(order.sequence)) {
     throw bindingError("DO_RUNTIME_EXCEPTION");
+  }
+  if (state.pending.has(order.sequence)) {
+    throw bindingError("DO_RUNTIME_EXCEPTION");
+  }
+  if (state.pending.size >= MAX_PENDING_OPERATIONS) {
+    throw bindingError("DO_STORAGE_LIMIT");
   }
   state.expiresAt = now + ORDER_IDLE_MS;
   if (order.sequence === state.next) {

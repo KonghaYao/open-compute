@@ -22,6 +22,7 @@ import {
   assertOrder,
   assertRpcMember,
   authorityFromHeaders,
+  cancelOrderedOperation,
   childFacetPath,
   deleteAuthorityFromHeaders,
   FACET_ENTRYPOINT,
@@ -686,13 +687,7 @@ export class DoHost extends DurableObject<DoHostEnv> {
         this.#pendingConnects.delete(token);
       }
     }
-    const state = this.#orderStates.get(order.channelId);
-    if (
-      state &&
-      (order.sequence < state.next || state.pending.has(order.sequence))
-    )
-      return;
-    await ordered(this.#orderStates, order, async () => undefined);
+    cancelOrderedOperation(this.#orderStates, order);
   }
 
   async connect(socket: Socket): Promise<void> {
