@@ -4,6 +4,7 @@
 import argparse
 from collections import namedtuple
 import concurrent.futures
+from contextlib import nullcontext
 from functools import partial
 import hashlib
 import json
@@ -276,7 +277,7 @@ def verify_case_inventory(targets, prepared):
 def resolve_targets(selected, workspace):
     """Use Cargo's workspace inventory; unaudited targets remain exclusive."""
     metadata = json.loads(subprocess.check_output(
-        [os.environ.get('CARGO', 'cargo'), 'metadata', '--locked', '--offline',
+        ['mbx', 'metadata', '--locked', '--offline',
          '--no-deps', '--format-version=1'], cwd=ROOT, text=True))
     known = {(package, name): (label, exclusive)
              for label, (package, name, exclusive) in CARGO_TARGETS.items()}
@@ -366,7 +367,9 @@ def resolve_targets(selected, workspace):
                 (str(ROOT / 'test/conformance/ai-provider-qualification.ts'),),
                 ('--list',),
                 (
-                    'PATH', 'HOME', 'OPEN_COMPUTE_TEST_WORKERD',
+                    'PATH', 'HOME', 'RUSTFLAGS', 'CARGO_HOME', 'RUSTUP_HOME',
+                    'CARGO_INCREMENTAL', 'MBX_CACHE_EXPORT_GROUP', 'MBX_CACHE_LINKS',
+                    'MBX_GC_AUTO', 'OPEN_COMPUTE_TEST_WORKERD',
                     'OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE', 'OPEN_COMPUTE_BUILD_CADDY',
                     'BAILIAN_API_HOST', 'BAILIAN_API_KEY', 'DEEPSEEK_API_KEY',
                     'COHERE_API_KEY',
@@ -391,6 +394,8 @@ def resolve_targets(selected, workspace):
                 ('--list',),
                 (
                     'PATH', 'HOME', 'RUSTFLAGS', 'CARGO_HOME', 'RUSTUP_HOME',
+                    'CARGO_INCREMENTAL', 'MBX_CACHE_EXPORT_GROUP', 'MBX_CACHE_LINKS',
+                    'MBX_GC_AUTO',
                     'OPEN_COMPUTE_TEST_R2_S3_ENDPOINT',
                     'OPEN_COMPUTE_TEST_R2_S3_REGION',
                     'OPEN_COMPUTE_TEST_R2_S3_BUCKET',
@@ -527,7 +532,7 @@ def build_targets(targets, directory, workspace):
     for names in expected.values():
         if len(names) > 1 and set(names) != allowed_aliases:
             raise RuntimeError(f'Cargo test executable has duplicate Gate owners: {sorted(names)}')
-    command = [os.environ.get('CARGO', 'cargo'), 'test', '--locked', '--offline',
+    command = ['mbx', 'test', '--locked', '--offline',
                '--all-features', '--no-run', '--message-format=json']
     if workspace:
         command += ['--workspace', '--all-targets']
@@ -618,7 +623,10 @@ def execute_target(name, executable, directory, target, *, list_only=False):
     env.pop('OPEN_COMPUTE_GATE_ROUNDS', None)
     start = time.monotonic()
     try:
-        with (directory / 'output.log').open('x') as output:
+        # JSON targets own stdout; compiler diagnostics must not become protocol data.
+        with (directory / 'output.log').open('x') as output, \
+             ((directory / 'stderr.log').open('x') if isinstance(target, TypedTarget)
+              else nullcontext(subprocess.STDOUT)) as errors:
             # Native harness loading can trigger slow host executable assessment. Finish
             # discovery before any product timeout starts; never prewarm product state.
             if isinstance(target, TypedTarget):
@@ -630,7 +638,7 @@ def execute_target(name, executable, directory, target, *, list_only=False):
                 if not list_only and target.cases:
                     arguments += ['--exact', *target.cases]
             process = subprocess.run([executable, *arguments], cwd=cwd, env=env,
-                                     stdout=output, stderr=subprocess.STDOUT,
+                                     stdout=output, stderr=errors,
                                      timeout=600 if list_only else target.timeout
                                      if isinstance(target, TypedTarget) else None)
     finally:

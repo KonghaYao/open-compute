@@ -598,6 +598,8 @@ class GateTests(unittest.TestCase):
         self.assertEqual(target.executable, '/bin/sh')
         self.assertEqual(target.cases, ('production-preflight',))
         self.assertIn('OPEN_COMPUTE_TEST_R2_S3_SECRET_ACCESS_KEY', target.env_allowlist)
+        self.assertIn('MBX_CACHE_EXPORT_GROUP', target.env_allowlist)
+        self.assertIn('CARGO_INCREMENTAL', target.env_allowlist)
 
     def test_ai_provider_qualification_forwards_pinned_build_inputs(self):
         metadata = {'workspace_members': [], 'packages': []}
@@ -608,6 +610,8 @@ class GateTests(unittest.TestCase):
         # The harness rebuilds the Rust gate; build.rs requires both pinned runtime inputs.
         self.assertIn('OPEN_COMPUTE_BUILD_WORKERD_ARCHIVE', target.env_allowlist)
         self.assertIn('OPEN_COMPUTE_BUILD_CADDY', target.env_allowlist)
+        self.assertIn('MBX_CACHE_EXPORT_GROUP', target.env_allowlist)
+        self.assertIn('CARGO_INCREMENTAL', target.env_allowlist)
 
     def test_final_workspace_runs_complete_inventory_once_and_only_timing_twice_more(self):
         targets = self.targets(['p0-1', 'p1-security', 'p2-1', 'workflow-product'])
@@ -852,7 +856,7 @@ class GateTests(unittest.TestCase):
             workerd.write_text('verified runtime input belongs to the real Gate')
             tools = {}
             sources = {
-                'cargo': """import sys
+                'mbx': """import sys
 if sys.argv[1:3] == ['llvm-cov', 'show-env']:
     print('export CARGO_LLVM_COV=1')
 elif sys.argv[1:] not in (['llvm-cov', '--version'], ['fetch', '--locked']):
@@ -884,7 +888,7 @@ if '--list' not in sys.argv:
                 path.chmod(0o700)
                 tools[name] = str(path)
             shutil.copy2(tools['gate'], root / 'test/gate.py')
-            environment = {'PATH': os.environ['PATH'], 'CARGO': tools['cargo'],
+            environment = {'PATH': str(root) + os.pathsep + os.environ['PATH'],
                            'RUSTC': tools['rustc'], 'LLVM_COV': tools['llvm-cov'],
                            'LLVM_PROFDATA': tools['llvm-profdata'],
                            'OPEN_COMPUTE_TEST_WORKERD': str(workerd),
@@ -1075,6 +1079,7 @@ if '--list' not in sys.argv:
                         {'id': 'second', 'status': 'passed'},
                     ],
                 }) + '\n')
+                kwargs['stderr'].write('mbx: diagnostic after the JSON result\n')
                 return SimpleNamespace(returncode=0)
 
             with patch.dict(os.environ, {'PATH': '/usr/bin', 'ALLOWED': 'yes',
@@ -1084,6 +1089,8 @@ if '--list' not in sys.argv:
                     'p3-contract', '/usr/bin/bun', Path(temp) / 'execute', target)
             self.assertEqual(result['exit_code'], 0)
             self.assertEqual(result['cases_passed'], 2)
+            self.assertEqual((Path(temp) / 'execute/stderr.log').read_text(),
+                             'mbx: diagnostic after the JSON result\n')
 
     def test_contract_report_keeps_local_and_remote_verdicts_separate(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(gate, 'ROOT', Path(temp)):
