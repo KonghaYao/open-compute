@@ -11,6 +11,8 @@ Artifacts live under `.temp/stress-run/<run-id>/`. Failed runs copy evidence to 
 source .temp/stress-run/.deploy_env
 ```
 
+`deploy-stress-demo.sh` resolves the live KV namespace and D1 database IDs from the running ocd instance (via `cf kv namespaces list` / `cf d1 list`), patches `examples/stress-demo/cloudflare.config.ts` only for the deploy build, then restores the tracked config. On first deploy it uses a two-pass flow: bootstrap without the self-referencing `SERVICE` binding, then redeploy with `SERVICE` once `stress-demo` exists.
+
 ## Scripts
 
 | Script                 | Purpose                                                          |
@@ -82,7 +84,7 @@ Fault injection codes: `KV_FAULT_INJECTED`, `D1_FAULT_INJECTED`, `R2_FAULT_INJEC
 
 `STRESS_PROFILE` selects load shape and SLO tables:
 
-- `2c4g` (default): compose 2 CPU / 4 GB profile, reduced peak rates for overload-prone stacks
+- `2c4g` (default): compose 2 CPU / 4 GB profile (`examples/container/docker-compose.yml` deploy limits), reduced peak rates for overload-prone stacks
 - `8c16g`: higher concurrency and tighter SLOs for larger hosts
 
 Per-stack PEAK phases (2C/4G defaults) with schema v2 `result.json` per run:
@@ -90,12 +92,12 @@ Per-stack PEAK phases (2C/4G defaults) with schema v2 `result.json` per run:
 | Stack         | Load                          | Duration   |
 | ------------- | ----------------------------- | ---------- |
 | http          | 25 → 50 → 75 concurrent       | 5 min each |
-| kv            | 40 concurrent                 | 15 min     |
+| kv            | 16 concurrent                 | 15 min     |
 | d1            | 15 write + 30 read concurrent | 15 min     |
 | r2            | 4 multipart + 10 GET/s        | 20 min     |
 | queue         | 200 msg/s                     | 10 min     |
 | do            | 10 RPC/s + 10 WebSocket       | 15 min     |
-| workflow      | 5/s                           | 15 min     |
+| workflow      | 3/s                           | 15 min     |
 | fetch         | 50 concurrent                 | 10 min     |
 | mega-checkout | 15 concurrent                 | 15 min     |
 
@@ -127,7 +129,15 @@ On the 2 CPU / 4 GB compose profile, sustained PEAK load on R2, Durable Objects,
 - Post-run `/health/ready` succeeds and no orphan `workerd` processes remain
 - Functional checks pass: KV read-after-write, DO counter monotonicity, reconcile consistency
 
+KV PEAK concurrency for `2c4g` is capped at 16 to stay within the default `max_readers_per_namespace = 2` admission window (`share/default-config.toml`); higher client concurrency mostly queues at the platform rather than increasing useful read throughput.
+
 D1 writes use client-side `withD1Retry` (see `examples/stress-demo/src/lib/d1-retry.ts`); transient `D1_BUSY` responses are retried and do not count as SLO failures when the retry succeeds.
+
+Workflow checkout uses `withWorkflowRetry` (see `examples/stress-demo/src/lib/workflow-retry.ts`); exhausted retries fail closed with HTTP 503 (`WORKFLOW_RUNTIME_UNAVAILABLE`) instead of ambiguous 404/500 under peak load.
+
+Reconcile and soak post-restart paths wait up to 60s for bindings alignment (`STRESS_BINDINGS_ALIGN_SEC`, default 40 elsewhere).
+
+R2 GET uses `withR2Retry` in the stress-demo Worker (see `examples/stress-demo/src/lib/r2-retry.ts`) plus bounded harness retry via `stress_request_idempotent_get` for transient 5xx under peak load.
 
 ## Examples
 

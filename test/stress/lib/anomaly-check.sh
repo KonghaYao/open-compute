@@ -128,7 +128,10 @@ check_orphan_workerd() {
     return 0
   fi
   local orphans
-  orphans=$(pgrep -fl workerd 2>/dev/null || true)
+  orphans=$(pgrep -x workerd 2>/dev/null || true)
+  if [ -n "$orphans" ]; then
+    orphans=$(ps -o pid=,comm= -p $orphans 2>/dev/null | sed '/^$/d' || true)
+  fi
   if [ -n "$orphans" ]; then
     record_anomaly "orphan_workerd" "$(jq -nc --arg processes "$orphans" '{processes: $processes}')"
     return 1

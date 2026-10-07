@@ -42,6 +42,12 @@ services:
       target: runtime
     image: ${OC_IMAGE:-open-compute:local}
     container_name: open-compute-ocd
+    # Pin the 2C/4G stress qualification profile (STRESS_PROFILE=2c4g).
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
     depends_on:
       init:
         condition: service_completed_successfully

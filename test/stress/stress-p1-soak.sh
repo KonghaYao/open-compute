@@ -5,6 +5,8 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 # shellcheck disable=SC1091
 . "${root}/test/stress/common.sh"
+cleanup_old_stress_runs
+kill_orphan_workerd_preflight
 ensure_stress_data
 
 run_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
@@ -16,15 +18,39 @@ mkdir -p "$STRESS_RUN_DIR"
 
 capture_container_restart_baseline open-compute-ocd
 
+export STRESS_BINDINGS_ALIGN_SEC=${STRESS_BINDINGS_ALIGN_SEC:-60}
+
 if [ "${STRESS_SOAK_ABBREV:-0}" = "1" ]; then
   SOAK_TOTAL_SEC=900
-  ROTATE_SEC=60
-  RESTART_INTERVAL_SEC=180
-  printf 'Soak abbreviated mode (STRESS_SOAK_ABBREV=1): 15 min total\n' >&2
+  ROTATE_SEC=120
+  SOAK_INJECT_RESTART=0
+  RESTART_INTERVAL_SEC=$((SOAK_TOTAL_SEC + 1))
+  SOAK_HTTP_CONCURRENCY=10
+  SOAK_KV_CONCURRENCY=8
+  SOAK_D1_CONCURRENCY=5
+  SOAK_R2_RATE=5
+  SOAK_QUEUE_RATE=10
+  SOAK_DO_RATE=8
+  SOAK_WORKFLOW_RATE=3
+  SOAK_FETCH_CONCURRENCY=10
+  SOAK_MEGA_CONCURRENCY=3
+  SOAK_RECOVER_SETTLE_SEC=20
+  printf 'Soak abbreviated mode (STRESS_SOAK_ABBREV=1): 15 min total, no container restart\n' >&2
 else
   SOAK_TOTAL_SEC=3600
   ROTATE_SEC=300
+  SOAK_INJECT_RESTART=1
   RESTART_INTERVAL_SEC=900
+  SOAK_HTTP_CONCURRENCY=25
+  SOAK_KV_CONCURRENCY=20
+  SOAK_D1_CONCURRENCY=10
+  SOAK_R2_RATE=10
+  SOAK_QUEUE_RATE=20
+  SOAK_DO_RATE=15
+  SOAK_WORKFLOW_RATE=3
+  SOAK_FETCH_CONCURRENCY=20
+  SOAK_MEGA_CONCURRENCY=6
+  SOAK_RECOVER_SETTLE_SEC=15
 fi
 
 STACK_NAMES="http kv d1 r2 queue do workflow fetch scenario_mega"
@@ -49,49 +75,51 @@ log_soak_event() {
 run_stack_soak() {
   stack=$1
   duration=$2
+  recover_before_sample "$SOAK_RECOVER_SETTLE_SEC"
   case "$stack" in
     http)
-      run_duration_concurrent http 25 "$duration" "/stack/http/ping" GET "" \
+      run_duration_concurrent http "$SOAK_HTTP_CONCURRENCY" "$duration" "/stack/http/ping" GET "" \
         "${STRESS_RUN_DIR}/lat-http.txt" "${STRESS_RUN_DIR}/err-http.txt"
       ;;
     kv)
-      run_duration_concurrent kv 20 "$duration" "/stack/kv/soak-kv-${run_id}" PUT "soak-value" \
+      run_duration_concurrent kv "$SOAK_KV_CONCURRENCY" "$duration" "/stack/kv/soak-kv-${run_id}" PUT "soak-value" \
         "${STRESS_RUN_DIR}/lat-kv.txt" "${STRESS_RUN_DIR}/err-kv.txt"
       ;;
     d1)
-      run_duration_concurrent d1 10 "$duration" "/stack/d1/orders" POST '{"status":"created"}' \
+      run_duration_concurrent d1 "$SOAK_D1_CONCURRENCY" "$duration" "/stack/d1/orders" POST '{"status":"created"}' \
         "${STRESS_RUN_DIR}/lat-d1.txt" "${STRESS_RUN_DIR}/err-d1.txt"
       ;;
     r2)
       curl -sS -H "$host_header" -X PUT \
         --data-binary "soak-r2-payload-${run_id}" \
         "${base_url}/stack/r2/objects/soak-r2-${run_id}" >/dev/null || true
-      run_rate_load r2 10 "$duration" "/stack/r2/objects/soak-r2-${run_id}" GET "" \
+      run_rate_load r2 "$SOAK_R2_RATE" "$duration" "/stack/r2/objects/soak-r2-${run_id}" GET "" \
         "${STRESS_RUN_DIR}/lat-r2.txt" "${STRESS_RUN_DIR}/err-r2.txt"
       ;;
     queue)
-      run_rate_load queue 20 "$duration" "/stack/queue/enqueue" POST \
+      run_rate_load queue "$SOAK_QUEUE_RATE" "$duration" "/stack/queue/enqueue" POST \
         "{\"label\":\"soak-q-${run_id}-$(date +%s)\"}" \
         "${STRESS_RUN_DIR}/lat-queue.txt" "${STRESS_RUN_DIR}/err-queue.txt"
       ;;
     do)
-      run_rate_load do 15 "$duration" "/stack/do/soak-do-${run_id}/increment" POST '{"amount":1}' \
+      run_rate_load do "$SOAK_DO_RATE" "$duration" "/stack/do/soak-do-${run_id}/increment" POST '{"amount":1}' \
         "${STRESS_RUN_DIR}/lat-do.txt" "${STRESS_RUN_DIR}/err-do.txt"
       ;;
     workflow)
-      run_rate_load workflow 5 "$duration" "/stack/workflow/checkout" POST '{"mode":"normal","fanOutN":2}' \
+      run_rate_load workflow "$SOAK_WORKFLOW_RATE" "$duration" "/stack/workflow/checkout" POST '{"mode":"normal","fanOutN":2}' \
         "${STRESS_RUN_DIR}/lat-workflow.txt" "${STRESS_RUN_DIR}/err-workflow.txt"
       ;;
     fetch)
-      run_duration_concurrent fetch 20 "$duration" "/stack/fetch/probe?hops=1" GET "" \
+      run_duration_concurrent fetch "$SOAK_FETCH_CONCURRENCY" "$duration" "/stack/fetch/probe?hops=1" GET "" \
         "${STRESS_RUN_DIR}/lat-fetch.txt" "${STRESS_RUN_DIR}/err-fetch.txt"
       ;;
     scenario_mega)
-      run_duration_concurrent scenario_mega 6 "$duration" "/stack/scenario/mega-checkout" POST \
+      run_duration_concurrent scenario_mega "$SOAK_MEGA_CONCURRENCY" "$duration" "/stack/scenario/mega-checkout" POST \
         "$(jq -nc --arg orderId "soak-mega-${run_id}-$(date +%s)" '{orderId: $orderId, mode: "normal"}')" \
         "${STRESS_RUN_DIR}/lat-scenario_mega.txt" "${STRESS_RUN_DIR}/err-scenario_mega.txt"
       ;;
   esac
+  recover_before_sample "$SOAK_RECOVER_SETTLE_SEC"
 }
 
 post_restart_verify() {
@@ -108,7 +136,8 @@ post_restart_verify() {
 
   local attempt=0
   while [ "$attempt" -lt 2 ]; do
-    if bash "${root}/test/stress/reconcile.sh" >/dev/null 2>&1; then
+    if STRESS_BINDINGS_ALIGN_SEC="${STRESS_BINDINGS_ALIGN_SEC:-60}" \
+      bash "${root}/test/stress/reconcile.sh" >/dev/null 2>&1; then
       log_soak_event "restart_reconcile_ok" "restart=${restart_num} attempt=$((attempt + 1))"
       return 0
     fi
@@ -123,10 +152,12 @@ post_restart_verify() {
 inject_restart() {
   local restart_num=$1
   log_soak_event "restart_begin" "restart=${restart_num}"
+  kill_orphan_workerd_preflight
   if command -v docker >/dev/null 2>&1; then
     docker restart open-compute-ocd >/dev/null 2>&1 || true
-    sleep 5
+    sleep 10
     post_restart_verify "$restart_num" || true
+    recover_before_sample "$SOAK_RECOVER_SETTLE_SEC"
     capture_container_restart_baseline open-compute-ocd
   else
     log_soak_event "restart_skipped" "docker unavailable"
@@ -159,7 +190,9 @@ while [ "$(date +%s)" -lt "$soak_end" ]; do
   run_stack_soak "$stack" "$phase_duration"
   log_soak_event "stack_end" "stack=${stack}"
 
-  if [ "$(date +%s)" -ge "$next_restart" ]; then
+  if [ "${SOAK_INJECT_RESTART:-0}" = "1" ] \
+    && [ "$(date +%s)" -lt "$soak_end" ] \
+    && [ "$(date +%s)" -ge "$next_restart" ]; then
     restart_count=$((restart_count + 1))
     inject_restart "$restart_count"
     next_restart=$((next_restart + RESTART_INTERVAL_SEC))

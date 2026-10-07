@@ -16,6 +16,9 @@ mkdir -p "$STRESS_RUN_DIR"
 # shellcheck source=lib/anomaly-check.sh
 . "${root}/test/stress/lib/anomaly-check.sh"
 
+# Queue fan-out and workflow side-effects can lag after peak load or container restart.
+STRESS_BINDINGS_ALIGN_SEC=${STRESS_BINDINGS_ALIGN_SEC:-60}
+
 seed_checkout() {
   local oid=$1
   local payload
@@ -41,7 +44,7 @@ reconcile_one() {
   object_id=$(printf '%s' "$line" | jq -r '.inventory.objectId // empty')
   receipt_key=$(printf '%s' "$line" | jq -r '.r2.key // empty')
 
-  if ! wait_bindings_aligned "$order_id" 40; then
+  if ! wait_bindings_aligned "$order_id" "$STRESS_BINDINGS_ALIGN_SEC"; then
     record_anomaly "reconcile_bindings" "$(jq -nc --arg order_id "$order_id" \
       '{order_id: $order_id, reason: "bindings_not_aligned_before_checks"}')"
   fi

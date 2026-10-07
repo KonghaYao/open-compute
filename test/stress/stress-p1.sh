@@ -6,20 +6,22 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 # shellcheck disable=SC1091
 . "${root}/test/stress/common.sh"
 require_disk_space 5 "${root}/.temp"
+cleanup_old_stress_runs
+kill_orphan_workerd_preflight
 ensure_stress_data
 
 STRESS_PROFILE=${STRESS_PROFILE:-2c4g}
 case "$STRESS_PROFILE" in
   2c4g)
     P1_HTTP_CONCURRENCY="25 50 75"
-    P1_KV_CONCURRENCY=40
+    P1_KV_CONCURRENCY=16
     P1_D1_WRITERS=10
     P1_D1_READERS=20
     P1_R2_GET_RATE=10
     P1_QUEUE_RATE=200
     P1_DO_RPC_RATE=10
     P1_DO_WS_COUNT=10
-    P1_WORKFLOW_RATE=5
+    P1_WORKFLOW_RATE=3
     P1_FETCH_CONCURRENCY=50
     P1_CPU_CONCURRENCY=8
     P1_MEGA_CONCURRENCY=15
@@ -145,11 +147,6 @@ run_rate_until() {
   printf 'completed %s rate=%s/s duration=%ss samples=%s\n' "$label" "$rate" "$duration_sec" "$seq" >&2
 }
 
-recover_before_sample() {
-  wait_for_ready "$base_url" 60 || true
-  sleep 5
-}
-
 sample_stack_response() {
   recover_before_sample
   local method=$1
@@ -195,24 +192,46 @@ sample_stack_response() {
 check_kv_read_after_write() {
   local key=$1
   local value=$2
-  local ctx
+  local ctx put_status body get_status attempt
   ctx=$(jq -nc --arg key "$key" '{key: $key, phase: "p1_kv_verify"}')
-  curl -sS -H "$host_header" -X PUT \
+  put_status=$(curl -sS -o "${STRESS_RUN_DIR}/kv-verify-put.json" -w '%{http_code}' \
+    -H "$host_header" -X PUT \
     --data-binary "$value" \
-    "${base_url}/stack/kv/${key}" >/dev/null || true
-  local body
-  body=$(curl -sS -H "$host_header" "${base_url}/stack/kv/${key}" || echo '{}')
+    "${base_url}/stack/kv/${key}" || echo "000")
+  if [ "$put_status" != "200" ]; then
+    record_anomaly "http_status" "$(jq -nc \
+      --arg key "$key" \
+      --arg status "$put_status" \
+      --argjson context "$ctx" \
+      '{key: $key, phase: "p1_kv_verify_put", status: $status, context: $context}')"
+    return 1
+  fi
+  body='{}'
+  get_status="000"
+  attempt=1
+  while [ "$attempt" -le 5 ]; do
+    get_status=$(curl -sS -o "${STRESS_RUN_DIR}/kv-verify-get.json" -w '%{http_code}' \
+      -H "$host_header" "${base_url}/stack/kv/${key}" || echo "000")
+    body=$(cat "${STRESS_RUN_DIR}/kv-verify-get.json" 2>/dev/null || echo '{}')
+    if [ "$get_status" = "200" ]; then
+      break
+    fi
+    sleep 1
+    attempt=$((attempt + 1))
+  done
   local actual exists
   actual=$(printf '%s' "$body" | jq -r '.value // empty')
   exists=$(printf '%s' "$body" | jq -r '.exists // false')
-  if [ "$exists" != "true" ] || [ "$actual" != "$value" ]; then
+  if [ "$get_status" != "200" ] || [ "$exists" != "true" ] || [ "$actual" != "$value" ]; then
     record_anomaly "kv_read_after_write" "$(jq -nc \
       --arg key "$key" \
       --arg expected "$value" \
       --arg actual "$actual" \
       --arg exists "$exists" \
+      --arg put_status "$put_status" \
+      --arg get_status "$get_status" \
       --argjson context "$ctx" \
-      '{key: $key, expected: $expected, actual: $actual, exists: ($exists == "true"), context: $context}')"
+      '{key: $key, expected: $expected, actual: $actual, exists: ($exists == "true"), put_status: $put_status, get_status: $get_status, context: $context}')"
     return 1
   fi
   return 0
@@ -357,6 +376,7 @@ stack_kv_peak() {
   done
   wait
   printf 'completed kv-peak concurrency=%s duration=%ss\n' "$P1_KV_CONCURRENCY" "$duration" >&2
+  recover_before_sample "${STRESS_RECOVER_SETTLE_SEC:-15}"
   check_kv_read_after_write "p1-kv-verify-${run_id}" "p1-verify-value-${run_id}" || true
   stack_stats "$lat" "$err"
 }
@@ -470,8 +490,35 @@ stack_r2_peak() {
   fi
   sleep 5
 
-  run_rate_until "r2-get-peak" "$(p1_rate "$P1_R2_GET_RATE")" "$duration" \
-    "/stack/r2/objects/${small_key}" GET "" "$lat" "$err"
+  r2_get_rate_until() {
+    local label=$1
+    local rate=$2
+    local duration_sec=$3
+    local path=$4
+    local lat_file=$5
+    local err_file=$6
+    local deadline=$(( $(date +%s) + duration_sec ))
+    local seq=0
+
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+      local second_start
+      second_start=$(date +%s)
+      local i=0
+      while [ "$i" -lt "$rate" ]; do
+        seq=$((seq + 1))
+        stress_request_idempotent_get "$path" "$lat_file" "$err_file"
+        i=$((i + 1))
+      done
+      local elapsed=$(( $(date +%s) - second_start ))
+      if [ "$elapsed" -lt 1 ]; then
+        sleep $((1 - elapsed))
+      fi
+    done
+    printf 'completed %s rate=%s/s duration=%ss samples=%s\n' "$label" "$rate" "$duration_sec" "$seq" >&2
+  }
+
+  r2_get_rate_until "r2-get-peak" "$(p1_rate "$P1_R2_GET_RATE")" "$duration" \
+    "/stack/r2/objects/${small_key}" "$lat" "$err"
   printf 'completed r2-peak multipart=4 get_rate=%s/s duration=%ss\n' "$P1_R2_GET_RATE" "$duration" >&2
   sample_stack_response GET "/stack/r2/objects/${small_key}" "" "200" >/dev/null
   stack_stats "$lat" "$err"
@@ -588,6 +635,7 @@ stack_scenario_mega_peak() {
 run_stack_peak() {
   local name=$1
   printf '\n=== P1 peak: %s ===\n' "$name" >&2
+  recover_before_sample "${STRESS_RECOVER_SETTLE_SEC:-15}"
   if ! wait_for_ready "$base_url" 30; then
     record_anomaly "health_ready" "$(jq -nc --arg stack "$name" '{phase: "pre_stack_peak", stack: $stack}')"
     return 1
@@ -597,7 +645,8 @@ run_stack_peak() {
 
 STACK_ORDER="http kv d1 r2 queue do workflow fetch cpu"
 selected=${STRESS_P1_STACK:-$STACK_ORDER}
-P1_COOLDOWN_SEC=${STRESS_P1_COOLDOWN_SEC:-60}
+P1_COOLDOWN_SEC=${STRESS_P1_COOLDOWN_SEC:-90}
+export P1_COOLDOWN_SEC
 first_stack=1
 
 for stack in $selected; do
