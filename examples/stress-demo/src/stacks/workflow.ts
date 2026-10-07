@@ -1,5 +1,6 @@
 import type { Env } from "../env";
-import { json, jsonError, readJson } from "../lib/json";
+import { json, jsonError, readJson, structuredError } from "../lib/json";
+import { withWorkflowRetry } from "../lib/workflow-retry";
 
 interface CheckoutBody {
   orderId?: string;
@@ -20,20 +21,31 @@ export async function handleWorkflowCheckout(
   const mode = body.mode ?? "normal";
   const fanOutN = body.fanOutN ?? 3;
 
-  const instance = await env.FLOW.create({
-    id: `checkout-${orderId}`,
-    params: { orderId, mode, fanOutN },
-  });
+  try {
+    const instance = await withWorkflowRetry(() =>
+      env.FLOW.create({
+        id: `checkout-${orderId}`,
+        params: { orderId, mode, fanOutN },
+      }),
+    );
 
-  return json(
-    {
-      stack: "workflow",
-      orderId,
-      workflowId: instance.id,
-      mode,
-      fanOutN,
-      status: "started",
-    },
-    202,
-  );
+    return json(
+      {
+        stack: "workflow",
+        orderId,
+        workflowId: instance.id,
+        mode,
+        fanOutN,
+        status: "started",
+      },
+      202,
+    );
+  } catch {
+    return structuredError(
+      "WORKFLOW_RUNTIME_UNAVAILABLE",
+      "workflow",
+      { orderId, mode, fanOutN },
+      503,
+    );
+  }
 }

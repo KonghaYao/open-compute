@@ -1,5 +1,6 @@
 import type { Env } from "../env";
 import { jsonError, ok } from "../lib/json";
+import { withR2Retry } from "../lib/r2-retry";
 
 const MULTIPART_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
@@ -61,11 +62,11 @@ export async function handleR2Object(
   }
 
   if (request.method === "GET") {
-    const object = await env.BUCKET.get(key);
+    const object = await withR2Retry(() => env.BUCKET.get(key));
     if (!object) {
       return jsonError("not_found", 404, { stack: "r2", key });
     }
-    const text = await object.text();
+    const text = await withR2Retry(() => object.text());
     return ok({
       stack: "r2",
       key,

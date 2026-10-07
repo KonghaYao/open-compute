@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { withD1Retry } from "../lib/d1-retry";
 import { ok, readJson, structuredError, type StackName } from "../lib/json";
 import { ensureOrderSchema } from "../lib/schema";
 
@@ -60,11 +61,13 @@ async function storeIdempotent(
   result: MegaCheckoutResult,
 ): Promise<void> {
   await env.KV.put(key, JSON.stringify(result));
-  await env.DB.prepare(
-    "INSERT INTO idempotency (key, order_id, response_json, created_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(key) DO UPDATE SET response_json = excluded.response_json, created_at = excluded.created_at",
-  )
-    .bind(key, result.orderId, JSON.stringify(result), Date.now())
-    .run();
+  await withD1Retry(() =>
+    env.DB.prepare(
+      "INSERT INTO idempotency (key, order_id, response_json, created_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(key) DO UPDATE SET response_json = excluded.response_json, created_at = excluded.created_at",
+    )
+      .bind(key, result.orderId, JSON.stringify(result), Date.now())
+      .run(),
+  );
 }
 
 async function rollbackPartial(
@@ -73,7 +76,9 @@ async function rollbackPartial(
   objectId: string,
 ): Promise<void> {
   await env.KV.delete(orderKey(orderId));
-  await env.DB.prepare("DELETE FROM orders WHERE id = ?1").bind(orderId).run();
+  await withD1Retry(() =>
+    env.DB.prepare("DELETE FROM orders WHERE id = ?1").bind(orderId).run(),
+  );
   await env.BUCKET.delete(receiptKey(orderId));
   const inventory = env.INVENTORY.getByName(objectId);
   await inventory.increment(-1).catch(() => undefined);
@@ -119,14 +124,15 @@ export async function handleMegaCheckout(
   }
 
   if (forceD1Conflict) {
-    await env.DB.prepare(
-      "INSERT INTO orders (id, status, revision, payload_bytes, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-    )
-      .bind(orderId, "pending", env.REVISION, payloadBytes, now)
-      .run()
-      .catch(() => {
-        conflictInjected = true;
-      });
+    await withD1Retry(() =>
+      env.DB.prepare(
+        "INSERT INTO orders (id, status, revision, payload_bytes, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+      )
+        .bind(orderId, "pending", env.REVISION, payloadBytes, now)
+        .run(),
+    ).catch(() => {
+      conflictInjected = true;
+    });
   }
 
   await env.KV.put(
@@ -144,14 +150,16 @@ export async function handleMegaCheckout(
     );
   }
 
-  await env.DB.batch([
-    env.DB.prepare(
-      "INSERT INTO orders (id, status, revision, payload_bytes, updated_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(id) DO UPDATE SET status = excluded.status, revision = excluded.revision, payload_bytes = excluded.payload_bytes, updated_at = excluded.updated_at",
-    ).bind(orderId, "pending", env.REVISION, payloadBytes, now),
-    env.DB.prepare(
-      "INSERT INTO inventory_events (object_id, delta, revision, created_at) VALUES (?1, ?2, ?3, ?4)",
-    ).bind(objectId, fanOutM, env.REVISION, now),
-  ]);
+  await withD1Retry(() =>
+    env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO orders (id, status, revision, payload_bytes, updated_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(id) DO UPDATE SET status = excluded.status, revision = excluded.revision, payload_bytes = excluded.payload_bytes, updated_at = excluded.updated_at",
+      ).bind(orderId, "pending", env.REVISION, payloadBytes, now),
+      env.DB.prepare(
+        "INSERT INTO inventory_events (object_id, delta, revision, created_at) VALUES (?1, ?2, ?3, ?4)",
+      ).bind(objectId, fanOutM, env.REVISION, now),
+    ]),
+  );
 
   if (mode === "fault" && faultStack === "queue") {
     await rollbackPartial(env, orderId, objectId);
@@ -251,17 +259,21 @@ export async function handleMegaCheckout(
       now: Date.now(),
     }),
   );
-  await env.DB.prepare(
-    "UPDATE orders SET status = ?1, updated_at = ?2 WHERE id = ?3",
-  )
-    .bind("committed", Date.now(), orderId)
-    .run();
+  await withD1Retry(() =>
+    env.DB.prepare(
+      "UPDATE orders SET status = ?1, updated_at = ?2 WHERE id = ?3",
+    )
+      .bind("committed", Date.now(), orderId)
+      .run(),
+  );
 
-  const row = await env.DB.prepare(
-    "SELECT id, status, revision, payload_bytes, updated_at FROM orders WHERE id = ?1",
-  )
-    .bind(orderId)
-    .first();
+  const row = await withD1Retry(() =>
+    env.DB.prepare(
+      "SELECT id, status, revision, payload_bytes, updated_at FROM orders WHERE id = ?1",
+    )
+      .bind(orderId)
+      .first(),
+  );
 
   const result: MegaCheckoutResult = {
     orderId,

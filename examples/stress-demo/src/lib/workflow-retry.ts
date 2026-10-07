@@ -1,21 +1,21 @@
 const RETRYABLE =
-  /(?:D1_?(?:OVERLOADED|TIMEOUT|BUSY)|SQLITE_BUSY|database is locked|database is busy|temporarily busy|operation queue is saturated)/i;
+  /(?:WORKFLOW_RUNTIME_UNAVAILABLE|WORKFLOW_VERSION_NOT_READY|WORKFLOW_BINDING_STALE|temporarily busy|operation queue is saturated|overloaded|resource limit|subrequest limit|isolate|dispatch|not ready)/i;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isRetryableD1Error(error: unknown): boolean {
+function isRetryableWorkflowError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return RETRYABLE.test(String(error));
   }
   return RETRYABLE.test(error.message) || RETRYABLE.test(error.name);
 }
 
-/** Retry transient D1 contention under peak write/read load. */
-export async function withD1Retry<T>(
+/** Retry transient workflow admission failures under peak create load. */
+export async function withWorkflowRetry<T>(
   operation: () => Promise<T>,
-  maxAttempts = 8,
+  maxAttempts = 6,
 ): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -23,10 +23,10 @@ export async function withD1Retry<T>(
       return await operation();
     } catch (error) {
       lastError = error;
-      if (!isRetryableD1Error(error) || attempt === maxAttempts) {
+      if (!isRetryableWorkflowError(error) || attempt === maxAttempts) {
         throw error;
       }
-      await delay(15 * attempt);
+      await delay(20 * attempt);
     }
   }
   throw lastError;

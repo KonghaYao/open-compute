@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { withD1Retry } from "../lib/d1-retry";
 import { ok, structuredError } from "../lib/json";
 import { ensureOrderSchema } from "../lib/schema";
 
@@ -38,23 +39,27 @@ export async function handleScenarioVerify(
     }
   }
 
-  const idempotencyRows = await env.DB.prepare(
-    "SELECT key, order_id, response_json FROM idempotency WHERE order_id = ?1 ORDER BY created_at DESC LIMIT 1",
-  )
-    .bind(orderId)
-    .all<{ key: string; order_id: string; response_json: string }>();
+  const idempotencyRows = await withD1Retry(() =>
+    env.DB.prepare(
+      "SELECT key, order_id, response_json FROM idempotency WHERE order_id = ?1 ORDER BY created_at DESC LIMIT 1",
+    )
+      .bind(orderId)
+      .all<{ key: string; order_id: string; response_json: string }>(),
+  );
 
-  const row = await env.DB.prepare(
-    "SELECT id, status, revision, payload_bytes, updated_at FROM orders WHERE id = ?1",
-  )
-    .bind(orderId)
-    .first<{
-      id: string;
-      status: string;
-      revision: string;
-      payload_bytes: number;
-      updated_at: number;
-    }>();
+  const row = await withD1Retry(() =>
+    env.DB.prepare(
+      "SELECT id, status, revision, payload_bytes, updated_at FROM orders WHERE id = ?1",
+    )
+      .bind(orderId)
+      .first<{
+        id: string;
+        status: string;
+        revision: string;
+        payload_bytes: number;
+        updated_at: number;
+      }>(),
+  );
 
   const receipt = await env.BUCKET.get(receiptKey(orderId));
   const r2Exists = receipt !== null;
