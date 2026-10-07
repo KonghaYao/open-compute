@@ -14,7 +14,7 @@ mkdir -p "$STRESS_RUN_DIR"
 # shellcheck source=lib/anomaly-check.sh
 . "${root}/test/stress/lib/anomaly-check.sh"
 
-capture_container_restart_baseline open-compute-ocd
+capture_container_restart_baseline
 
 STACK_NAMES="http kv d1 r2 queue do workflow fetch cpu service scenario_mega"
 for stack in $STACK_NAMES; do
@@ -74,63 +74,11 @@ mega_body='{"mode":"normal","fanOutN":5,"fanOutM":2,"payloadBytes":2048}'
 run_stack_load scenario_mega 6 "/stack/scenario/mega-checkout" POST "$mega_body"
 
 check_health_post_run "$base_url" || true
-check_orphan_workerd || true
-check_container_restarts open-compute-ocd || true
+check_container_restarts || true
 
 timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-RESULT_DIR="$STRESS_RUN_DIR" RUN_ID="$run_id" TIMESTAMP="$timestamp" WORKER_HOST="$worker_host" python3 - <<'PY' >"${STRESS_RUN_DIR}/result.json"
-import json
-import os
-from pathlib import Path
-
-result_dir = Path(os.environ["RESULT_DIR"])
-stacks = {}
-for lat_file in sorted(result_dir.glob("lat-*.txt")):
-    name = lat_file.name.replace("lat-", "").replace(".txt", "")
-    err_file = result_dir / f"err-{name}.txt"
-    total = sum(1 for _ in lat_file.open())
-    errors = sum(1 for _ in err_file.open()) if err_file.exists() else 0
-    error_rate = (errors / total) if total else 1.0
-
-    def pct(p: int) -> int:
-        if total == 0:
-            return 0
-        rank = (total * p + 99) // 100
-        lines = sorted(int(line.strip()) for line in lat_file.open() if line.strip())
-        return lines[min(rank, len(lines)) - 1]
-
-    stacks[name] = {
-        "samples": total,
-        "errors": errors,
-        "error_rate": round(error_rate, 6),
-        "p50": pct(50),
-        "p95": pct(95),
-        "p99": pct(99),
-    }
-
-output = {
-    "schema_version": 2,
-    "profile": "p0-2c4g",
-    "run_id": os.environ["RUN_ID"],
-    "timestamp": os.environ["TIMESTAMP"],
-    "worker_host": os.environ["WORKER_HOST"],
-    "stacks": stacks,
-    "scenario": {"mega-checkout": stacks.get("scenario_mega", {})},
-    "slo_thresholds_2c4g": {
-        "http": {"p95_ms": 800, "p99_ms": 1500, "error_rate_max": 0.01},
-        "kv": {"p95_ms": 600, "error_rate_max": 0.01},
-        "d1": {"p95_ms": 1200, "error_rate_max": 0.01},
-        "r2": {"p95_ms": 1000, "error_rate_max": 0.01},
-        "queue": {"p95_ms": 900, "error_rate_max": 0.01},
-        "do": {"p95_ms": 1000, "error_rate_max": 0.01},
-        "workflow": {"p95_ms": 2000, "error_rate_max": 0.01},
-        "fetch": {"p95_ms": 1200, "error_rate_max": 0.01},
-        "cpu": {"p95_ms": 3000, "error_rate_max": 0.01},
-        "service": {"p95_ms": 800, "error_rate_max": 0.01},
-        "scenario_mega": {"p95_ms": 3000, "error_rate_max": 0.01},
-    },
-}
-print(json.dumps(output, indent=2))
-PY
+python3 "${root}/test/stress/report.py" --directory "$STRESS_RUN_DIR" \
+  --mode p0 --profile 2c4g --stacks $STACK_NAMES \
+  --run-id "$run_id" --timestamp "$timestamp" >"${STRESS_RUN_DIR}/result.json"
 
 finalize_verdict "${STRESS_RUN_DIR}/result.json"

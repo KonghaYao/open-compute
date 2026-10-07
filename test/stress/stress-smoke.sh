@@ -13,7 +13,7 @@ mkdir -p "$STRESS_RUN_DIR"
 # shellcheck source=lib/anomaly-check.sh
 . "${root}/test/stress/lib/anomaly-check.sh"
 
-capture_container_restart_baseline open-compute-ocd
+capture_container_restart_baseline
 
 curl_stack() {
   local method=$1
@@ -77,8 +77,7 @@ fi
 check_route "stack/scenario/verify" curl_stack GET "/stack/scenario/verify?order_id=${order_id}"
 
 check_health_post_run "$base_url" || true
-check_orphan_workerd || true
-check_container_restarts open-compute-ocd || true
+check_container_restarts || true
 
 python3 - <<PY >"${STRESS_RUN_DIR}/result.json"
 import json

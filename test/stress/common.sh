@@ -22,9 +22,9 @@ _resolve_open_compute_root() {
 }
 root=$(_resolve_open_compute_root)
 stress_data_dir="${root}/.temp/stress-data"
-stress_run_root="${root}/.temp/stress-run"
+stress_run_root="${STRESS_RUN_ROOT:-${root}/.temp/stress-run}"
 
-base_url=${STRESS_BASE_URL:-http://127.0.0.1:8788}
+base_url=${STRESS_BASE_URL:-http://127.0.0.1:8787}
 if [ -z "${STRESS_ACCOUNT_ID:-}" ] && [ -f "${stress_run_root}/.deploy_env" ]; then
   set -a
   # shellcheck disable=SC1091
@@ -41,127 +41,40 @@ ensure_stress_data() {
   fi
 }
 
-kill_orphan_workerd_preflight() {
-  if ! command -v pgrep >/dev/null 2>&1; then
-    return 0
+stress_compose() {
+  if [ -n "${STRESS_COMPOSE_OVERRIDE:-}" ]; then
+    docker compose --project-directory "${root}/examples/container" \
+      -f "${root}/examples/container/docker-compose.yml" -f "$STRESS_COMPOSE_OVERRIDE" "$@"
+    return
   fi
-  local pids
-  pids=$(pgrep -x workerd 2>/dev/null || true)
-  if [ -z "$pids" ]; then
-    return 0
-  fi
-  printf 'preflight: killing orphan host workerd (%s)\n' "$pids" >&2
-  pkill -x workerd 2>/dev/null || true
-  sleep 2
-  pids=$(pgrep -x workerd 2>/dev/null || true)
-  if [ -n "$pids" ]; then
-    pkill -9 -x workerd 2>/dev/null || true
-    sleep 1
-  fi
+  docker compose --project-directory "${root}/examples/container" \
+    -f "${root}/examples/container/docker-compose.yml" "$@"
 }
 
-cleanup_old_stress_runs() {
-  keep_count=${1:-${STRESS_RUN_KEEP:-10}}
-  if [ ! -d "$stress_run_root" ]; then
-    return 0
+stress_container() {
+  container=$(stress_compose ps -q ocd) || return 1
+  case "$container" in
+    ""|*'
+'*) echo "expected one running ocd in the selected Compose project" >&2; return 1 ;;
+  esac
+  printf '%s\n' "$container"
+}
+
+restart_stress_container() {
+  container=$(stress_container) || return 1
+  before=$(docker inspect --format '{{.State.StartedAt}}' "$container") || return 1
+  stress_compose restart ocd || return 1
+  after=$(docker inspect --format '{{.State.StartedAt}}' "$container") || return 1
+  if [ "$before" = "$after" ]; then
+    echo "ocd container did not restart" >&2
+    return 1
   fi
-  local run_dirs total delete_count dir size_kb
-  run_dirs=$(find "$stress_run_root" -mindepth 1 -maxdepth 1 -type d \
-    -name '20*' | sort)
-  total=$(printf '%s\n' "$run_dirs" | sed '/^$/d' | wc -l | tr -d ' ')
-  if [ "$total" -le "$keep_count" ]; then
-    find "$stress_run_root" -maxdepth 1 -name '.curl-body-*' -type f -delete 2>/dev/null || true
-    return 0
-  fi
-  delete_count=$((total - keep_count))
-  printf 'cleanup: pruning up to %s old stress-run dirs (keeping %s)\n' "$delete_count" "$keep_count" >&2
-  printf '%s\n' "$run_dirs" | head -n "$delete_count" | while IFS= read -r dir; do
-    [ -z "$dir" ] && continue
-    if [ -d "${dir}/failed" ]; then
-      printf 'cleanup: retain failed run %s\n' "$(basename "$dir")" >&2
-      continue
-    fi
-    size_kb=$(du -sk "$dir" 2>/dev/null | awk '{print $1}')
-    rm -rf "$dir"
-    printf 'cleanup: removed %s (%sKB)\n' "$(basename "$dir")" "$size_kb" >&2
-  done
-  find "$stress_run_root" -maxdepth 1 -name '.curl-body-*' -type f -delete 2>/dev/null || true
 }
 
 recover_before_sample() {
   settle_sec=${1:-${STRESS_RECOVER_SETTLE_SEC:-10}}
-  kill_orphan_workerd_preflight
   wait_for_worker_ready 90 || return 1
   sleep "$settle_sec"
-}
-
-ensure_compose_stack() {
-  compose_dir="${root}/examples/container"
-  port=${OC_PUBLIC_PORT:-8788}
-  if [ -f "${compose_dir}/.env" ]; then
-    env_port=$(grep '^OC_PUBLIC_PORT=' "${compose_dir}/.env" | cut -d= -f2- || true)
-    if [ -n "$env_port" ]; then
-      port=$env_port
-    fi
-  fi
-  export OC_PUBLIC_PORT="$port"
-  export STRESS_BASE_URL="http://127.0.0.1:${port}"
-  base_url="$STRESS_BASE_URL"
-
-  kill_orphan_workerd_preflight
-
-  if ! command -v docker >/dev/null 2>&1; then
-    echo "docker unavailable; cannot ensure compose stack" >&2
-    return 1
-  fi
-
-  local running
-  running=$(docker inspect -f '{{.State.Running}}' open-compute-ocd 2>/dev/null || echo false)
-  if [ "$running" != "true" ]; then
-    printf 'compose: starting open-compute stack on port %s\n' "$port" >&2
-    if (cd "$compose_dir" && docker compose up -d) >&2; then
-      :
-    elif (cd "$compose_dir" && docker compose up -d --build) >&2; then
-      :
-    else
-      echo "compose up failed (try: cd examples/container && docker compose up -d)" >&2
-      return 1
-    fi
-  fi
-
-  if ! wait_for_ready "$base_url" 120; then
-    echo "compose stack failed readiness on ${base_url}" >&2
-    return 1
-  fi
-
-  deploy_env="${stress_run_root}/.deploy_env"
-  worker_ready=0
-  if [ -f "$deploy_env" ]; then
-    set -a
-    # shellcheck disable=SC1090
-    . "$deploy_env"
-    set +a
-    if wait_for_worker_ready 30; then
-      worker_ready=1
-    fi
-  fi
-
-  if [ "$worker_ready" -eq 0 ]; then
-    printf 'compose: deploying stress-demo\n' >&2
-    OC_PUBLIC_PORT="$port" sh "${root}/test/stress/deploy-stress-demo.sh"
-    set -a
-    # shellcheck disable=SC1090
-    . "$deploy_env"
-    set +a
-    if ! wait_for_worker_ready 90; then
-      echo "stress-demo deploy failed worker readiness" >&2
-      return 1
-    fi
-  fi
-
-  export STRESS_ACCOUNT_ID
-  export STRESS_BASE_URL
-  return 0
 }
 
 require_disk_space() {
@@ -233,27 +146,29 @@ stress_request() {
   body=${3:-}
   lat_file=$4
   err_file=$5
-  start_ms=$(now_ms)
+  request_failed=0
   status=000
-  body_out="${STRESS_RUN_DIR:-/tmp}/.curl-body-$$"
+  body_out=/dev/null
   if [ -n "$body" ]; then
     if ! response=$(curl -sS -H "$host_header" -H 'Content-Type: application/json' \
-      -X "$method" -o "$body_out" -w '%{http_code}' \
+      -X "$method" -o "$body_out" -w '%{http_code} %{time_total}' \
       --max-time 60 "${base_url}${path}" -d "$body"); then
-      status=000
-    else
-      status=$response
+      request_failed=1
     fi
   else
-    if ! response=$(curl -sS -H "$host_header" -X "$method" -o "$body_out" -w '%{http_code}' \
+    if ! response=$(curl -sS -H "$host_header" -X "$method" -o "$body_out" -w '%{http_code} %{time_total}' \
       --max-time 60 "${base_url}${path}"); then
-      status=000
-    else
-      status=$response
+      request_failed=1
     fi
   fi
-  end_ms=$(now_ms)
-  latency=$((end_ms - start_ms))
+  IFS=' ' read -r status elapsed_secs <<EOF
+$response
+EOF
+  [ "$request_failed" -eq 0 ] || status=000
+  latency=$(awk -v seconds="$elapsed_secs" 'BEGIN {
+    if (seconds !~ /^[0-9]+([.][0-9]+)?$/) exit 1
+    printf "%.0f\n", seconds * 1000
+  }')
   printf '%s\n' "$latency" >>"$lat_file"
   case "$status" in
     200|201|202|204|101) ;;
@@ -269,7 +184,7 @@ stress_request_idempotent_get() {
   max_attempts=${4:-5}
   start_ms=$(now_ms)
   status=000
-  body_out="${STRESS_RUN_DIR:-/tmp}/.curl-body-$$"
+  body_out=/dev/null
   attempt=1
   while [ "$attempt" -le "$max_attempts" ]; do
     if ! response=$(curl -sS -H "$host_header" -X GET -o "$body_out" -w '%{http_code}' \

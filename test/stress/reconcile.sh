@@ -131,7 +131,6 @@ else
 fi
 
 check_health_post_run "$base_url" || true
-check_orphan_workerd || true
 
 python3 - <<PY >"${STRESS_RUN_DIR}/result.json"
 import json

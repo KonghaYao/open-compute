@@ -1,6 +1,6 @@
 # Stress tests with anomaly detection
 
-Stress scripts measure latency and concurrency, but **fail closed** on technical anomalies. A run with acceptable p95 but secret leakage, orphan `workerd`, or cross-binding drift is a failure.
+Stress scripts measure latency and concurrency, but **fail closed** on technical anomalies. A run with acceptable p95 but secret leakage, unexpected restarts in the selected Compose project, or cross-binding drift is a failure.
 
 Artifacts live under `.temp/stress-run/<run-id>/`. Failed runs copy evidence to `.temp/stress-run/<run-id>/failed/anomalies.json`.
 
@@ -11,7 +11,13 @@ Artifacts live under `.temp/stress-run/<run-id>/`. Failed runs copy evidence to 
 source .temp/stress-run/.deploy_env
 ```
 
-`deploy-stress-demo.sh` resolves the live KV namespace and D1 database IDs from the running ocd instance (via `cf kv namespaces list` / `cf d1 list`), patches `examples/stress-demo/cloudflare.config.ts` only for the deploy build, then restores the tracked config. On first deploy it uses a two-pass flow: bootstrap without the self-referencing `SERVICE` binding, then redeploy with `SERVICE` once `stress-demo` exists.
+`deploy-stress-demo.sh` resolves the live KV namespace and D1 database IDs from the running ocd instance (via `cf kv namespaces list` / `cf d1 list`), supplies their IDs through explicit environment values without modifying tracked configuration. On first deploy it uses a two-pass flow: bootstrap without the self-referencing `SERVICE` binding, then redeploy with `SERVICE` once `stress-demo` exists.
+
+## Release qualification
+
+`./test/stress/qualify-release.sh ABS_CANDIDATE ABS_PACKAGE_REPORT` verifies the packaged Linux x64 executable and its source/runtime identity, builds local images, and runs smoke, P0, scenario, full P1 peak, and a one-hour soak in a unique Compose project. Docker enforces 2 CPUs and 4 GiB memory. No host-wide workerd search or signal is permitted; injected restarts select this project's `ocd` service and count only successful restarts with verified readiness and reconciliation.
+
+Release qualification rejects abbreviated profiles, empty samples, excessive errors or latency, missing stack results, and failed recovery. The selected candidate digest and actual container limits accompany the results. Successful fixtures are torn down; failed project volumes and diagnostics remain under `.temp/release-stress/` for investigation. Release publication requires this job to pass and includes branded `test-report.html` plus `test-report.json`, bound into the manifest and SHA256SUMS.
 
 ## Scripts
 
@@ -55,7 +61,6 @@ source .temp/stress-run/.deploy_env
 | `secret_leak`            | critical | Token/key/password pattern in response body    |
 | `health_live`            | critical | `/health/live` not 200 after run               |
 | `health_ready`           | critical | `/health/ready` not 200 after run              |
-| `orphan_workerd`         | critical | Host `workerd` process survived after run      |
 | `container_restart`      | warning  | Docker container restart count increased       |
 | `kv_read_after_write`    | error    | KV GET value differs from prior PUT            |
 | `do_counter_regression`  | error    | Durable Object counter not monotonic           |
@@ -89,19 +94,21 @@ Fault injection codes: `KV_FAULT_INJECTED`, `D1_FAULT_INJECTED`, `R2_FAULT_INJEC
 
 Per-stack PEAK phases (2C/4G defaults) with schema v2 `result.json` per run:
 
-| Stack         | Load                          | Duration   |
-| ------------- | ----------------------------- | ---------- |
-| http          | 25 → 50 → 75 concurrent       | 5 min each |
-| kv            | 16 concurrent                 | 15 min     |
-| d1            | 15 write + 30 read concurrent | 15 min     |
-| r2            | 4 multipart + 10 GET/s        | 20 min     |
-| queue         | 200 msg/s                     | 10 min     |
-| do            | 10 RPC/s + 10 WebSocket       | 15 min     |
-| workflow      | 3/s                           | 15 min     |
-| fetch         | 50 concurrent                 | 10 min     |
-| mega-checkout | 15 concurrent                 | 15 min     |
+| Stack    | Load                          | Duration   |
+| -------- | ----------------------------- | ---------- |
+| http     | 25 → 50 → 75 concurrent       | 5 min each |
+| kv       | 16 concurrent                 | 15 min     |
+| d1       | 10 write + 20 read concurrent | 15 min     |
+| r2       | 4 multipart + 10 GET/s        | 20 min     |
+| queue    | 200 msg/s                     | 10 min     |
+| do       | 10 RPC/s + 10 WebSocket       | 15 min     |
+| workflow | 3/s                           | 15 min     |
+| fetch    | 50 concurrent                 | 10 min     |
+| cpu      | 8 concurrent                  | 10 min     |
 
-Inter-stack cooldown defaults to 60s (`STRESS_P1_COOLDOWN_SEC` to override). Disk preflight requires ≥5 GB free on `.temp/`.
+Rate-based phases send one concurrent batch per second and wait for it before starting another. Actual throughput depends on request latency and client overhead; the recorded sample count is authoritative. `scenario_mega` is an optional peak selection (`STRESS_P1_STACK=scenario_mega`), with 15 concurrent requests for 15 minutes.
+
+Inter-stack cooldown defaults to 90s (`STRESS_P1_COOLDOWN_SEC` to override). Disk preflight requires ≥5 GB free on `.temp/`.
 
 Soak (`stress-p1-soak.sh`): rotate stacks every 5 min for 1 hour; restart container every 15 min; post-restart ready + reconcile.
 

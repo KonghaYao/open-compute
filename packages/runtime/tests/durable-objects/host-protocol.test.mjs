@@ -46,30 +46,56 @@ test("DO host authority accepts only the canonical instance ID", () => {
 test("cancelOrderedOperation skips a queued sequence without blocking the channel", async () => {
   const states = new Map();
   const channelId = "a".repeat(32);
-  let firstStarted;
-  const firstGate = new Promise((resolve) => {
-    firstStarted = resolve;
+  let ran = false;
+  const second = ordered(states, { channelId, sequence: 1 }, async () => {
+    ran = true;
   });
-  const first = ordered(states, { channelId, sequence: 0 }, async () => {
-    await firstGate;
-    return "first";
-  });
-  const second = ordered(
-    states,
-    { channelId, sequence: 1 },
-    async () => "second",
-  );
-  await new Promise((resolve) => setImmediate(resolve));
+  const cancelled = assert.rejects(second, /DO_RUNTIME_EXCEPTION/);
   cancelOrderedOperation(states, { channelId, sequence: 1 });
-  firstStarted();
-  assert.equal(await first, "first");
+  await cancelled;
+  assert.equal(
+    await ordered(states, { channelId, sequence: 0 }, async () => "first"),
+    "first",
+  );
   const third = await ordered(
     states,
     { channelId, sequence: 2 },
     async () => "third",
   );
   assert.equal(third, "third");
-  await second.catch(() => undefined);
+  assert.equal(ran, false);
+  assert.equal(states.get(channelId).pending.size, 0);
+});
+
+test("cancellation before the first request advances an unseen channel", async () => {
+  const states = new Map();
+  const channelId = "c".repeat(32);
+  cancelOrderedOperation(states, { channelId, sequence: 0 });
+  cancelOrderedOperation(states, { channelId, sequence: 0 });
+  assert.equal(
+    await ordered(states, { channelId, sequence: 1 }, async () => "next"),
+    "next",
+  );
+  assert.throws(
+    () => ordered(states, { channelId, sequence: 0 }, async () => "stale"),
+    /DO_RUNTIME_EXCEPTION/,
+  );
+});
+
+test("future cancellations remain bounded and cannot execute tenant work", async () => {
+  const states = new Map();
+  const channelId = "d".repeat(32);
+  for (let sequence = 1; sequence <= 256; sequence += 1)
+    cancelOrderedOperation(states, { channelId, sequence });
+  assert.throws(
+    () => cancelOrderedOperation(states, { channelId, sequence: 257 }),
+    /DO_STORAGE_LIMIT/,
+  );
+  cancelOrderedOperation(states, { channelId, sequence: 0 });
+  assert.equal(
+    await ordered(states, { channelId, sequence: 257 }, async () => "next"),
+    "next",
+  );
 });
 
 test("ordered rejects duplicate pending sequences with DO_RUNTIME_EXCEPTION", async () => {
@@ -88,4 +114,25 @@ test("ordered rejects duplicate pending sequences with DO_RUNTIME_EXCEPTION", as
     /DO_RUNTIME_EXCEPTION/,
   );
   release();
+});
+
+test("a full ordering buffer still admits the next sequence so pending work can drain", async () => {
+  const states = new Map();
+  const channelId = "e".repeat(32);
+  const pending = Array.from({ length: 256 }, (_, index) =>
+    ordered(states, { channelId, sequence: index + 1 }, async () => index + 1),
+  );
+  assert.throws(
+    () => ordered(states, { channelId, sequence: 257 }, async () => 257),
+    /DO_STORAGE_LIMIT/,
+  );
+  assert.equal(
+    await ordered(states, { channelId, sequence: 0 }, async () => 0),
+    0,
+  );
+  assert.deepEqual(
+    await Promise.all(pending),
+    Array.from({ length: 256 }, (_, index) => index + 1),
+  );
+  assert.equal(states.get(channelId).pending.size, 0);
 });

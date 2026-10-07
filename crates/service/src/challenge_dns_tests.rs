@@ -220,7 +220,7 @@ fn challenge_probe_rejects_wrong_nameserver_and_non_authoritative_response() {
 
 #[tokio::test]
 async fn provider_and_dns_sockets_isolate_two_domains() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = tempfile::tempdir_in("/tmp").unwrap();
     let authority = Arc::new(
         ChallengeAuthority::new(&["compute.example.com", "other.example.net"], false).unwrap(),
     );

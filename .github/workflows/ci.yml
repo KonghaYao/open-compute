@@ -47,7 +47,7 @@ jobs:
       - name: Validate source identity and release-tool contracts
         run: |
           bun test/conformance/check.ts --case baseline-identity
-          node --test test/release-tools.test.mjs
+          node --test test/release-tools.test.mjs test/release-test-report.test.mjs test/stress.test.mjs
 
   checks:
     # Fast development checks. Full acceptance is owned by the release workflow.

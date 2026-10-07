@@ -5,8 +5,6 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 # shellcheck disable=SC1091
 . "${root}/test/stress/common.sh"
-cleanup_old_stress_runs
-kill_orphan_workerd_preflight
 ensure_stress_data
 
 run_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
@@ -16,15 +14,16 @@ mkdir -p "$STRESS_RUN_DIR"
 # shellcheck source=lib/anomaly-check.sh
 . "${root}/test/stress/lib/anomaly-check.sh"
 
-capture_container_restart_baseline open-compute-ocd
+capture_container_restart_baseline
 
 export STRESS_BINDINGS_ALIGN_SEC=${STRESS_BINDINGS_ALIGN_SEC:-60}
 
 if [ "${STRESS_SOAK_ABBREV:-0}" = "1" ]; then
   SOAK_TOTAL_SEC=900
-  ROTATE_SEC=120
-  SOAK_INJECT_RESTART=0
-  RESTART_INTERVAL_SEC=$((SOAK_TOTAL_SEC + 1))
+  ROTATE_SEC=60
+  SOAK_INJECT_RESTART=1
+  RESTART_INTERVAL_SEC=300
+  SOAK_SCALE=0.1
   SOAK_HTTP_CONCURRENCY=10
   SOAK_KV_CONCURRENCY=8
   SOAK_D1_CONCURRENCY=5
@@ -34,8 +33,8 @@ if [ "${STRESS_SOAK_ABBREV:-0}" = "1" ]; then
   SOAK_WORKFLOW_RATE=3
   SOAK_FETCH_CONCURRENCY=10
   SOAK_MEGA_CONCURRENCY=3
-  SOAK_RECOVER_SETTLE_SEC=20
-  printf 'Soak abbreviated mode (STRESS_SOAK_ABBREV=1): 15 min total, no container restart\n' >&2
+  SOAK_RECOVER_SETTLE_SEC=5
+  printf 'Soak abbreviated mode (STRESS_SOAK_ABBREV=1): 15 min total, restart every 5 min\n' >&2
 else
   SOAK_TOTAL_SEC=3600
   ROTATE_SEC=300
@@ -152,17 +151,15 @@ post_restart_verify() {
 inject_restart() {
   local restart_num=$1
   log_soak_event "restart_begin" "restart=${restart_num}"
-  kill_orphan_workerd_preflight
-  if command -v docker >/dev/null 2>&1; then
-    docker restart open-compute-ocd >/dev/null 2>&1 || true
-    sleep 10
-    post_restart_verify "$restart_num" || true
-    recover_before_sample "$SOAK_RECOVER_SETTLE_SEC"
-    capture_container_restart_baseline open-compute-ocd
-  else
-    log_soak_event "restart_skipped" "docker unavailable"
+  if ! restart_stress_container; then
+    record_anomaly "container_restart_injection" '{"reason":"restart_failed"}'
+    log_soak_event "restart_failed" "restart=${restart_num}"
+    return 1
   fi
-  check_orphan_workerd || true
+  post_restart_verify "$restart_num" || return 1
+  recover_before_sample "$SOAK_RECOVER_SETTLE_SEC" || return 1
+  capture_container_restart_baseline
+
 }
 
 soak_start=$(date +%s)
@@ -193,8 +190,8 @@ while [ "$(date +%s)" -lt "$soak_end" ]; do
   if [ "${SOAK_INJECT_RESTART:-0}" = "1" ] \
     && [ "$(date +%s)" -lt "$soak_end" ] \
     && [ "$(date +%s)" -ge "$next_restart" ]; then
+    inject_restart "$((restart_count + 1))"
     restart_count=$((restart_count + 1))
-    inject_restart "$restart_count"
     next_restart=$((next_restart + RESTART_INTERVAL_SEC))
   fi
 
@@ -203,67 +200,12 @@ done
 
 log_soak_event "soak_end" "restarts=${restart_count} anomalies=$(anomaly_count)"
 
-check_orphan_workerd || true
-check_container_restarts open-compute-ocd || true
+check_container_restarts || true
 
 timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-RESULT_DIR="$STRESS_RUN_DIR" RUN_ID="$run_id" TIMESTAMP="$timestamp" \
-  WORKER_HOST="$worker_host" SOAK_LOG="$SOAK_LOG" RESTART_COUNT="$restart_count" \
-  python3 - <<'PY' >"${STRESS_RUN_DIR}/result.json"
-import json
-import os
-from pathlib import Path
-
-result_dir = Path(os.environ["RESULT_DIR"])
-soak_events = []
-soak_file = Path(os.environ.get("SOAK_LOG", ""))
-if soak_file.is_file():
-    soak_events = [json.loads(line) for line in soak_file.read_text().splitlines() if line.strip()]
-
-stacks = {}
-for lat_file in sorted(result_dir.glob("lat-*.txt")):
-    name = lat_file.name.replace("lat-", "").replace(".txt", "")
-    err_file = result_dir / f"err-{name}.txt"
-    lines = [int(line.strip()) for line in lat_file.read_text().splitlines() if line.strip()]
-    total = len(lines)
-    errors = sum(1 for _ in err_file.open()) if err_file.exists() else 0
-    error_rate = (errors / total) if total else 0.0
-
-    def pct(p: int) -> int:
-        if not lines:
-            return 0
-        rank = (total * p + 99) // 100
-        return sorted(lines)[min(rank, total) - 1]
-
-    stacks[name] = {
-        "samples": total,
-        "errors": errors,
-        "error_rate": round(error_rate, 6),
-        "latency_ms": {"p50": pct(50), "p95": pct(95), "p99": pct(99)},
-        "anomalies": [],
-        "verdict": "pass",
-    }
-
-recovery_times = [
-    e.get("details", "")
-    for e in soak_events
-    if e.get("event") == "restart_ready_ok"
-]
-print(json.dumps({
-    "schema_version": 2,
-    "profile": "p1-soak" if os.environ.get("STRESS_SOAK_ABBREV") != "1" else "p1-soak-abbrev",
-    "run_id": os.environ["RUN_ID"],
-    "timestamp": os.environ["TIMESTAMP"],
-    "worker_host": os.environ["WORKER_HOST"],
-    "soak": {
-        "container_restarts_injected": int(os.environ.get("RESTART_COUNT", "0")),
-        "recovery_events": recovery_times,
-        "events": soak_events,
-    },
-    "stacks": stacks,
-    "scenario": {"mega-checkout": stacks.get("scenario_mega", {})},
-    "verdict": "pass",
-}, indent=2))
-PY
+python3 "${root}/test/stress/report.py" --directory "$STRESS_RUN_DIR" \
+  --mode soak --profile "${STRESS_PROFILE:-2c4g}" --stacks $STACK_NAMES \
+  --run-id "$run_id" --timestamp "$timestamp" --restarts "$restart_count" \
+  --scale "${SOAK_SCALE:-1}" >"${STRESS_RUN_DIR}/result.json"
 
 finalize_verdict "${STRESS_RUN_DIR}/result.json"

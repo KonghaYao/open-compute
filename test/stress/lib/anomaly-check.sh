@@ -123,44 +123,36 @@ check_health_post_run() {
   return "$ok"
 }
 
-check_orphan_workerd() {
-  if ! command -v pgrep >/dev/null 2>&1; then
-    return 0
-  fi
-  local orphans
-  orphans=$(pgrep -x workerd 2>/dev/null || true)
-  if [ -n "$orphans" ]; then
-    orphans=$(ps -o pid=,comm= -p $orphans 2>/dev/null | sed '/^$/d' || true)
-  fi
-  if [ -n "$orphans" ]; then
-    record_anomaly "orphan_workerd" "$(jq -nc --arg processes "$orphans" '{processes: $processes}')"
+capture_container_restart_baseline() {
+  local container_name
+  if ! container_name=$(stress_container); then
+    record_anomaly "container_lookup" '{}'
     return 1
   fi
-  return 0
-}
-
-capture_container_restart_baseline() {
-  local container_name=$1
-  if ! command -v docker >/dev/null 2>&1; then
-    return 0
-  fi
   local count
-  count=$(docker inspect --format='{{.RestartCount}}' "$container_name" 2>/dev/null || echo 0)
+  if ! count=$(docker inspect --format='{{.RestartCount}}' "$container_name"); then
+    record_anomaly "container_inspection" '{}'
+    return 1
+  fi
   printf '%s\n' "$count" >"$CONTAINER_RESTART_BASELINE"
 }
 
 check_container_restarts() {
-  local container_name=$1
-  if ! command -v docker >/dev/null 2>&1; then
-    return 0
+  local container_name
+  if ! container_name=$(stress_container); then
+    record_anomaly "container_lookup" '{}'
+    return 1
   fi
   if [ ! -f "$CONTAINER_RESTART_BASELINE" ]; then
-    capture_container_restart_baseline "$container_name"
-    return 0
+    capture_container_restart_baseline
+    return $?
   fi
   local before after delta
   before=$(cat "$CONTAINER_RESTART_BASELINE")
-  after=$(docker inspect --format='{{.RestartCount}}' "$container_name" 2>/dev/null || echo 0)
+  if ! after=$(docker inspect --format='{{.RestartCount}}' "$container_name"); then
+    record_anomaly "container_inspection" '{}'
+    return 1
+  fi
   delta=$((after - before))
   if [ "$delta" -gt 0 ]; then
     record_anomaly "container_restart" "$(jq -nc \
@@ -192,6 +184,11 @@ load_anomalies_array() {
 
 finalize_verdict() {
   local result_json=${1:-}
+  if [ -n "$result_json" ]; then
+    if [ ! -f "$result_json" ] || ! jq -e '.verdict == "pass"' "$result_json" >/dev/null 2>&1; then
+      record_anomaly "qualification_result" '{"reason":"missing, invalid or failed verdict"}'
+    fi
+  fi
   local count
   count=$(anomaly_count)
   local anomalies

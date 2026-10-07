@@ -15,7 +15,8 @@ GitHub Releases 是公开二进制的唯一权威来源。每个 release 固定�
 - `ocd-vX.Y.Z-linux-arm64`；
 - `ocd-vX.Y.Z-linux-x64`；
 - `release.json`：版本、Git revision、正式 workerd pin/lock 摘要和逐目标文件身份；
-- `SHA256SUMS`：三个二进制与 `release.json` 的 SHA-256。
+- `test-report.html` 与 `test-report.json`：带 open-compute 品牌的详细资格报告与机器可读指标；
+- `SHA256SUMS`：三个二进制、`release.json` 和两份测试报告的 SHA-256。
 
 Windows 和 macOS Intel 不提供官方二进制、CI package 或 GitHub Release asset。需要在目标机器上使用自己的
 Rust/Bun/Bazel 工具链，从源码手动编译，并显式提供与正式 lock 匹配的 workerd 输入；该路径不属于正式发布资格。
@@ -100,10 +101,14 @@ npm 发布以 `npm publish` 成功退出为完成信号，成功后不轮询 reg
 artifact 完全一致，则把它视为此前调用结果未知但发布已完成；否则立即失败并交给 `release-recovery`，不自动重发。
 
 只读 `assemble` job 只接受三个精确命名的二进制和对应 package report；它重新核对版本、revision、workerd pin、
-lock SHA-256、文件大小与文件 SHA-256，然后生成 `release.json` 和 `SHA256SUMS`。工作流的默认权限
+lock SHA-256、文件大小与文件 SHA-256。组装还必须等待 coverage、integration、安装生命周期和 stress 全部成功，读取各 job 的同提交证据生成品牌 HTML 与 JSON 报告，将报告摘要和大小写入 `release.json`，并加入 `SHA256SUMS`。
+
+`stress` 使用已打包的 Linux x64 候选，在独立 Compose project 中实际限制 2 CPU / 4 GiB，执行 smoke、P0、scenario、完整 P1 peak 与一小时 soak。缩减档、零样本、超出错误率或延迟 SLO、缺失 stack、重启失败或恢复未验证均阻止发布。报告包含 Gate case、耗时、覆盖率、安装/升级步骤、逐 stack 样本和 p50/p95/p99、阈值以及恢复重启次数；只输出选定字段，不包含凭据、原始日志、API payload 或主机路径。
+
+工作流的默认权限
 是只读，只有 `release` environment 中的最后一个 job 获得 `contents: write`。该 job 只使用随 tag 提交并通过上述结构
 校验的版本说明，不使用 GitHub 自动生成的 PR 标题列表。它先创建 Draft
-GitHub Release，上传五个公开 assets，再全部下载回来逐字节比较并执行 `sha256sum --check`；全部通过
+GitHub Release，上传七个公开 assets，再全部下载回来逐字节比较并执行 `sha256sum --check`；全部通过
 后才把 Draft 变成正式 latest release。任一目标或回读校验失败时，不会出现部分公开 release。
 
 `./scripts/release-dry-run.sh` 是本地 Docker 隔离的 Linux ARM64 package 诊断，不是第二套远端发布资格。
@@ -204,7 +209,7 @@ release 的 coverage、最终 Gate、Linux egress 与 package 只依赖身份校
 决定，不再把这些长任务串行相加。
 
 push tag 是唯一发布触发器。随后在 GitHub Actions 的 `release` workflow 中确认所有 qualification、
-三个正式目标 package 和 `publish` job 成功，并在 GitHub Release 页面核对五个 assets。仓库已配置以下设置（2026-09-06 按用户要求迁移）：
+三个正式目标 package 和 `publish` job 成功，并在 GitHub Release 页面核对七个 assets。仓库已配置以下设置（2026-09-06 按用户要求迁移）：
 
 - main 分支不启用分支保护；版本从 main 推进到唯一的 release 分支；release 分支要求 PR、最新 required `ci` 成功和讨论解决，禁止强推/删除；管理员同样受检查约束；
 - `Release tags` ruleset 限制 `v*` tag 创建/更新/删除，仅 repository admin maintainer 可 bypass；

@@ -1,6 +1,6 @@
 import type { Inventory } from "./do/inventory";
 
-export interface InternalService extends Fetcher {
+interface InternalService extends Fetcher {
   echo(value: unknown): Promise<{ value: unknown; revision: string }>;
   multiply(a: number, b: number): Promise<number>;
 }

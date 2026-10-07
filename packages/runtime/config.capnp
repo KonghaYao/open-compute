@@ -195,6 +195,7 @@ const doHostWorker :Workerd.Worker = (
   compatibilityFlags = __OPEN_COMPUTE_SYSTEM_COMPATIBILITY_FLAGS__,
   modules = [
     (name = "durable-objects/router.js", esModule = embed "dist/durable-objects/router.js"),
+    (name = "durable-objects/admission.js", esModule = embed "dist/durable-objects/admission.js"),
     (name = "durable-objects/errors.js", esModule = embed "dist/durable-objects/errors.js"),
     (name = "durable-objects/host.js", esModule = embed "dist/durable-objects/host.js"),
     (name = "durable-objects/host-protocol.js", esModule = embed "dist/durable-objects/host-protocol.js"),

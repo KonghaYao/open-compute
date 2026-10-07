@@ -5,10 +5,7 @@ interface IncrementBody {
   amount?: number;
 }
 
-export async function handleDoRead(
-  env: Env,
-  objectId: string,
-): Promise<Response> {
+async function handleDoRead(env: Env, objectId: string): Promise<Response> {
   const stub = env.INVENTORY.getByName(objectId);
   const state = await stub.read();
   return ok({ stack: "do", ...state });

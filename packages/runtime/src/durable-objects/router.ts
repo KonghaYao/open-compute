@@ -1,10 +1,6 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { RuntimeObservabilityIdentity } from "../loader/protocol.js";
-import {
-  currentStartupGeneration,
-  doPolicy,
-  stableCode,
-} from "../loader/shared.js";
+import { currentStartupGeneration, stableCode } from "../loader/shared.js";
 import { collectObservabilityTail } from "../observability/collector.js";
 import {
   inboundSocketAddress,
@@ -12,6 +8,7 @@ import {
   validateSocketAuthorityWire,
   type SocketAuthorityWire,
 } from "../sockets/tunnel.js";
+import { admitted } from "./admission.js";
 import {
   encodeObjectIdentity,
   identityFromHeaders,
@@ -21,7 +18,6 @@ import type {
   DoHostEnv,
   DoOrder,
   DoPolicy,
-  DoPolicyEnv,
   ResolvedDoAuthority,
 } from "./protocol.js";
 
@@ -75,8 +71,6 @@ const FORBIDDEN_RPC = new Set([
   "webSocketClose",
   "webSocketError",
 ]);
-let activeDispatches = 0;
-const dispatchWaiters: Array<() => void> = [];
 const pendingConnects = new Map<
   string,
   {
@@ -164,47 +158,6 @@ function boundedBody(
       },
     }),
   );
-}
-
-function acquireDispatchSlot(maximum: number): Promise<void> {
-  if (activeDispatches < maximum) {
-    activeDispatches += 1;
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve) => {
-    dispatchWaiters.push(() => {
-      activeDispatches += 1;
-      resolve();
-    });
-  });
-}
-
-function releaseDispatchSlot(): void {
-  activeDispatches -= 1;
-  const next = dispatchWaiters.shift();
-  if (next) next();
-}
-
-function admitted<T>(
-  env: DoPolicyEnv,
-  operation: (policy: DoPolicy) => Promise<T>,
-): Promise<T> {
-  const policy = doPolicy(env);
-  let released = false;
-  const release = () => {
-    if (released) return;
-    released = true;
-    releaseDispatchSlot();
-  };
-  const pending = acquireDispatchSlot(policy.maxInFlightDispatches)
-    .then(() => operation(policy))
-    .finally(release);
-  return Promise.race([
-    pending,
-    scheduler.wait(policy.dispatchTimeoutMs).then(() => {
-      throw stableFailure("DO_DISPATCH_TIMEOUT");
-    }),
-  ]);
 }
 
 function backendHeaders(request: Request, env: DoHostEnv) {
@@ -631,7 +584,8 @@ export default class DoRouter extends WorkerEntrypoint<DoHostEnv> {
 
   async cancelOrder(identity: Record<string, string>): Promise<void> {
     if (!record(identity)) throw stableFailure("DO_INTERNAL_PROTOCOL_ERROR");
-    await admitted(this.env, () => cancelNativeOrder(this.env, identity));
+    // Cancellation must remain available when tenant dispatch admission is full.
+    await cancelNativeOrder(this.env, identity);
   }
 
   async connect(socket: Socket): Promise<void> {

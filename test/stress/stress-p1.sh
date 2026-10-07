@@ -6,8 +6,6 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 # shellcheck disable=SC1091
 . "${root}/test/stress/common.sh"
 require_disk_space 5 "${root}/.temp"
-cleanup_old_stress_runs
-kill_orphan_workerd_preflight
 ensure_stress_data
 
 STRESS_PROFILE=${STRESS_PROFILE:-2c4g}
@@ -54,7 +52,7 @@ mkdir -p "$STRESS_RUN_DIR"
 # shellcheck source=lib/anomaly-check.sh
 . "${root}/test/stress/lib/anomaly-check.sh"
 
-capture_container_restart_baseline open-compute-ocd
+capture_container_restart_baseline
 
 # Full durations per P1 spec; STRESS_P1_ABBREV=1 scales to ~10% for session validation.
 P1_SCALE=${STRESS_P1_SCALE:-1}
@@ -132,13 +130,20 @@ run_rate_until() {
     local second_start
     second_start=$(date +%s)
     local i=0
+    local batch_pids=()
     while [ "$i" -lt "$rate" ]; do
       seq=$((seq + 1))
       local body
       body=$(printf '%s' "$body_template" | sed "s/__SEQ__/${seq}/g; s/__RUN__/${run_id}/g")
-      stress_request "$path" "$method" "$body" "$lat_file" "$err_file"
+      stress_request "$path" "$method" "$body" "$lat_file" "$err_file" &
+      batch_pids+=("$!")
       i=$((i + 1))
     done
+    local failed=0 child
+    for child in "${batch_pids[@]}"; do
+      wait "$child" || failed=1
+    done
+    [ "$failed" -eq 0 ] || return 1
     local elapsed=$(( $(date +%s) - second_start ))
     if [ "$elapsed" -lt 1 ]; then
       sleep $((1 - elapsed))
@@ -533,7 +538,9 @@ stack_queue_peak() {
   local body_template='{"label":"p1-q-__RUN__-__SEQ__","payload":{"run":"__RUN__","seq":__SEQ__}}'
   run_rate_until "queue-peak" "$(p1_rate "$P1_QUEUE_RATE")" "$duration" \
     "/stack/queue/enqueue" POST "$body_template" "$lat" "$err"
-  local verify_label="p1-q-${run_id}-$((seq > 20 ? seq - 20 : 1))"
+  local sent
+  sent=$(wc -l <"$lat")
+  local verify_label="p1-q-${run_id}-$((sent > 20 ? sent - 20 : 1))"
   if ! wait_queue_label "$verify_label" 120; then
     record_anomaly "queue_not_processed" "$(jq -nc --arg label "$verify_label" '{label: $label, phase: "p1_queue_peak"}')"
   fi
@@ -667,98 +674,13 @@ for stack in $selected; do
 done
 
 check_health_post_run "$base_url" || true
-check_orphan_workerd || true
-check_container_restarts open-compute-ocd || true
+check_container_restarts || true
 
 timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-RESULT_DIR="$STRESS_RUN_DIR" RUN_ID="$run_id" TIMESTAMP="$timestamp" \
-  WORKER_HOST="$worker_host" P1_SCALE="$P1_SCALE" STRESS_PROFILE="$STRESS_PROFILE" \
-  python3 - <<'PY' >"${STRESS_RUN_DIR}/result.json"
-import json
-import os
-from pathlib import Path
-
-result_dir = Path(os.environ["RESULT_DIR"])
-profile = os.environ["STRESS_PROFILE"]
-slo_2c4g = {
-    "http": {"p95_ms": 2500, "p99_ms": 3500, "error_rate_max": 0.01},
-    "kv": {"p95_ms": 5000, "p99_ms": 6000, "error_rate_max": 0.01},
-    "d1": {"p95_ms": 3000, "p99_ms": 10000, "error_rate_max": 0.10},
-    "r2": {"p95_ms": 1000, "p99_ms": 3000, "error_rate_max": 0.15},
-    "queue": {"p95_ms": 900, "p99_ms": 2000, "error_rate_max": 0.01},
-    "do": {"p95_ms": 1500, "p99_ms": 3000, "error_rate_max": 0.15},
-    "workflow": {"p95_ms": 2000, "p99_ms": 4000, "error_rate_max": 0.10},
-    "fetch": {"p95_ms": 2000, "p99_ms": 3000, "error_rate_max": 0.01},
-    "cpu": {"p95_ms": 3000, "p99_ms": 6000, "error_rate_max": 0.01},
-    "scenario_mega": {"p95_ms": 3000, "p99_ms": 6000, "error_rate_max": 0.05},
-}
-slo_8c16g = {
-    "http": {"p95_ms": 1500, "p99_ms": 2500, "error_rate_max": 0.01},
-    "kv": {"p95_ms": 3000, "p99_ms": 5000, "error_rate_max": 0.01},
-    "d1": {"p95_ms": 2000, "p99_ms": 8000, "error_rate_max": 0.02},
-    "r2": {"p95_ms": 800, "p99_ms": 2000, "error_rate_max": 0.05},
-    "queue": {"p95_ms": 700, "p99_ms": 1500, "error_rate_max": 0.01},
-    "do": {"p95_ms": 1000, "p99_ms": 2000, "error_rate_max": 0.05},
-    "workflow": {"p95_ms": 1500, "p99_ms": 3000, "error_rate_max": 0.05},
-    "fetch": {"p95_ms": 1200, "p99_ms": 2000, "error_rate_max": 0.01},
-    "cpu": {"p95_ms": 2500, "p99_ms": 5000, "error_rate_max": 0.01},
-    "scenario_mega": {"p95_ms": 2500, "p99_ms": 5000, "error_rate_max": 0.03},
-}
-slo = slo_2c4g if profile == "2c4g" else slo_8c16g
-stacks = {}
-for lat_file in sorted(result_dir.glob("lat-*.txt")):
-    name = lat_file.name.replace("lat-", "").replace(".txt", "")
-    err_file = result_dir / f"err-{name}.txt"
-    total = sum(1 for _ in lat_file.open())
-    errors = sum(1 for _ in err_file.open()) if err_file.exists() else 0
-    error_rate = (errors / total) if total else 1.0
-
-    def pct(p: int) -> int:
-        if total == 0:
-            return 0
-        rank = (total * p + 99) // 100
-        lines = sorted(int(line.strip()) for line in lat_file.open() if line.strip())
-        return lines[min(rank, len(lines)) - 1]
-
-    latency = {"p50": pct(50), "p95": pct(95), "p99": pct(99)}
-    threshold = slo.get(name, {"p95_ms": 5000, "p99_ms": 10000, "error_rate_max": 0.02})
-    stack_anomalies = []
-    verdict = "pass"
-    if error_rate > threshold["error_rate_max"]:
-        stack_anomalies.append({"type": "slo_error_rate", "actual": error_rate, "max": threshold["error_rate_max"]})
-        verdict = "fail"
-    if latency["p95"] > threshold["p95_ms"]:
-        stack_anomalies.append({"type": "slo_p95", "actual": latency["p95"], "max": threshold["p95_ms"]})
-        verdict = "fail"
-    if latency["p99"] > threshold.get("p99_ms", threshold["p95_ms"] * 2):
-        stack_anomalies.append({"type": "slo_p99", "actual": latency["p99"], "max": threshold.get("p99_ms")})
-        verdict = "fail"
-
-    stacks[name] = {
-        "samples": total,
-        "errors": errors,
-        "error_rate": round(error_rate, 6),
-        "latency_ms": latency,
-        "anomalies": stack_anomalies,
-        "verdict": verdict,
-    }
-
-scale_suffix = "" if float(os.environ["P1_SCALE"]) >= 0.99 else "-abbrev"
-output = {
-    "schema_version": 2,
-    "profile": f"p1-{profile}-peak{scale_suffix}",
-    "stress_profile": profile,
-    "run_id": os.environ["RUN_ID"],
-    "timestamp": os.environ["TIMESTAMP"],
-    "worker_host": os.environ["WORKER_HOST"],
-    "p1_scale": float(os.environ["P1_SCALE"]),
-    "stacks": stacks,
-    "scenario": {"mega-checkout": stacks.get("scenario_mega", {})},
-    f"slo_thresholds_{profile}": slo,
-    "verdict": "pass" if all(s["verdict"] == "pass" for s in stacks.values()) else "fail",
-}
-print(json.dumps(output, indent=2))
-PY
+python3 "${root}/test/stress/report.py" --directory "$STRESS_RUN_DIR" \
+  --mode peak --profile "$STRESS_PROFILE" --stacks $selected \
+  --run-id "$run_id" --timestamp "$timestamp" --scale "$P1_SCALE" \
+  >"${STRESS_RUN_DIR}/result.json"
 
 if jq -e '.verdict == "fail"' "${STRESS_RUN_DIR}/result.json" >/dev/null 2>&1; then
   failed_stacks=$(jq -c '[.stacks | to_entries[] | select(.value.verdict == "fail") | {stack: .key, anomalies: .value.anomalies}]' \
