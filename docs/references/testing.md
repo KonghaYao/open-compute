@@ -187,7 +187,7 @@ discovery 确认为零用例的 workspace binary harness。
 及场景内恢复断言覆盖，不能依赖增加顶层轮数来碰撞竞态。需要额外置信度时，load、soak、fuzz 或重复
 诊断作为独立活动显式执行和报告，不属于日常或最终 Gate 的完成条件。
 
-调度器一次 `cargo test --no-run --all-features`，根据 Cargo JSON 的精确 executable 路径运行测试，
+调度器一次 `mbx test --no-run --all-features`，根据 Cargo JSON 的精确 executable 路径运行测试，
 不搜索可能过期的哈希文件；typed target 则校验 tracked source/executable identity，并通过自身 JSON
 discovery 枚举精确 case。执行阶段不再调用 Cargo，也不重建 JS。正确 keyed 的 `target/`、
 `node_modules/`、正式 immutable 输入可复用，不清缓存、不下载。库单测、类型检查与 coverage
@@ -219,7 +219,7 @@ single-binary 与 `workflow-product` 使用独占屏障。该目标同时覆盖 
 配置不变；不缓存或绕过完整性检查。实测及其测量口径见 [Runtime 与测试布局](../implemented/p2-7-runtime-and-test-layout.md)。
 
 `--workspace` 通过 Cargo metadata 枚举全部启用的 test harness，使用
-`cargo test --workspace --all-targets --all-features --no-run` 一次构建，再逐一执行；
+`mbx test --workspace --all-targets --all-features --no-run` 一次构建，再逐一执行；
 拒绝缺少或未计划的 executable。它与普通 Cargo workspace 测试的目标集合相同，保留 package
 工作目录（supervisor 的相对诊断输出使用本轮目标目录，避免清空环境的夹具写入源码树）；
 不接受同时指定 Gate 名称。最终验收执行一个完整 round，覆盖全部 workspace 宿主；库、普通集成和
@@ -232,12 +232,33 @@ core/storage/artifacts/workers/service 五个库的故障钩子均
 
 ## 完整检查与最终验收
 
+Rust 构建直接调用全局安装的 `mbx`，工具缺失即失败；仓库不保留逐项目版本文件、包装入口或缓存配置。项目和 worktree 共用 mbx 的全局用户缓存（macOS 默认 `~/Library/Caches/mbx/`），`mbx cache dir` 显示实际对象目录。CI 和容器安装 mbx 1.22.0。
+
+全局设置保留 `build.rs` 校验、`CARGO_TARGET_DIR` 和 coverage 插桩参数；对象与内部状态总预算 8 GiB、最低空闲目标 4 GiB。关闭 build.rs 执行缓存、target views 和 hardlink 恢复，不自动回收普通 target。首次安装后运行：
+
 ```sh
-cargo fmt --all --check
+mbx settings set build_script_execution false
+mbx settings set target.views false
+mbx settings set restore_hardlink false
+mbx settings set gc.auto true
+mbx settings set gc.max_total_size 8GiB
+mbx settings set gc.min_free_size 4GiB
+```
+
+`mbx setup` 安装全局 Cargo shim，按其输出配置 PATH 后，其他项目的普通 Cargo 命令也经过 mbx。CI 使用 OS `/tmp` 放置临时 session，避免 Unix socket 路径限制。清理脚本调用 mbx 自带 GC，共享对象被回收后会在后续编译时重建；日志、失败证据、普通 target 和运行时输入不在清理范围内。
+
+```sh
+./scripts/clean-mbx-cache.sh --dry-run
+./scripts/clean-mbx-cache.sh
+./scripts/clean-mbx-cache.sh --max-size 2GiB
+```
+
+```sh
+mbx fmt --all --check
 ./test/check-rust-clippy.sh
-RUSTFLAGS='-D warnings' cargo check --workspace --no-default-features
-cargo +1.98.0 check --workspace --all-targets
-cargo metadata --no-deps --format-version 1
+RUSTFLAGS='-D warnings' mbx check --workspace --no-default-features
+mbx +1.98.0 check --workspace --all-targets
+mbx metadata --no-deps --format-version 1
 ./test/check-boundaries.sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s test -p 'test_gate.py'
 ./test/check-production.py

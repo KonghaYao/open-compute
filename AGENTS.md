@@ -44,14 +44,16 @@
 
 ## Commands
 
+- All repository Rust commands invoke the globally installed `mbx`; never fall back to direct Cargo or a second compiler cache. Use mbx's global user configuration and shared object store across projects/worktrees; do not add project-specific mbx configuration or wrappers. Keep build-script execution caching, target views, and hardlink restoration disabled globally so runtime verification and ordinary writable target paths remain intact. `./scripts/clean-mbx-cache.sh` runs native mbx GC against that shared store and forwards its options.
+
 - Explicitly prepare the host runtime inputs from their formal locks before running `bun run build`: `bun scripts/prepare-workerd.ts --dest /abs/workerd --download` and `bun scripts/prepare-caddy.ts --dest /abs/caddy --download` print the required build/test environment variables. Cargo consumes only those verified inputs. Real-runtime tests require the verified `OPEN_COMPUTE_TEST_WORKERD` binary. Prepare inputs explicitly as documented in `docs/references/single-binary.md`; never download a runtime as an implicit validation step.
-- Format: `cargo fmt --all --check`
+- Format: `mbx fmt --all --check`
 - Lint: `./test/check-rust-clippy.sh` (production targets use the 300-line function budget; test targets use the 800-line function budget; both passes use `--keep-going`)
 - Clippy workflow: run the canonical command once on the current source, collect the complete reachable diagnostic set, fix that set as one batch, then rerun once for verification. Do not rerun Clippy after each individual warning; start another fix batch only when clearing compile blockers exposes diagnostics that the prior run could not reach.
 - Test: `./test/gate.py --workspace` (all Cargo workspace/all-targets/all-features test executables once, audited process parallelism, `--test-threads=1` within each process)
-- No-default-features check: `RUSTFLAGS='-D warnings' cargo check --workspace --no-default-features`
-- MSRV check: `cargo +1.98.0 check --workspace --all-targets`
-- Metadata: `cargo metadata --no-deps --format-version 1`
+- No-default-features check: `RUSTFLAGS='-D warnings' mbx check --workspace --no-default-features`
+- MSRV check: `mbx +1.98.0 check --workspace --all-targets`
+- Metadata: `mbx metadata --no-deps --format-version 1`
 - Dependency boundaries: `./test/check-boundaries.sh`
 - Coverage setup (macOS): `brew install cargo-llvm-cov`
 - Coverage setup (portable): `cargo install cargo-llvm-cov --locked`
