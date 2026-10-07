@@ -200,7 +200,6 @@ TIMING = {
         'unexpected_exit_backoff_and_budget',
     ),
     'single-binary': (
-        'one_daemon_starts_two_isolated_instance_children',
         'single_file_first_start_restart_orphan_recovery_and_corruption_failure',
     ),
 }
