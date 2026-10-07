@@ -2,3 +2,7 @@
 ocd
 ocd.linux-x64
 ocd.linux-arm64
+
+# Local compose secrets (see .env.example).
+.env
+!.env.example
