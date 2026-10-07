@@ -27,6 +27,14 @@ test("release report publishes selected metrics and escaped case names; rejects 
   const gatePath = join(directory, "gate-evidence-macos-15/report.json");
   const gate = JSON.parse(await readFile(gatePath, "utf8"));
   gate.results[0].targets[0].cases = ['<img src=x onerror="throw 1">'];
+  gate.targets.push("open-compute-service.bin.ocd");
+  gate.results[0].targets.push({
+    target: "open-compute-service.bin.ocd",
+    exit_code: 0,
+    seconds: 0,
+    cases: [],
+    cases_passed: 0,
+  });
   await writeJson(gatePath, gate);
   const rendered = await releaseTestReport(directory, identity, digest);
   assert.match(rendered.html, /open-compute/);
@@ -43,6 +51,12 @@ test("release report publishes selected metrics and escaped case names; rejects 
   }
   const report = JSON.parse(rendered.json);
   assert.equal(report.gates.length, 6);
+  assert.deepEqual(
+    report.gates
+      .find((entry) => entry.label === "gate-evidence-macos-15")
+      .targets.at(-1).cases,
+    [],
+  );
   assert.equal(report.installs.length, 10);
   assert.equal(report.stress.runs.length, 5);
   const oldRevision = gate.revision;
@@ -59,7 +73,20 @@ test("release report publishes selected metrics and escaped case names; rejects 
     releaseTestReport(directory, identity, digest),
     /all cases/,
   );
+  const cases = gate.results[0].targets[0].cases;
+  gate.results[0].targets[0].cases = [];
+  gate.results[0].targets[0].cases_passed = 0;
+  gate.test_cases = 0;
+  gate.test_cases_passed = 0;
+  await writeJson(gatePath, gate);
+  await assert.rejects(
+    releaseTestReport(directory, identity, digest),
+    /case count/,
+  );
+  gate.results[0].targets[0].cases = cases;
   gate.results[0].targets[0].cases_passed = 1;
+  gate.test_cases = 1;
+  gate.test_cases_passed = 1;
   await writeJson(gatePath, gate);
   const stressPath = join(directory, "stress-qualification/qualification.json");
   const stress = JSON.parse(await readFile(stressPath, "utf8"));

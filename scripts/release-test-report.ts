@@ -94,7 +94,6 @@ export async function releaseTestReport(
       const cases = list(target.cases).map(text);
       requirePass(
         target.exit_code === 0 &&
-          cases.length > 0 &&
           target.cases_passed === cases.length &&
           new Set(cases).size === cases.length,
         `${label}: all cases must execute once`,
@@ -116,7 +115,7 @@ export async function releaseTestReport(
       0,
     );
     requirePass(
-      raw.test_cases === count && raw.test_cases_passed === count,
+      count > 0 && raw.test_cases === count && raw.test_cases_passed === count,
       `${label}: case count`,
     );
     gates.push({ label, seconds: number(raw.seconds), cases: count, targets });
