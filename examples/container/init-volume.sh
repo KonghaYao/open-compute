@@ -135,8 +135,8 @@ printf '%s\n' "${ADMIN_TOKEN}" > "${ROOT}/keys/admin.token"
 chmod 600 "${ROOT}/keys/admin.token"
 
 write_ocd_config
-write_compute_config
 CONFIG="${ROOT}/instances/default/compute.toml"
+DATA="${ROOT}/instances/default/data"
 
 chown -R open-compute:open-compute "${ROOT}"
 
@@ -171,14 +171,26 @@ su -s /bin/sh open-compute -c "\
   OPEN_COMPUTE_READ_ONLY_TOKEN='${READONLY_TOKEN}' \
   OC_S3_ACCESS_KEY_ID='${OC_S3_ACCESS_KEY_ID:-}' \
   OC_S3_SECRET_ACCESS_KEY='${OC_S3_SECRET_ACCESS_KEY:-}' \
-  ${OCD} --system --config '${CONFIG}' config check"
+  ${OCD} --system instance setup \
+    --config '${CONFIG}' \
+    --data-dir '${DATA}' \
+    --yes --autostart true --start true"
+
+printf '%s\n' "${DEPLOYER_TOKEN}" > "${DATA}/keys/deployer.token"
+printf '%s\n' "${READONLY_TOKEN}" > "${DATA}/keys/read-only.token"
+chmod 600 "${DATA}/keys/deployer.token" "${DATA}/keys/read-only.token"
+chown open-compute:open-compute "${DATA}/keys/deployer.token" "${DATA}/keys/read-only.token"
+
+if [ "${OC_STORAGE_BACKEND}" = "s3" ]; then
+  write_compute_config
+fi
 
 su -s /bin/sh open-compute -c "\
   OPEN_COMPUTE_DEPLOYER_TOKEN='${DEPLOYER_TOKEN}' \
   OPEN_COMPUTE_READ_ONLY_TOKEN='${READONLY_TOKEN}' \
   OC_S3_ACCESS_KEY_ID='${OC_S3_ACCESS_KEY_ID:-}' \
   OC_S3_SECRET_ACCESS_KEY='${OC_S3_SECRET_ACCESS_KEY:-}' \
-  ${OCD} --system instance add --config '${CONFIG}'"
+  ${OCD} --system --config '${CONFIG}' config check"
 
 touch "${MARKER}"
 chown open-compute:open-compute "${MARKER}"
