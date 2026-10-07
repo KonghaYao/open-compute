@@ -1,39 +1,15 @@
-# Overlay for sharing an existing S3-compatible object store.
-#
-#   docker compose -f docker-compose.yml -f docker-compose.external-s3.yml up -d
-
+# The operator provisions the bucket and network before starting this stack.
 services:
   init:
-    depends_on:
-      s3-init:
-        condition: service_completed_successfully
+    networks: [external]
     environment:
       OC_STORAGE_BACKEND: s3
-
-  s3-init:
-    image: minio/mc:latest
-    networks:
-      - external
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set remote $${OC_S3_ENDPOINT} $${OC_S3_ACCESS_KEY_ID} $${OC_S3_SECRET_ACCESS_KEY};
-      mc mb -p remote/$${OC_S3_BUCKET} || true;
-      exit 0;
-      "
-    environment:
       OC_S3_ENDPOINT: ${OC_S3_ENDPOINT:?set OC_S3_ENDPOINT}
-      OC_S3_BUCKET: ${OC_S3_BUCKET:-open-compute}
+      OC_S3_BUCKET: ${OC_S3_BUCKET:?set OC_S3_BUCKET}
       OC_S3_ACCESS_KEY_ID: ${OC_S3_ACCESS_KEY_ID:?set OC_S3_ACCESS_KEY_ID}
       OC_S3_SECRET_ACCESS_KEY: ${OC_S3_SECRET_ACCESS_KEY:?set OC_S3_SECRET_ACCESS_KEY}
-    restart: "no"
-
   ocd:
-    depends_on:
-      s3-init:
-        condition: service_completed_successfully
-    networks:
-      - external
-
+    networks: [external]
 networks:
   external:
     name: ${OC_EXTERNAL_NETWORK:?set OC_EXTERNAL_NETWORK}

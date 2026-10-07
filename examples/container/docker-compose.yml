@@ -1,30 +1,15 @@
-# open-compute container stack (local object storage).
-#
-# External S3-compatible bucket (RustFS/MinIO on an existing Docker network):
-#   docker compose -f docker-compose.yml -f docker-compose.external-s3.yml up -d
-#
-# Build context must contain Linux release binaries: ocd.linux-x64, ocd.linux-arm64.
-# Download them from a release or run:
-#   curl -fsSL -o ocd.linux-x64 https://github.com/elliothux/open-compute/releases/download/v0.2.4/ocd-v0.2.4-linux-x64
-#   curl -fsSL -o ocd.linux-arm64 https://github.com/elliothux/open-compute/releases/download/v0.2.4/ocd-v0.2.4-linux-arm64
-
-name: open-compute
-
+# Published release images; use docker-compose.build.yml for local image builds.
 services:
   init:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: init
+    image: ${OC_INIT_IMAGE:-ghcr.io/elliothux/open-compute-init:0.2.4}
     environment:
       OPEN_COMPUTE_ADMIN_TOKEN: ${OPEN_COMPUTE_ADMIN_TOKEN:?set OPEN_COMPUTE_ADMIN_TOKEN}
       OPEN_COMPUTE_DEPLOYER_TOKEN: ${OPEN_COMPUTE_DEPLOYER_TOKEN:?set OPEN_COMPUTE_DEPLOYER_TOKEN}
       OPEN_COMPUTE_READ_ONLY_TOKEN: ${OPEN_COMPUTE_READ_ONLY_TOKEN:?set OPEN_COMPUTE_READ_ONLY_TOKEN}
-      OC_PUBLIC_BIND: ${OC_PUBLIC_BIND:-0.0.0.0:8787}
+      OC_PUBLIC_BIND: 0.0.0.0:8787
       OC_PUBLIC_PORT: ${OC_PUBLIC_PORT:-8787}
-      OC_PUBLIC_BASE_DOMAIN: ${OC_PUBLIC_BASE_DOMAIN:-open-compute.dev}
       OC_STORAGE_BACKEND: ${OC_STORAGE_BACKEND:-local}
-      OC_S3_ENDPOINT: ${OC_S3_ENDPOINT:-http://127.0.0.1:9000}
+      OC_S3_ENDPOINT: ${OC_S3_ENDPOINT:-}
       OC_S3_REGION: ${OC_S3_REGION:-us-east-1}
       OC_S3_BUCKET: ${OC_S3_BUCKET:-open-compute}
       OC_S3_PREFIX: ${OC_S3_PREFIX:-open-compute/system/}
@@ -36,34 +21,27 @@ services:
     restart: "no"
 
   ocd:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    image: ${OC_IMAGE:-open-compute:local}
-    container_name: open-compute-ocd
+    image: ${OC_IMAGE:-ghcr.io/elliothux/open-compute:0.2.4}
     depends_on:
       init:
         condition: service_completed_successfully
     ports:
-      - "${OC_HOST_BIND:-127.0.0.1}:${OC_PUBLIC_PORT:-8787}:${OC_PUBLIC_PORT:-8787}"
+      - "${OC_HOST_BIND:-127.0.0.1}:${OC_PUBLIC_PORT:-8787}:8787"
     environment:
-      OPEN_COMPUTE_DEPLOYER_TOKEN: ${OPEN_COMPUTE_DEPLOYER_TOKEN:?set OPEN_COMPUTE_DEPLOYER_TOKEN}
-      OPEN_COMPUTE_READ_ONLY_TOKEN: ${OPEN_COMPUTE_READ_ONLY_TOKEN:?set OPEN_COMPUTE_READ_ONLY_TOKEN}
       OC_S3_ACCESS_KEY_ID: ${OC_S3_ACCESS_KEY_ID:-}
       OC_S3_SECRET_ACCESS_KEY: ${OC_S3_SECRET_ACCESS_KEY:-}
     volumes:
       - ocd-data:/var/lib/open-compute
+    read_only: true
+    tmpfs:
+      - /tmp
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://127.0.0.1:${OC_PUBLIC_PORT:-8787}/health/live >/dev/null",
-        ]
-      interval: 15s
-      timeout: 5s
-      retries: 12
-      start_period: 90s
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8787/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 30s
+    stop_grace_period: 60s
     restart: unless-stopped
 
 volumes:
