@@ -1,91 +1,94 @@
-# Container notes
+# Container deployment
 
-Files in this directory:
+Run one non-root `ocd` with its embedded runtime and a persistent named volume. The
+Ubuntu 24.04 base matches the Linux release's glibc baseline. The one-shot init
+container uses `instance setup` to create the database and master key, then starts
+and stops the configured instance before marking the volume initialized.
 
-- `Dockerfile` — runtime (`target: runtime`) and one-shot bootstrap (`target: init`) images
-- `docker-compose.yml` — local object storage stack
-- `docker-compose.external-s3.yml` — optional overlay for an existing S3-compatible bucket
-- `init-volume.sh` — bootstrap script copied into the init image
+## Published images
 
-The runtime image runs one `ocd` daemon for explicitly registered instances. Each running
-instance owns its own verified workerd child and data directory; the daemon owns the shared
-listener and Gateway. The build context must contain `ocd.linux-x64` and `ocd.linux-arm64`
-release binaries for the matching CPU architecture. The Ubuntu 24.04 base matches the CI
-Linux release builder; workerd requires glibc, so this image cannot use `scratch` or
-Alpine/musl.
-
-## Quick start (local storage)
+After the first container publication, use matching version tags for both images:
 
 ```bash
 cd examples/container
 cp .env.example .env
-# edit tokens in .env
-
-curl -fsSL --http1.1 -o ocd.linux-x64 \
-  "https://github.com/elliothux/open-compute/releases/download/v0.2.4/ocd-v0.2.4-linux-x64"
-curl -fsSL --http1.1 -o ocd.linux-arm64 \
-  "https://github.com/elliothux/open-compute/releases/download/v0.2.4/ocd-v0.2.4-linux-arm64"
-chmod 0555 ocd.linux-x64 ocd.linux-arm64
-
-docker compose up -d --build
+# Replace all three authentication tokens with distinct private values.
+docker compose up -d
 curl -fsS http://127.0.0.1:8787/health/live
 ```
 
-## External S3 (shared RustFS / MinIO)
+The defaults are `ghcr.io/elliothux/open-compute:0.2.4` and
+`ghcr.io/elliothux/open-compute-init:0.2.4`. Set `OC_IMAGE` and `OC_INIT_IMAGE`
+together when selecting another release or registry. No local build is required.
+Images are published only from an existing stable GitHub Release, after native
+amd64 and arm64 empty-volume/restart tests pass. The workflow runs after the release workflow
+succeeds or on explicit dispatch, never automatically publishes PR or main builds,
+and does not maintain a mutable `latest` tag.
 
-Use a non-overlapping bucket prefix per instance. Example with an existing Docker network:
+The default host listener is `127.0.0.1:8787`; `OC_PUBLIC_PORT` changes the host
+port while the container continues listening on 8787. Use a distinct Compose
+project (`docker compose -p other ...`) for another independent stack. Worker
+HTTP routing uses the normal `<worker>.<account-id>.localhost` hostnames. Public
+DNS/TLS requires the separate shared Gateway configuration documented in the
+[operator guide](../../docs/references/single-binary.md); this example does not
+implicitly configure a public domain or certificates.
+
+## Build locally
+
+Download the matching **published** `ocd` executable and its checksum manifest.
+This example selects ARM64; use `linux-x64` and `ocd.linux-amd64` for AMD64:
 
 ```bash
-cp .env.example .env
-# set:
-#   OC_STORAGE_BACKEND=s3
-#   OC_EXTERNAL_NETWORK=1panel-network
-#   OC_S3_ENDPOINT=http://1Panel-rustfs-R3pn:9000
-#   OC_S3_ACCESS_KEY_ID=...
-#   OC_S3_SECRET_ACCESS_KEY=...
-#   OC_S3_BUCKET=open-compute
-
-docker compose -f docker-compose.yml -f docker-compose.external-s3.yml up -d --build
+mkdir -p ../../.temp/container-inputs
+cd ../../.temp/container-inputs
+curl -fsSLO https://github.com/elliothux/open-compute/releases/download/v0.2.4/SHA256SUMS
+curl -fsSLO https://github.com/elliothux/open-compute/releases/download/v0.2.4/ocd-v0.2.4-linux-arm64
+awk '$2 == "ocd-v0.2.4-linux-arm64" {print; found=1} END {exit !found}' SHA256SUMS | sha256sum --check -
+cp ocd-v0.2.4-linux-arm64 ../../examples/container/ocd.linux-arm64
+cd ../../examples/container
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
-To run beside another stack that already uses `8787`, change both `OC_PUBLIC_PORT` and
-`OC_PUBLIC_BIND` before the first `up`. The listener is written into the data volume during
-bootstrap and is not changed by a later env edit.
+The Dockerfile copies only the selected architecture's executable. Runtime
+preparation, checksum verification and compilation remain release/build tasks;
+production startup does not download anything. See the [single-binary
+contract](../../docs/references/single-binary.md).
 
-## Published images
+## Existing S3 storage
 
-GitHub Actions publishes multi-arch images to GHCR on pushes to `main` and on version tags:
+Provision the bucket, credentials and external Docker network first. In `.env`,
+set `OC_EXTERNAL_NETWORK`, `OC_S3_ENDPOINT`, `OC_S3_BUCKET`,
+`OC_S3_ACCESS_KEY_ID`, and `OC_S3_SECRET_ACCESS_KEY`. Choose non-overlapping
+`OC_S3_PREFIX` and `OC_S3_R2_PREFIX` for each instance, then run:
 
-- `ghcr.io/<owner>/open-compute:<version>`
-- `ghcr.io/<owner>/open-compute-init:<version>`
-
-Point compose at published images:
-
-```env
-OC_IMAGE=ghcr.io/konghayao/open-compute:0.2.4
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external-s3.yml up -d
 ```
 
-and replace the `build:` sections with `image:` for `init`/`ocd` if desired.
+Add `-f docker-compose.build.yml` when using local images. Both init and runtime
+join the external network. Initialization performs the real instance startup,
+including its S3 preflight; a failed preflight must not mark the volume ready.
+This stack never creates a remote bucket for you.
 
-## Runtime contract
+## Persistence and recovery
 
-- Run as non-root (`USER 65532`). Pre-provision `/var/lib/open-compute` and every external instance
-  data directory for that UID with mode 0700.
-- PID 1 is `ocd`; it owns and drains its children. There is no shell or runtime sidecar.
-- Mount a writable, executable filesystem at `/var/lib/open-compute` (`OCD_DIR`). It holds
-  `ocd.toml`, shared keys, Gateway state, locks, and the verified embedded runtime package. Do not
-  mount it `noexec` or read-only.
-- `ocd.toml` lists only each instance's `config` path and `autostart`. Each `compute.toml` must
-  explicitly set `[data].path`; `instances/` is merely a convenient default location, never
-  scanned. Data inside OCD_DIR must be strictly below `instances/`; external data paths are allowed.
-- Supply credentials with environment variables or private files referenced by the appropriate
-  config. Never bake credentials into the executable or image.
-- Keep the image root read-only. Expose a non-loopback public listener only with an explicit
-  admin authentication reference or a separate loopback-only admin listener.
-- Local object bytes stay under each instance's data directory. S3 is optional; when instances
-  share one bucket, configure non-overlapping system and R2 prefixes for each.
-- Restart on process exit or `/health/live` failure, never on readiness 503.
-- An image build is a deployment operation, not an automatic local validation command.
+- `ocd-data` contains the scope manifest, registered instance, SQLite databases,
+  private keys, object data and extracted embedded runtime. Keep it writable and
+  executable. The runtime image filesystem is read-only, with a temporary `/tmp`.
+- Init runs as root only to prepare ownership; the daemon and its children run as
+  UID/GID 65532. Runtime PID 1 is `ocd`, which owns child shutdown and recovery.
+- Authentication tokens are copied to mode-0600 files on first initialization.
+  Later `.env` edits do not rotate those files or reconfigure an existing instance.
+  S3 credentials remain environment references; never put them into an image.
+- An initialized volume is reused without rewriting authority. An interrupted,
+  unmarked nonempty volume is preserved and rejected for operator recovery; do
+  not erase it to retry initialization without inspecting the failure.
+- `init-daemon.log` remains in the volume for bootstrap diagnostics. Init errors
+  preserve the volume. Keep any recovered database and key together.
+- Container health probes liveness. Instance readiness is a separate admission
+  signal and must not be used as a restart trigger.
 
-The image must use the formally pinned workerd embedded in the release executable. See
-[`packages/runtime/workerd.lock.json`](../../packages/runtime/workerd.lock.json) for its identity.
+The repository regression command is `./test/container/smoke.sh` after building
+`open-compute:local` and `open-compute-init:local`. It uses an isolated project,
+checks initialization/restart identity and credentials, removes only its successful
+test volume, and retains stopped containers/volume and `.temp/` logs on failure.

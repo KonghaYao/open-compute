@@ -84,7 +84,7 @@ Fault injection codes: `KV_FAULT_INJECTED`, `D1_FAULT_INJECTED`, `R2_FAULT_INJEC
 
 `STRESS_PROFILE` selects load shape and SLO tables:
 
-- `2c4g` (default): compose 2 CPU / 4 GB profile (`examples/container/docker-compose.yml` deploy limits), reduced peak rates for overload-prone stacks
+- `2c4g` (default): reduced peak rates for an operator-configured 2 CPU / 4 GB environment. The base Compose example does not impose these resource limits; configure them separately before comparing results with this profile.
 - `8c16g`: higher concurrency and tighter SLOs for larger hosts
 
 Per-stack PEAK phases (2C/4G defaults) with schema v2 `result.json` per run:

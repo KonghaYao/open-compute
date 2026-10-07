@@ -1,8 +1,3 @@
-# Release binaries copied into the build context by CI or local `make fetch-ocd-all`.
-ocd
-ocd.linux-x64
-ocd.linux-arm64
-
-# Local compose secrets (see .env.example).
 .env
-!.env.example
+ocd.linux-amd64
+ocd.linux-arm64
