@@ -125,6 +125,81 @@ esac
   await rm(directory, { recursive: true });
 });
 
+test("readiness helpers preserve caller variables and soak executes every stack", async () => {
+  const directory = await fixture();
+  const source = await readFile(
+    join(root, "test/stress/stress-p1-soak.sh"),
+    "utf8",
+  );
+  const soak = source.match(/^run_stack_soak\(\) \{\n[\s\S]*?^\}/m)?.[0];
+  assert.ok(soak);
+  const { stdout } = await exec(
+    "bash",
+    [
+      "-c",
+      `
+set -eu
+. '${join(root, "test/stress/common.sh")}'
+curl() { printf '%s' "$CURL_CODE"; }
+sleep() { :; }
+CURL_CODE=200
+stack=caller
+attempts=12
+stable=7
+base=caller-base
+ready=caller-ready
+settle_sec=23
+wait_for_ready "$base_url" 2
+wait_for_worker_ready 2
+recover_before_sample 0
+[ "$stack/$attempts/$stable/$base/$ready/$settle_sec" = 'caller/12/7/caller-base/caller-ready/23' ]
+CURL_CODE=503
+if wait_for_ready "$base_url" 2; then exit 8; fi
+if wait_for_worker_ready 2; then exit 9; fi
+[ "$stack/$attempts/$stable/$base/$ready/$settle_sec" = 'caller/12/7/caller-base/caller-ready/23' ]
+CURL_CODE=200
+SOAK_RECOVER_SETTLE_SEC=0
+SOAK_HTTP_CONCURRENCY=1 SOAK_KV_CONCURRENCY=1 SOAK_D1_CONCURRENCY=1
+SOAK_R2_RATE=1 SOAK_QUEUE_RATE=1 SOAK_DO_RATE=1 SOAK_WORKFLOW_RATE=1
+SOAK_FETCH_CONCURRENCY=1 SOAK_MEGA_CONCURRENCY=1
+run_id=fixture
+run_duration_concurrent() { printf '%s %s\\n' "$1" "$3"; }
+run_rate_load() { printf '%s %s\\n' "$1" "$3"; }
+${soak}
+for name in http kv d1 r2 queue do workflow fetch scenario_mega; do
+  run_stack_soak "$name" 300
+  [ "$stack" = "$name" ]
+done
+`,
+    ],
+    {
+      env: {
+        ...process.env,
+        OPEN_COMPUTE_ROOT: root,
+        STRESS_ACCOUNT_ID: "fixture-account",
+        STRESS_RUN_DIR: directory,
+      },
+    },
+  );
+  assert.equal(
+    stdout,
+    [
+      "http",
+      "kv",
+      "d1",
+      "r2",
+      "queue",
+      "do",
+      "workflow",
+      "fetch",
+      "scenario_mega",
+    ]
+      .map((name) => `${name} 300\n`)
+      .join(""),
+  );
+  await rm(directory, { recursive: true });
+});
+
 test("final qualification exits unsuccessfully and preserves failed evidence", async () => {
   const directory = await fixture();
   const result = join(directory, "result.json");

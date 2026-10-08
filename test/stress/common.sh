@@ -71,11 +71,11 @@ restart_stress_container() {
   fi
 }
 
-recover_before_sample() {
+recover_before_sample() (
   settle_sec=${1:-${STRESS_RECOVER_SETTLE_SEC:-10}}
   wait_for_worker_ready 90 || return 1
   sleep "$settle_sec"
-}
+)
 
 require_disk_space() {
   min_gb=${1:-5}
@@ -267,7 +267,7 @@ run_stack_phase() {
   printf 'completed %s concurrency=%s\n' "$label" "$concurrency"
 }
 
-wait_for_ready() {
+wait_for_ready() (
   base=${1:-$base_url}
   attempts=${2:-120}
   while [ "$attempts" -gt 0 ]; do
@@ -279,9 +279,9 @@ wait_for_ready() {
     attempts=$((attempts - 1))
   done
   return 1
-}
+)
 
-wait_for_worker_ready() {
+wait_for_worker_ready() (
   attempts=${1:-90}
   stable=0
   while [ "$attempts" -gt 0 ]; do
@@ -299,7 +299,7 @@ wait_for_worker_ready() {
     attempts=$((attempts - 1))
   done
   return 1
-}
+)
 
 run_duration_concurrent() {
   label=$1
