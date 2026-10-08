@@ -204,6 +204,7 @@ const doHostWorker :Workerd.Worker = (
     (name = "durable-objects/admission.js", esModule = embed "dist/durable-objects/admission.js"),
     (name = "durable-objects/errors.js", esModule = embed "dist/durable-objects/errors.js"),
     (name = "durable-objects/host.js", esModule = embed "dist/durable-objects/host.js"),
+    (name = "durable-objects/facet-manager.js", esModule = embed "dist/durable-objects/facet-manager.js"),
     (name = "durable-objects/host-protocol.js", esModule = embed "dist/durable-objects/host-protocol.js"),
     (name = "durable-objects/identity.js", esModule = embed "dist/durable-objects/identity.js"),
     (name = "loader/host.js", esModule = embed "dist/loader/host.js"),

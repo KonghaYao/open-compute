@@ -1,9 +1,11 @@
 import { bindingError } from "../loader/shared.js";
 import type { SocketAuthorityWire } from "../sockets/tunnel.js";
+import { sanitizeDoError } from "./errors.js";
 import { identityFromHeaders, OBJECT_IDENTITY_HEADER } from "./identity.js";
 import type {
   DoOrder,
   FacetClassDescriptor,
+  LoadedDurableObject,
   TenantDoAuthority,
 } from "./protocol.js";
 
@@ -57,6 +59,7 @@ interface PendingOperation {
 }
 export interface OrderState {
   next: number;
+  starting: boolean;
   expiresAt: number;
   pending: Map<number, PendingOperation>;
   skipped: Set<number>;
@@ -183,11 +186,13 @@ function advanceOrderCursor(state: OrderState): void {
 }
 
 function grantNextOperation(state: OrderState): void {
+  if (state.starting) return;
   advanceOrderCursor(state);
   const pending = state.pending.get(state.next);
   if (!pending) return;
   state.pending.delete(state.next);
   state.next += 1;
+  state.starting = true;
   pending.resolve();
 }
 
@@ -222,13 +227,18 @@ function orderState(
   let state = states.get(channelId);
   if (!state) {
     for (const [channelId, candidate] of states) {
-      if (candidate.pending.size === 0 && candidate.expiresAt <= now)
+      if (
+        !candidate.starting &&
+        candidate.pending.size === 0 &&
+        candidate.expiresAt <= now
+      )
         states.delete(channelId);
     }
     if (states.size >= MAX_ORDER_CHANNELS)
       throw bindingError("DO_STORAGE_LIMIT");
     state = {
       next: 0,
+      starting: false,
       expiresAt: now + ORDER_IDLE_MS,
       pending: new Map(),
       skipped: new Set(),
@@ -242,7 +252,8 @@ function orderState(
 export function ordered<T>(
   states: Map<string, OrderState>,
   order: DoOrder,
-  run: () => Promise<T>,
+  run: (started: () => void) => Promise<T>,
+  waitForStart = false,
 ): Promise<T> {
   assertOrder(order);
   const state = orderState(states, order.channelId);
@@ -254,37 +265,40 @@ export function ordered<T>(
     throw bindingError("DO_RUNTIME_EXCEPTION");
   }
   if (
-    order.sequence !== state.next &&
+    (order.sequence !== state.next || state.starting) &&
     state.pending.size + state.skipped.size >= MAX_PENDING_OPERATIONS
   ) {
     throw bindingError("DO_STORAGE_LIMIT");
   }
-  if (order.sequence === state.next) {
-    state.next += 1;
+  const start = () => {
+    state.starting = true;
+    let granted = false;
+    const started = () => {
+      if (!granted) {
+        granted = true;
+        state.starting = false;
+        grantNextOperation(state);
+      }
+    };
     let value: Promise<T>;
     try {
-      value = run();
+      value = run(started);
     } catch (error) {
-      grantNextOperation(state);
+      started();
       throw error;
     }
-    grantNextOperation(state);
+    if (waitForStart) void value.then(started, started);
+    else started();
     return value;
+  };
+  if (order.sequence === state.next && !state.starting) {
+    state.next += 1;
+    return start();
   }
   const turn = new Promise<void>((resolve, reject) => {
     state.pending.set(order.sequence, { resolve, reject });
   });
-  return turn.then(() => {
-    let value: Promise<T>;
-    try {
-      value = run();
-    } catch (error) {
-      grantNextOperation(state);
-      throw error;
-    }
-    grantNextOperation(state);
-    return value;
-  });
+  return turn.then(start);
 }
 
 export function assertRpcMember(member: unknown): asserts member is string {
@@ -387,4 +401,63 @@ export function deleteAuthorityFromHeaders(headers: Headers) {
     throw bindingError("DO_INTERNAL_PROTOCOL_ERROR");
   }
   return { objectId, objectGeneration };
+}
+
+/** Preserve start order across the native RPC and HTTP event paths. */
+export function orderedTenantRpc(
+  states: Map<string, OrderState>,
+  order: DoOrder,
+  facet: Fetcher<LoadedDurableObject>,
+  kind: "call" | "get",
+  member: string,
+  args: unknown[],
+): Promise<unknown> {
+  return ordered(
+    states,
+    order,
+    async (started) => {
+      try {
+        return await facet.__openComputeInvokeRpc(
+          kind,
+          member,
+          args,
+          async () => started(),
+        );
+      } catch (error) {
+        throw sanitizeDoError(error, "DO_RUNTIME_EXCEPTION");
+      }
+    },
+    true,
+  );
+}
+
+/** Acknowledge actual fetch admission without transferring WebSockets over RPC. */
+export function orderedTenantFetch(
+  states: Map<string, OrderState>,
+  order: DoOrder,
+  facet: Fetcher<LoadedDurableObject>,
+  request: Request,
+  timeoutMs: number,
+): Promise<Response> {
+  return ordered(
+    states,
+    order,
+    async (started) => {
+      const token = crypto.randomUUID();
+      try {
+        await facet.__openComputePrepareFetch(
+          token,
+          async () => started(),
+          timeoutMs,
+        );
+        request.headers.set("x-open-compute-fetch-admission", token);
+        return await facet.fetch(request);
+      } catch (error) {
+        throw sanitizeDoError(error, "DO_RUNTIME_EXCEPTION");
+      } finally {
+        await facet.__openComputeCancelFetch(token).catch(() => undefined);
+      }
+    },
+    true,
+  );
 }
