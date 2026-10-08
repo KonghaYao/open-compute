@@ -437,12 +437,15 @@ async fn provider_and_dns_sockets_isolate_two_domains() {
     tokio::task::yield_now().await;
     pid.store(0, Ordering::Release);
     let _ = in_flight.write_all(&payload).await;
-    assert_eq!(
+    // Closing a Unix stream with unread client bytes may reset it on Linux.
+    let assert_closed = |result: std::io::Result<usize>| match result {
+        Ok(bytes) => assert_eq!(bytes, 0),
+        Err(error) => assert_eq!(error.kind(), std::io::ErrorKind::ConnectionReset),
+    };
+    assert_closed(
         tokio::time::timeout(Duration::from_secs(2), in_flight.read(&mut length))
             .await
-            .unwrap()
             .unwrap(),
-        0
     );
     assert!(
         Message::from_vec(
@@ -456,7 +459,11 @@ async fn provider_and_dns_sockets_isolate_two_domains() {
     );
     let mut denied = UnixStream::connect(&socket).await.unwrap();
     denied.write_all(&[0, 2, b'{', b'}']).await.unwrap();
-    assert_eq!(denied.read(&mut length).await.unwrap(), 0);
+    assert_closed(
+        tokio::time::timeout(Duration::from_secs(2), denied.read(&mut length))
+            .await
+            .unwrap(),
+    );
 
     shutdown_tx.send(true).unwrap();
     dns_task.await.unwrap().unwrap();

@@ -223,7 +223,7 @@ async fn metrics_auth_state_conversion_and_bounded_route_labels_are_covered() {
         CONTENT_TYPE
     );
     assert!(
-        !to_bytes(response.into_body(), 64 * 1024)
+        !to_bytes(response.into_body(), 256 * 1024)
             .await
             .unwrap()
             .is_empty()

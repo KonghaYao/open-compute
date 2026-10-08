@@ -152,7 +152,7 @@ vinext/Next.js 端到端或 hosted Cloudflare differential。其冻结摘要和�
    不是 Git commit ID；凡影响摘要范围的源码、测试、工具链、manifest 或 `docs/references/**` 变更，都要一起更新。
    随后在本地干净 checkout 完成最终验收。若当前冻结源码尚未完成最终验收，必须显式准备正式 workerd，
    先运行 `bun run build` 和静态检查，再用宿主对应的 `OPEN_COMPUTE_TEST_WORKERD` 依次执行一次
-   `./test/coverage.sh --jobs 2` 与一次 `./test/gate.py --workspace --jobs 2`。coverage 的插桩 Gate 和最终
+   `./test/coverage.sh --jobs 2` 与一次 `./test/gate.py --workspace --final --jobs 2`。coverage 的插桩 Gate 和最终
    未插桩 Gate 各有不同验收职责；冻结源码已经有这两项成功证据时直接复用，不再为了发布重复执行不变
    输入。除此之外不运行重复 aggregate。90% Rust 行覆盖率和最终 Gate
    必须通过后才能 push/tag。需要隔离验证正式 Linux ARM64 package 路径时，再从干净的冻结 `HEAD` 运行一次

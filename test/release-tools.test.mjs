@@ -307,7 +307,7 @@ test("release qualification and local Docker diagnostic keep their exact boundar
     /name: unverified-native-build-\$\{\{ matrix\.target \}\}[\s\S]*?\.temp\/dashboard-e2e[\s\S]*?\.temp\/dashboard-server[\s\S]*?apps\/dashboard\/test-results/,
   );
   assert.equal(
-    workflow.match(/\.\/test\/gate\.py --workspace --jobs 2/g)?.length,
+    workflow.match(/\.\/test\/gate\.py --workspace --final --jobs 2/g)?.length,
     1,
   );
   assert.match(workflow, /test-p0-2-egress-linux\.sh p0-2 --jobs 2/);

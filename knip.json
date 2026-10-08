@@ -10,7 +10,7 @@
   ],
   "ignoreWorkspaces": ["test/applications/*", "third_party/*"],
   "ignoreDependencies": ["tailwindcss"],
-  "ignoreBinaries": ["ocd", "mbx"],
+  "ignoreBinaries": ["mbx", "ocd"],
   "workspaces": {
     ".": {
       "entry": ["scripts/*.ts"],
@@ -57,6 +57,10 @@
       "entry": ["build.ts", "src/**/*.ts", "src/**/*.d.ts"],
       "project": ["build.ts", "src/**/*.ts", "src/**/*.d.ts"],
       "ignoreDependencies": ["cloudflare", "cloudflare-internal"]
+    },
+    "packages/browser-actions": {
+      "entry": ["src/index.ts", "src/live-view.ts"],
+      "project": ["src/**/*.ts"]
     },
     "packages/workers-types": {
       "entry": ["index.d.ts"],

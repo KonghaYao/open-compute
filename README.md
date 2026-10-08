@@ -115,18 +115,18 @@ Write standard module workers (`export default { fetch }`) with the bindings you
 
 ### Partial
 
-| Module     | Status                                                  |
-| ---------- | ------------------------------------------------------- |
-| Workers AI | ██░░░░░░░░ 20% — Markdown Conversion and AI Search only |
+| Module      | Status                                                                                                                                           |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Workers AI  | ██░░░░░░░░ 20% — Markdown Conversion and AI Search only                                                                                          |
+| Browser Run | CDP and managed browser, Quick Actions, DevTools, Live View and Custom AI; [operator guide](docs/references/runbooks/install-and-first-start.md) |
 
 ### Planning
 
 Design is underway; bindings and APIs are not available to deploy yet.
 
-| Module      | Status                     |
-| ----------- | -------------------------- |
-| Browser Run | ██░░░░░░░░ 20% — Planning. |
-| Containers  | ██░░░░░░░░ 20% — Planning. |
+| Module     | Status                     |
+| ---------- | -------------------------- |
+| Containers | ██░░░░░░░░ 20% — Planning. |
 
 ### Not yet
 

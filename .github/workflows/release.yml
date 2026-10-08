@@ -236,6 +236,7 @@ jobs:
         with:
           llvm-cov: "true"
           rust-components: llvm-tools-preview
+          browser-fixture: "true"
       - name: Build untracked runtime and toolchain assets from this checkout
         run: bun run build
       - name: Enforce 90 percent Rust line coverage
@@ -266,13 +267,15 @@ jobs:
         with:
           lfs: true
       - uses: ./.github/actions/setup-open-compute
+        with:
+          browser-fixture: ${{ runner.os == 'macOS' && 'true' || 'false' }}
       - name: Build untracked runtime and toolchain assets from this checkout
         run: bun run build
       - name: Fetch locked crates for offline Gate compile
         run: mbx fetch --locked
       - name: Final workspace once (macOS)
         if: runner.os == 'macOS'
-        run: ./test/gate.py --workspace --jobs 2
+        run: ./test/gate.py --workspace --final --jobs 2
       - name: Controlled P0.2 egress only (Linux, explicit privilege authorization)
         if: runner.os == 'Linux'
         run: OPEN_COMPUTE_EGRESS_FIXTURE_ALLOW_SUDO=1 ./test/test-p0-2-egress-linux.sh p0-2 --jobs 2

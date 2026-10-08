@@ -12,7 +12,7 @@ export const DoHost=class {}, AiSearchTransport=class {}, AiTransport=class {}, 
 CacheWriteTransport=class {}, ImageTransport=class {}, KVNamespace=class {}, ExtensionCacheTransport=class {},
 PrivateHttpTransport=class {}, ServiceFetchCompletion=class {}, ServiceTransport=class {}, VectorizeTransport=class {},
 WorkflowBindingTransport=class {}, AlarmIndex=class {}, ArtifactsTransport=class {}, AssetTransport=class {},
-D1Transport=class {}, DoTransport=class {}, QueueTransport=class {}, R2Transport=class {};
+D1Transport=class {}, DoTransport=class {}, QueueTransport=class {}, R2Transport=class {}, BrowserTransport=class {};
 `);
 const imports = {
   "cloudflare:workers": moduleUrl(
@@ -38,6 +38,7 @@ for (const path of [
   "./host.js",
   "../ai-search/host.js",
   "../ai/host.js",
+  "../browser/host.js",
   "../cache/host.js",
   "../images/host.js",
   "../kv/transport.js",
