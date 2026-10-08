@@ -673,6 +673,13 @@ impl KvEngine {
              PRAGMA cache_size = -8192;",
         )
         .map_err(map_sql)?;
+        // Per-operation connections keep FULL-synced WAL commits without forcing
+        // a checkpoint on every close. Auto-checkpoints and maintenance remain enabled.
+        conn.set_db_config(
+            rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE,
+            true,
+        )
+        .map_err(map_sql)?;
         apply_quota(&conn, self.quota_bytes)?;
         verify_identity(&conn, self.instance_id, self.resource_id)?;
         verify_schema(&conn)?;

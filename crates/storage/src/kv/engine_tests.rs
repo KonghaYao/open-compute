@@ -394,3 +394,36 @@ fn private_validation_and_sqlite_error_classification_matrix_is_stable() {
     assert_eq!(storage_unavailable().code(), ErrorCode::KvUnavailable);
     assert_eq!(invariant().code(), ErrorCode::ResourceInvariantViolation);
 }
+
+#[test]
+fn committed_kv_wal_survives_operation_close_and_backup_remains_standalone() {
+    let (dir, engine, _, _) = fixture();
+    engine
+        .put("key", b"committed", &KvPutOptions::default(), 1_000)
+        .unwrap();
+    // Individual FULL-synchronous mutations must not checkpoint and recreate WAL.
+    assert!(engine.wal_bytes().unwrap() > 0);
+    let reopened = engine.clone();
+    drop(engine);
+    assert_eq!(
+        reopened.get("key", 1_001).unwrap().unwrap().value,
+        b"committed"
+    );
+    assert!(reopened.wal_bytes().unwrap() > 0);
+    let backup = dir.path().join("backup.sqlite");
+    reopened.online_backup(&backup).unwrap();
+    let conn = Connection::open(&backup).unwrap();
+    let value: Vec<u8> = conn
+        .query_row(
+            "SELECT value FROM kv_entries WHERE key=?1",
+            [b"key".as_slice()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(value, b"committed");
+    drop(conn);
+    assert!(!dir.path().join("backup.sqlite-wal").exists());
+    reopened.checkpoint(true).unwrap();
+    assert_eq!(reopened.wal_bytes().unwrap(), 0);
+    reopened.quick_check().unwrap();
+}
