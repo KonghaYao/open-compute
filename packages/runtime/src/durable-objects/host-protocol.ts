@@ -53,11 +53,13 @@ export const FACET_TOKEN = /^[0-9a-f]{32}$/;
 const encoder = new TextEncoder();
 interface PendingOperation {
   resolve: () => void;
+  reject: (error: Error) => void;
 }
 export interface OrderState {
   next: number;
   expiresAt: number;
   pending: Map<number, PendingOperation>;
+  skipped: Set<number>;
 }
 export interface RegisteredFacet {
   logicalPath: readonly string[];
@@ -173,12 +175,68 @@ export function assertOrder(order: unknown): asserts order is DoOrder {
   }
 }
 
+function advanceOrderCursor(state: OrderState): void {
+  while (state.skipped.has(state.next)) {
+    state.skipped.delete(state.next);
+    state.next += 1;
+  }
+}
+
 function grantNextOperation(state: OrderState): void {
+  advanceOrderCursor(state);
   const pending = state.pending.get(state.next);
   if (!pending) return;
   state.pending.delete(state.next);
   state.next += 1;
   pending.resolve();
+}
+
+/** Drop a queued or future order slot without running tenant work. */
+export function cancelOrderedOperation(
+  states: Map<string, OrderState>,
+  order: DoOrder,
+): void {
+  assertOrder(order);
+  const state = orderState(states, order.channelId);
+  if (order.sequence < state.next) return;
+  advanceOrderCursor(state);
+  if (state.skipped.has(order.sequence)) return;
+  const pending = state.pending.get(order.sequence);
+  if (
+    !pending &&
+    order.sequence !== state.next &&
+    state.pending.size + state.skipped.size >= MAX_PENDING_OPERATIONS
+  )
+    throw bindingError("DO_STORAGE_LIMIT");
+  state.pending.delete(order.sequence);
+  state.skipped.add(order.sequence);
+  pending?.reject(bindingError("DO_RUNTIME_EXCEPTION"));
+  grantNextOperation(state);
+}
+
+function orderState(
+  states: Map<string, OrderState>,
+  channelId: string,
+): OrderState {
+  const now = Date.now();
+  let state = states.get(channelId);
+  if (!state) {
+    for (const [channelId, candidate] of states) {
+      if (candidate.pending.size === 0 && candidate.expiresAt <= now)
+        states.delete(channelId);
+    }
+    if (states.size >= MAX_ORDER_CHANNELS)
+      throw bindingError("DO_STORAGE_LIMIT");
+    state = {
+      next: 0,
+      expiresAt: now + ORDER_IDLE_MS,
+      pending: new Map(),
+      skipped: new Set(),
+    };
+    states.set(channelId, state);
+  }
+  state.expiresAt = now + ORDER_IDLE_MS;
+  return state;
 }
 
 export function ordered<T>(
@@ -187,26 +245,20 @@ export function ordered<T>(
   run: () => Promise<T>,
 ): Promise<T> {
   assertOrder(order);
-  const now = Date.now();
-  let state = states.get(order.channelId);
-  if (!state) {
-    for (const [channelId, candidate] of states) {
-      if (candidate.pending.size === 0 && candidate.expiresAt <= now)
-        states.delete(channelId);
-    }
-    if (states.size >= MAX_ORDER_CHANNELS)
-      throw bindingError("DO_STORAGE_LIMIT");
-    state = { next: 0, expiresAt: now + ORDER_IDLE_MS, pending: new Map() };
-    states.set(order.channelId, state);
-  }
-  if (
-    order.sequence < state.next ||
-    state.pending.has(order.sequence) ||
-    state.pending.size >= MAX_PENDING_OPERATIONS
-  ) {
+  const state = orderState(states, order.channelId);
+  advanceOrderCursor(state);
+  if (order.sequence < state.next || state.skipped.has(order.sequence)) {
     throw bindingError("DO_RUNTIME_EXCEPTION");
   }
-  state.expiresAt = now + ORDER_IDLE_MS;
+  if (state.pending.has(order.sequence)) {
+    throw bindingError("DO_RUNTIME_EXCEPTION");
+  }
+  if (
+    order.sequence !== state.next &&
+    state.pending.size + state.skipped.size >= MAX_PENDING_OPERATIONS
+  ) {
+    throw bindingError("DO_STORAGE_LIMIT");
+  }
   if (order.sequence === state.next) {
     state.next += 1;
     let value: Promise<T>;
@@ -219,8 +271,8 @@ export function ordered<T>(
     grantNextOperation(state);
     return value;
   }
-  const turn = new Promise<void>((resolve) => {
-    state!.pending.set(order.sequence, { resolve });
+  const turn = new Promise<void>((resolve, reject) => {
+    state.pending.set(order.sequence, { resolve, reject });
   });
   return turn.then(() => {
     let value: Promise<T>;

@@ -33,6 +33,7 @@ import {
   sha256,
   sourceArguments,
 } from "../scripts/workerd-archive.ts";
+import { createReleaseEvidence } from "./fixtures/release-evidence.mjs";
 
 const execFileAsync = promisify(execFile);
 const installerPath = fileURLToPath(
@@ -248,7 +249,11 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   );
   assert.match(
     ci,
-    /  failfast:\n    runs-on: ubuntu-24\.04[\s\S]*?Classify changed files[\s\S]*?bun test\/conformance\/check\.ts --case baseline-identity[\s\S]*?node --test test\/release-tools\.test\.mjs/,
+    /  failfast:\n    runs-on: ubuntu-24\.04[\s\S]*?Classify changed files[\s\S]*?bun test\/conformance\/check\.ts --case baseline-identity[\s\S]*?node --test test\/stress\.test\.mjs/,
+  );
+  assert.doesNotMatch(
+    ci,
+    /node --test[^\n]*test\/release-(?:tools|test-report)\.test\.mjs/,
   );
   for (const suite of ["core", "clippy", "production"]) {
     assert.match(ci, new RegExp(`- suite: ${suite}\\n`));
@@ -434,6 +439,9 @@ test("release qualification and local Docker diagnostic keep their exact boundar
 
 test("release assembly requires and describes the exact three native executables", async () => {
   const root = await mkdtemp(join(tmpdir(), "oc-release-assembly-test-"));
+  const evidenceDirectory = await mkdtemp(
+    join(tmpdir(), "oc-release-evidence-test-"),
+  );
   assert.deepEqual(releaseTargets, [
     "darwin-arm64",
     "linux-arm64",
@@ -479,17 +487,28 @@ test("release assembly requires and describes the exact three native executables
         }),
       );
     }
+    await createReleaseEvidence(
+      evidenceDirectory,
+      identity,
+      sha256(Buffer.from("native-linux-x64")),
+    );
     const badReportPath = join(root, "release-report-linux-x64.json");
     const badReport = JSON.parse(await readFile(badReportPath, "utf8"));
     badReport.revision = "f".repeat(40);
     await writeFile(badReportPath, JSON.stringify(badReport));
     await assert.rejects(
-      assembleRelease(root, "v1.2.3", identity, sdkReport),
+      assembleRelease(root, "v1.2.3", identity, sdkReport, evidenceDirectory),
       /does not match/,
     );
     badReport.revision = identity.revision;
     await writeFile(badReportPath, JSON.stringify(badReport));
-    await assembleRelease(root, "v1.2.3", identity, sdkReport);
+    await assembleRelease(
+      root,
+      "v1.2.3",
+      identity,
+      sdkReport,
+      evidenceDirectory,
+    );
     assert.deepEqual(
       (await readdir(root)).sort(),
       [
@@ -497,6 +516,8 @@ test("release assembly requires and describes the exact three native executables
         ...releaseTargets.map((target) => `ocd-v1.2.3-${target}`),
         ...releaseTargets.map((target) => `release-report-${target}.json`),
         "release.json",
+        "test-report.json",
+        "test-report.html",
       ].sort(),
     );
     const manifest = JSON.parse(
@@ -519,13 +540,14 @@ test("release assembly requires and describes the exact three native executables
       releaseTargets,
     );
     const checksums = await readFile(join(root, "SHA256SUMS"), "utf8");
-    assert.equal(checksums.trim().split("\n").length, 4);
+    assert.equal(checksums.trim().split("\n").length, 6);
     assert.match(checksums, /  release\.json$/m);
     await assert.rejects(
-      assembleRelease(root, "v1.2.3", identity, sdkReport),
+      assembleRelease(root, "v1.2.3", identity, sdkReport, evidenceDirectory),
       /exact three binaries/,
     );
   } finally {
+    await rm(evidenceDirectory, { recursive: true, force: true });
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -833,7 +855,10 @@ test("default non-root install owns one user prefix and configures PATH", async 
 test("installation qualification is a mandatory publication dependency", async () => {
   const workflow = await readFile(releaseWorkflowPath, "utf8");
   const ci = await readFile(ciWorkflowPath, "utf8");
-  assert.match(workflow, /  publish:\n    needs: \[[^\n]*install-lifecycle\]/);
+  assert.match(
+    workflow,
+    /  publish:\n    needs: \[[^\n]*install-lifecycle[^\n]*\]/,
+  );
   assert.match(
     workflow,
     /  install-lifecycle:\n    needs: \[failfast, package\]/,
@@ -854,7 +879,7 @@ test("installation qualification is a mandatory publication dependency", async (
   );
   const recovery = await readFile(recoveryWorkflowPath, "utf8");
   assert.match(recovery, /startswith\("install-lifecycle \("\)/);
-  assert.match(recovery, /length == 13 and all\(\.conclusion == "success"\)/);
+  assert.match(recovery, /length == 14 and all\(\.conclusion == "success"\)/);
   await execFileAsync(
     "python3",
     ["-B", "-m", "unittest", "discover", "-s", "test/install-lifecycle"],

@@ -69,6 +69,11 @@
     "examples/hello-worker": {
       "entry": ["src/index.ts", "*.config.ts"],
       "project": ["src/**/*.ts", "*.config.ts"]
+    },
+    "examples/stress-demo": {
+      "entry": ["src/index.ts", "*.config.ts"],
+      "project": ["src/**/*.ts", "*.config.ts"],
+      "ignoreDependencies": ["cloudflare"]
     }
   }
 }
