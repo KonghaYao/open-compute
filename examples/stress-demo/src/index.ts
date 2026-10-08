@@ -166,7 +166,6 @@ export default {
   },
 
   async queue(batch, env: Env): Promise<void> {
-    const counter = env.INVENTORY.getByName("queue-consumer");
     for (const message of batch.messages) {
       const body = message.body as QueueMessageBody;
       const label = body.label;
@@ -177,7 +176,6 @@ export default {
           JSON.stringify(body),
         );
       }
-      await counter.increment(1);
       message.ack();
     }
   },

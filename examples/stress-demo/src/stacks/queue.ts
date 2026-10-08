@@ -56,15 +56,11 @@ export async function handleQueueDequeueVerify(
   }
 
   const processed = await env.KV.get(`queue-processed:${label}`);
-  const counter = env.INVENTORY.getByName("queue-consumer");
-  const state = await counter.read();
 
   return ok({
     stack: "queue",
     label,
     processed: processed !== null,
     processedPhase: processed,
-    consumerCount: state.count,
-    consumerAlarmTicks: state.alarmTicks,
   });
 }

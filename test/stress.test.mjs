@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { rolldown } from "rolldown";
 
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -280,5 +281,124 @@ test("request latency uses curl transfer time and failed transfers remain errors
     await readFile(join(directory, "err.txt"), "utf8"),
     "POST /queue 000\n",
   );
+  await rm(directory, { recursive: true });
+});
+
+test("queue consumer persists evidence before ACK without a shared DO counter", async () => {
+  const bundle = await rolldown({
+    input: join(root, "examples/stress-demo/src/index.ts"),
+    external: ["cloudflare:workers"],
+  });
+  const { output } = await bundle.generate({ format: "esm" });
+  await bundle.close();
+  assert.equal(output.length, 1);
+  const workers =
+    "data:text/javascript," +
+    encodeURIComponent(
+      "export class DurableObject {}; export class WorkerEntrypoint {}; export class WorkflowEntrypoint {};",
+    );
+  const code = output[0].code.replaceAll(
+    '"cloudflare:workers"',
+    JSON.stringify(workers),
+  );
+  const { default: worker } = await import(
+    "data:text/javascript," + encodeURIComponent(code)
+  );
+  const trace = [];
+  const env = {
+    KV: {
+      async put(key, value) {
+        trace.push([key, value]);
+      },
+      async get() {
+        return "processed";
+      },
+    },
+    get INVENTORY() {
+      throw new Error("queue processing must not require a shared DO");
+    },
+  };
+  const messages = [
+    {
+      body: { label: "first" },
+      ack() {
+        trace.push(["ack", "first"]);
+      },
+    },
+    {
+      body: { label: "second", orderId: "order", phase: "committed" },
+      ack() {
+        trace.push(["ack", "second"]);
+      },
+    },
+  ];
+  await worker.queue({ messages }, env);
+  assert.deepEqual(
+    trace.map(([key]) => key),
+    [
+      "queue-processed:first",
+      "ack",
+      "queue-processed:second",
+      "queue-order:order:second",
+      "ack",
+    ],
+  );
+  assert.equal(trace[2][1], "committed");
+  const verification = await worker.fetch(
+    new Request("http://fixture/stack/queue/dequeue-verify?label=first"),
+    env,
+  );
+  assert.equal((await verification.json()).processed, true);
+  trace.length = 0;
+  env.KV.put = async () => {
+    throw new Error("KV write failed");
+  };
+  await assert.rejects(worker.queue({ messages }, env), /KV write failed/);
+  assert.deepEqual(trace, []);
+});
+
+test("stress bootstrap creates a 100-message consumer and rejects mismatched settings", async () => {
+  const directory = await fixture();
+  const source = await readFile(
+    join(root, "test/stress/deploy-stress-demo.sh"),
+    "utf8",
+  );
+  const start = source.indexOf("consumers=$(cf queues consumers list");
+  const end = source.indexOf(
+    'sh "${root}/test/stress/generate-data.sh"',
+    start,
+  );
+  assert.ok(start >= 0 && end > start);
+  const configuration = source.slice(start, end);
+  const inventory = join(directory, "consumers.json");
+  const consumer = {
+    script_name: "stress-demo",
+    type: "worker",
+    settings: { batch_size: 100 },
+  };
+  const script = `set -eu
+queue_id=fixture
+cf() {
+  if [ "$1 $2 $3" = "queues consumers list" ]; then cat "$INVENTORY"; return; fi
+  [ "$1 $2 $3" = "queues consumers create" ] || exit 19
+  case " $* " in *" --settings-batch-size 100 "*) ;; *) exit 20;; esac
+  printf '%s' "$EXPECTED" > "$INVENTORY"
+}
+${configuration}`;
+  const env = {
+    ...process.env,
+    INVENTORY: inventory,
+    EXPECTED: JSON.stringify([consumer]),
+  };
+  for (const initial of [[], [consumer]]) {
+    await writeFile(inventory, JSON.stringify(initial));
+    await exec("bash", ["-c", script], { env });
+    assert.deepEqual(JSON.parse(await readFile(inventory, "utf8")), [consumer]);
+  }
+  await writeFile(
+    inventory,
+    JSON.stringify([{ ...consumer, settings: { batch_size: 10 } }]),
+  );
+  await assert.rejects(exec("bash", ["-c", script], { env }), /batch size 100/);
   await rm(directory, { recursive: true });
 });

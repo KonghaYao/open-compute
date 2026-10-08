@@ -57,7 +57,12 @@ if [ "$worker_exists" = false ]; then STRESS_INCLUDE_SERVICE=false deploy; fi
 STRESS_INCLUDE_SERVICE=true deploy
 consumers=$(cf queues consumers list --queue-id "$queue_id")
 if ! printf '%s' "$consumers" | jq -e '.[] | select(.script_name == "stress-demo")' >/dev/null; then
-  cf queues consumers create "$queue_id" --script-name stress-demo --type worker >/dev/null
+  cf queues consumers create "$queue_id" --script-name stress-demo --type worker --settings-batch-size 100 >/dev/null
+fi
+consumers=$(cf queues consumers list --queue-id "$queue_id")
+if ! printf '%s' "$consumers" | jq -e 'length == 1 and .[0].script_name == "stress-demo" and .[0].type == "worker" and .[0].settings.batch_size == 100' >/dev/null; then
+  echo "stress consumer requires one stress-demo Worker with batch size 100" >&2
+  exit 1
 fi
 sh "${root}/test/stress/generate-data.sh"
 # Quote each value as shell data and create the private file before writing credentials.

@@ -106,6 +106,8 @@ Per-stack PEAK phases (2C/4G defaults) with schema v2 `result.json` per run:
 | fetch    | 50 concurrent                 | 10 min     |
 | cpu      | 8 concurrent                  | 10 min     |
 
+The stress consumer uses batches of 100 messages. Processing markers are persisted in KV before acknowledgement; the queue profile does not serialize each message through a shared DO counter. Durable Object throughput is measured by its own profile.
+
 Rate-based phases send one concurrent batch per second and wait for it before starting another. Actual throughput depends on request latency and client overhead; the recorded sample count is authoritative. `scenario_mega` is an optional peak selection (`STRESS_P1_STACK=scenario_mega`), with 15 concurrent requests for 15 minutes.
 
 Inter-stack cooldown defaults to 90s (`STRESS_P1_COOLDOWN_SEC` to override). Disk preflight requires ≥5 GB free on `.temp/`.
