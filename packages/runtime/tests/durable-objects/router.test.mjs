@@ -8,7 +8,7 @@ import {
 
 // Unrelated entrypoints are not invoked by cancellation; only module loading is stubbed.
 const unused = moduleUrl(`
-export const DoHost=class {}, AiSearchTransport=class {}, AiTransport=class {}, CacheTransport=class {},
+export const DoHost=class {}, FacetManager=class {}, AiSearchTransport=class {}, AiTransport=class {}, CacheTransport=class {},
 CacheWriteTransport=class {}, ImageTransport=class {}, KVNamespace=class {}, ExtensionCacheTransport=class {},
 PrivateHttpTransport=class {}, ServiceFetchCompletion=class {}, ServiceTransport=class {}, VectorizeTransport=class {},
 WorkflowBindingTransport=class {}, AlarmIndex=class {}, ArtifactsTransport=class {}, AssetTransport=class {},
@@ -36,6 +36,7 @@ const imports = {
 };
 for (const path of [
   "./host.js",
+  "./facet-manager.js",
   "../ai-search/host.js",
   "../ai/host.js",
   "../browser/host.js",

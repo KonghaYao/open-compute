@@ -8,6 +8,7 @@ import {
 
 const { authorityFromHeaders, cancelOrderedOperation, ordered } =
   await importRuntime("durable-objects/host-protocol.ts", {
+    "./errors.js": moduleUrl(await compileRuntime("durable-objects/errors.ts")),
     "./identity.js": moduleUrl(
       await compileRuntime("durable-objects/identity.ts"),
     ),
@@ -41,6 +42,67 @@ test("DO host authority accepts only the canonical instance ID", () => {
     () => authorityFromHeaders(headers),
     /DO_INTERNAL_PROTOCOL_ERROR/,
   );
+});
+
+test("RPC admission blocks following events until startup, while allowing in-flight overlap", async () => {
+  const states = new Map();
+  const channelId = "a".repeat(32);
+  const events = [];
+  let acknowledge;
+  let complete;
+  const held = new Promise((resolve) => {
+    complete = resolve;
+  });
+  const first = ordered(
+    states,
+    { channelId, sequence: 0 },
+    async (started) => {
+      acknowledge = started;
+      events.push("rpc:admitting");
+      await held;
+      events.push("rpc:complete");
+    },
+    true,
+  );
+  const second = ordered(states, { channelId, sequence: 1 }, async () => {
+    events.push("fetch:start");
+  });
+  const third = ordered(states, { channelId, sequence: 2 }, async () => {
+    events.push("connect:start");
+  });
+  await Promise.resolve();
+  assert.deepEqual(events, ["rpc:admitting"]);
+  acknowledge();
+  acknowledge();
+  await Promise.all([second, third]);
+  assert.deepEqual(events, ["rpc:admitting", "fetch:start", "connect:start"]);
+  complete();
+  await first;
+  assert.equal(events.at(-1), "rpc:complete");
+});
+
+test("a rejected RPC startup releases its ordered successor", async () => {
+  const states = new Map();
+  const channelId = "b".repeat(32);
+  let rejectStartup;
+  const startup = new Promise((_resolve, reject) => {
+    rejectStartup = reject;
+  });
+  const first = ordered(
+    states,
+    { channelId, sequence: 0 },
+    () => startup,
+    true,
+  );
+  const failed = assert.rejects(first, /startup-failed/);
+  const second = ordered(
+    states,
+    { channelId, sequence: 1 },
+    async () => "next",
+  );
+  rejectStartup(new Error("startup-failed"));
+  await failed;
+  assert.equal(await second, "next");
 });
 
 test("cancelOrderedOperation skips a queued sequence without blocking the channel", async () => {

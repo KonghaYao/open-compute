@@ -22,6 +22,7 @@ import type {
 } from "./protocol.js";
 
 export { DoHost } from "./host.js";
+export { FacetManager } from "./facet-manager.js";
 
 export { AiSearchTransport } from "../ai-search/host.js";
 export { AiTransport } from "../ai/host.js";

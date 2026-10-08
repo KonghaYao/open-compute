@@ -141,7 +141,10 @@ TIMING = {
         'uploads::concurrent_large_upload_keeps_runtime_responsive',
     ),
     'p0-6': ('p0_6_real_d1_facade_and_backend_matrix',),
-    'p0-7': ('p0_7_real_durable_objects_matrix',),
+    'p0-7': (
+        'p0_7_real_durable_objects_matrix',
+        'loader_capacity::durable_objects_preserve_loader_capacity_and_persist_through_restart',
+    ),
     'p0-8': ('p0_8_real_scheduler_alarm_matrix',),
     'p0-exit': ('p0_real_combined_exit_matrix',),
     'p1-crash': ('p1_ocd_sigkill_reclaims_orphan_and_restarts_cleanly',),
