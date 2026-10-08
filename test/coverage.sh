@@ -39,6 +39,18 @@ esac
 export OPEN_COMPUTE_TEST_WORKERD="$workerd"
 
 cd "$root"
+# Cargo dependency locations follow the configured home, including Docker mounts.
+cargo_home_regex=$(python3 - <<'PYTHON'
+import os
+from pathlib import Path
+import re
+
+home = Path(os.environ.get('CARGO_HOME', str(Path.home() / '.cargo')))
+locations = sorted({os.path.abspath(home), str(home.resolve())})
+print('(' + '|'.join(re.escape(path) for path in locations) + ')')
+PYTHON
+)
+ignore_filename_regex="$ignore_filename_regex|^$cargo_home_regex/(registry|git)/"
 # Gate compiles with --offline; fetch the locked crate graph while network is allowed.
 mbx fetch --locked
 # Keep the instrumented target dir so mbx can reuse compiled artifacts.

@@ -18,6 +18,10 @@ inputs:
     description: Install cargo-llvm-cov
     required: false
     default: "false"
+  browser-fixture:
+    description: Explicitly download and prepare the pinned chrome-headless-shell test input
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -116,3 +120,27 @@ runs:
         set -euo pipefail
         bun scripts/prepare-workerd.ts --dest "${RUNNER_TEMP}/open-compute-build-workerd" --download >> "$GITHUB_ENV"
         bun scripts/prepare-caddy.ts --dest "${RUNNER_TEMP}/open-compute-build-caddy" --download >> "$GITHUB_ENV"
+
+    - name: Download and verify chrome-headless-shell fixture
+      if: ${{ inputs.browser-fixture == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "$(uname -s):$(uname -m)" in
+          Darwin:arm64) target=darwin-arm64 ;;
+          Darwin:x86_64) target=darwin-x64 ;;
+          Linux:x86_64) target=linux-x64 ;;
+          *) echo 'This CI fixture requires an explicitly pinned host target' >&2; exit 1 ;;
+        esac
+        lock="$PWD/test/browser-fixture.lock.json"
+        platform=$(jq -er --arg target "$target" '.targets[$target].platform' "$lock")
+        url=$(jq -er --arg target "$target" '.targets[$target].url' "$lock")
+        sha256=$(jq -er --arg target "$target" '.targets[$target].sha256' "$lock")
+        mkdir -p "$PWD/.temp"
+        fixture=$(mktemp -d "$PWD/.temp/browser-fixture-XXXXXXXX")
+        curl --fail --location --output "$fixture/archive.zip" "$url"
+        printf '%s  %s\n' "$sha256" "$fixture/archive.zip" | shasum -a 256 --check
+        unzip -q "$fixture/archive.zip" -d "$fixture/source"
+        bun scripts/prepare-browser.ts \
+          --source "$fixture/source/chrome-headless-shell-$platform/chrome-headless-shell" \
+          --dest "$fixture/prepared" >> "$GITHUB_ENV"

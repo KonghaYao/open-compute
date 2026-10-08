@@ -663,3 +663,5 @@ export default class DoRouter extends WorkerEntrypoint<DoHostEnv> {
     }
   }
 }
+
+export { BrowserTransport } from "../browser/host.js";

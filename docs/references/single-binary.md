@@ -20,6 +20,10 @@ Open Compute 只有一种生产发行形式：按平台构建的单个 `ocd` 可
 
 产品支持范围见[兼容矩阵](cloudflare-compatibility.md)；本页只维护构建与运行契约。
 
+可选 Browser Run 使用 operator 安装的完整 `chrome-headless-shell`，不嵌入 `ocd`，也不改变正式 workerd/Caddy 的内嵌契约。
+managed 使用 Chrome 原生 sandbox 和平台 CDP 权限边界，不叠加外层 sandbox；安装与实例配置见
+[首次启动手册](runbooks/install-and-first-start.md)。外部 CDP 模式由 operator 管理浏览器进程及其访问权限。
+
 ## 内嵌内容
 
 - 当前目标平台正式 pin 对应的 workerd gzip；
