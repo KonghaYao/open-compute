@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { registerHooks } from "node:module";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { rolldown } from "rolldown";
 
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -285,25 +285,33 @@ test("request latency uses curl transfer time and failed transfers remain errors
 });
 
 test("queue consumer persists evidence before ACK without a shared DO counter", async () => {
-  const bundle = await rolldown({
-    input: join(root, "examples/stress-demo/src/index.ts"),
-    external: ["cloudflare:workers"],
-  });
-  const { output } = await bundle.generate({ format: "esm" });
-  await bundle.close();
-  assert.equal(output.length, 1);
   const workers =
     "data:text/javascript," +
     encodeURIComponent(
       "export class DurableObject {}; export class WorkerEntrypoint {}; export class WorkflowEntrypoint {};",
     );
-  const code = output[0].code.replaceAll(
-    '"cloudflare:workers"',
-    JSON.stringify(workers),
-  );
-  const { default: worker } = await import(
-    "data:text/javascript," + encodeURIComponent(code)
-  );
+  const source = new URL("../examples/stress-demo/src/", import.meta.url);
+  const hooks = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (specifier === "cloudflare:workers")
+        return { url: workers, shortCircuit: true };
+      if (
+        context.parentURL?.startsWith(source.href) &&
+        specifier.startsWith(".")
+      )
+        return nextResolve(
+          new URL(`${specifier}.ts`, context.parentURL).href,
+          context,
+        );
+      return nextResolve(specifier, context);
+    },
+  });
+  let worker;
+  try {
+    ({ default: worker } = await import(new URL("index.ts", source).href));
+  } finally {
+    hooks.deregister();
+  }
   const trace = [];
   const env = {
     KV: {
