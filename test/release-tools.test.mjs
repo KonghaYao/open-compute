@@ -283,6 +283,14 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   );
   assert.match(rustSetup, /jdx\/mr-boxington-action@v1/);
   assert.match(rustSetup, /github-cache-mode: objects/);
+  assert.match(
+    rustSetup,
+    /uses: jdx\/mr-boxington-action@v1\n\s+env:\n\s+MBX_BUILD_SCRIPT_EXECUTION: "0"\n\s+MBX_TARGET_VIEWS: "0"\n\s+MBX_RESTORE_HARDLINK: "0"/,
+  );
+  assert.match(
+    rustSetup,
+    /cache-key-suffix: \$\{\{ github\.job \}\}-\$\{\{ matrix\.suite \|\| 'build' \}\}/,
+  );
   assert.match(rustSetup, /version: 1\.22\.0/);
   assert.doesNotMatch(
     workflow + ci + rustSetup,
@@ -298,7 +306,7 @@ test("release qualification and local Docker diagnostic keep their exact boundar
     /name: unverified-native-build-\$\{\{ matrix\.target \}\}[\s\S]*?\.temp\/dashboard-e2e[\s\S]*?\.temp\/dashboard-server[\s\S]*?apps\/dashboard\/test-results/,
   );
   assert.equal(
-    workflow.match(/\.\/test\/gate\.py --workspace --jobs 2/g)?.length,
+    workflow.match(/\.\/test\/gate\.py --workspace --final --jobs 2/g)?.length,
     1,
   );
   assert.match(workflow, /test-p0-2-egress-linux\.sh p0-2 --jobs 2/);

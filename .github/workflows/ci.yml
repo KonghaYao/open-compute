@@ -287,7 +287,7 @@ jobs:
           path: |
             .temp/gate-run/failed/*/*.json
             .temp/gate-run/failed/*/*.log
-            .temp/gate-run/failed/*/*/*/output.log
+            .temp/gate-run/failed/*/*/*/*.log
           if-no-files-found: ignore
           retention-days: 14
 
@@ -314,6 +314,18 @@ jobs:
           OPEN_COMPUTE_TEST_R2_S3_SECRET_ACCESS_KEY: ${{ secrets.OPEN_COMPUTE_TEST_R2_S3_SECRET_ACCESS_KEY }}
           OPEN_COMPUTE_TEST_R2_S3_MUTATION_ACK: ${{ secrets.OPEN_COMPUTE_TEST_R2_S3_MUTATION_ACK }}
         run: ./test/gate.py s3-provider-qualification --jobs 1
+
+      - name: Upload S3 provider qualification failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: s3-provider-qualification-failed-${{ github.run_attempt }}
+          path: |
+            .temp/gate-run/failed/*/*.json
+            .temp/gate-run/failed/*/*.log
+            .temp/gate-run/failed/*/*/*/*.log
+          if-no-files-found: ignore
+          retention-days: 14
 
   ci:
     if: ${{ always() && !cancelled() }}

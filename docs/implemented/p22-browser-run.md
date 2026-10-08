@@ -164,3 +164,12 @@ conformance digest：`36a2907ce6c59d6c80d1ade17f14305ff29c793d1f187f1dc2796eaf26
 普通 target 约 8.6 GiB；共享 MBX 约 7.8 GiB，另有约 80.2 MiB 受保护状态。
 本次没有新增 Docker 容器/卷，其他任务资源未触碰。最终状态与清理摘要：
 `.temp/p22-completion/final-acceptance.json`。
+
+## 上游同步（2026-10-08）
+
+合并远端 main `26481829` 的 CI、容器示例与 Gate 工具修正；验收基线按合并后的源码重新计算。
+固定 coverage 的 680 个生产 Rust 文件及三项配置逐字节不变，Live View HTML 保持已验收字节。
+Gate runner 46 项单元测试通过；release tooling 收集的 20 项中，一条旧 Gate 命令断言
+更新为包含 `--final` 后定向重跑通过。五项受影响 conformance 检查、strict TS7、格式、
+文档检查和容器 shell 语法检查通过。复用上述完整 Gate 与覆盖率，不重复执行 workspace 验收。
+本次同步未重新构建或运行上游容器镜像。
