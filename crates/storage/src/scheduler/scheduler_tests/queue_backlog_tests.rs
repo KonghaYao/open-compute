@@ -107,7 +107,7 @@ fn queue_backlog_hot_paths_are_bounded_and_preserve_batch_deadlines() {
     assert_eq!(retention.next_due_at_ms, Some(66_000));
     steps.store(0, Ordering::Relaxed);
     let batch = store
-        .claim_queue_batches(6_001, 1_000, 5, 1, None)
+        .claim_queue_batches(6_001, 20_000, 5, 1, None)
         .unwrap()
         .0
         .pop()
@@ -117,7 +117,7 @@ fn queue_backlog_hot_paths_are_bounded_and_preserve_batch_deadlines() {
     let occupied = store.queue_consumer_workload_summary(6_002).unwrap();
     assert_eq!(occupied.ready, 0);
     assert_eq!(occupied.claimed, 1);
-    assert_eq!(occupied.next_due_at_ms, Some(7_001));
+    assert_eq!(occupied.next_due_at_ms, Some(26_001));
     store
         .lock()
         .unwrap()
@@ -125,8 +125,11 @@ fn queue_backlog_hot_paths_are_bounded_and_preserve_batch_deadlines() {
     // A full consumer wakes at its claim lease, not an overdue backlog timeout.
     let saturated = store.queue_consumer_workload_summary(11_001).unwrap();
     assert_eq!(saturated.ready, 0);
-    assert_eq!(saturated.expired, 1);
-    assert_eq!(saturated.next_due_at_ms, Some(7_001));
+    assert_eq!(saturated.expired, 0);
+    assert_eq!(saturated.next_due_at_ms, Some(26_001));
+    let lease_due = store.queue_consumer_workload_summary(26_001).unwrap();
+    assert_eq!(lease_due.expired, 1);
+    assert_eq!(lease_due.next_due_at_ms, Some(26_001));
     // Expired messages still contribute their exact count and deadline.
     let expired = store.queue_workload_summary(66_000).unwrap();
     assert_eq!(expired.ready, 9_900);
