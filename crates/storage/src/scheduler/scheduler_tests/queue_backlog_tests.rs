@@ -122,6 +122,11 @@ fn queue_backlog_hot_paths_are_bounded_and_preserve_batch_deadlines() {
         .lock()
         .unwrap()
         .progress_handler(0, None::<fn() -> bool>);
+    // A full consumer wakes at its claim lease, not an overdue backlog timeout.
+    let saturated = store.queue_consumer_workload_summary(11_001).unwrap();
+    assert_eq!(saturated.ready, 0);
+    assert_eq!(saturated.expired, 1);
+    assert_eq!(saturated.next_due_at_ms, Some(7_001));
     // Expired messages still contribute their exact count and deadline.
     let expired = store.queue_workload_summary(66_000).unwrap();
     assert_eq!(expired.ready, 9_900);

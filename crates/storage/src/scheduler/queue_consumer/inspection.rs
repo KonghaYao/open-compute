@@ -37,6 +37,9 @@ impl SchedulerStore {
                 "WITH due AS MATERIALIZED (
                    SELECT c.consumer_id, c.consumer_generation, c.max_concurrency,
                           c.max_batch_size, c.max_batch_timeout_ms,
+                          (SELECT COUNT(*) FROM queue_delivery_batches b
+                           WHERE b.consumer_id = c.consumer_id
+                             AND b.consumer_generation = c.consumer_generation) AS in_flight,
                           (SELECT m.available_at_ms FROM queue_messages m
                            WHERE m.queue_id = c.queue_id AND m.state = 'ready'
                              AND m.available_at_ms <= ?1 AND m.expires_at_ms > ?1
@@ -58,9 +61,7 @@ impl SchedulerStore {
                  )
                  SELECT
                    (SELECT COUNT(*) FROM due c
-                    WHERE (SELECT COUNT(*) FROM queue_delivery_batches b
-                           WHERE b.consumer_id = c.consumer_id
-                             AND b.consumer_generation = c.consumer_generation) < c.max_concurrency
+                    WHERE c.in_flight < c.max_concurrency
                       AND (c.due_count >= c.max_batch_size
                            OR ?1 >= c.oldest + c.max_batch_timeout_ms)),
                    (SELECT COUNT(*) FROM queue_delivery_batches),
@@ -69,7 +70,9 @@ impl SchedulerStore {
                    MIN(value)
                  FROM (
                    SELECT MIN(oldest + max_batch_timeout_ms) AS value FROM due
+                     WHERE in_flight < max_concurrency
                    UNION ALL SELECT MIN(next_available) FROM due
+                     WHERE in_flight < max_concurrency
                    UNION ALL SELECT MIN(claim_until_ms) FROM queue_delivery_batches
                    UNION ALL SELECT MIN(next_attempt_at_ms) FROM queue_dlq_pending
                  )",
