@@ -249,7 +249,11 @@ test("release qualification and local Docker diagnostic keep their exact boundar
   );
   assert.match(
     ci,
-    /  failfast:\n    runs-on: ubuntu-24\.04[\s\S]*?Classify changed files[\s\S]*?bun test\/conformance\/check\.ts --case baseline-identity[\s\S]*?node --test test\/release-tools\.test\.mjs/,
+    /  failfast:\n    runs-on: ubuntu-24\.04[\s\S]*?Classify changed files[\s\S]*?bun test\/conformance\/check\.ts --case baseline-identity[\s\S]*?node --test test\/stress\.test\.mjs/,
+  );
+  assert.doesNotMatch(
+    ci,
+    /node --test[^\n]*test\/release-(?:tools|test-report)\.test\.mjs/,
   );
   for (const suite of ["core", "clippy", "production"]) {
     assert.match(ci, new RegExp(`- suite: ${suite}\\n`));

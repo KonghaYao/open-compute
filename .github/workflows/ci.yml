@@ -44,10 +44,10 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s test -p 'test_ci_scope.py'
           PYTHONDONTWRITEBYTECODE=1 python3 test/ci_scope.py \
             --base "$BASE_SHA" --head "$HEAD_SHA" >> "$GITHUB_OUTPUT"
-      - name: Validate source identity and release-tool contracts
+      - name: Validate source identity and stress contracts
         run: |
           bun test/conformance/check.ts --case baseline-identity
-          node --test test/release-tools.test.mjs test/release-test-report.test.mjs test/stress.test.mjs
+          node --test test/stress.test.mjs
 
   checks:
     # Fast development checks. Full acceptance is owned by the release workflow.
